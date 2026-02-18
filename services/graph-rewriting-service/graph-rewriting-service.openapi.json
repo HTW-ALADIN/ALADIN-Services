@@ -1,885 +1,781 @@
 {
-  "swagger": "2.0",
-  "info": {
-    "version": "9.4.2",
-    "title": "@fastify/swagger"
-  },
-  "definitions": {
-    "def-0": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Graph Node Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "key": {
-          "description": "The node's ID, also used as node in an edges source/target etc.",
-          "type": "string"
-        },
-        "attributes": {
-          "description": "The node's attributes. ",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "boolean"
-              }
-            ]
-          }
-        }
-      },
-      "required": [
-        "key",
-        "attributes"
-      ]
-    },
-    "def-1": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Graph Edge Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "key": {
-          "description": "The edge's ID",
-          "type": "string"
-        },
-        "source": {
-          "description": "The key of the node at the edge's source",
-          "type": "string"
-        },
-        "target": {
-          "description": "The key of the node at the edge's target",
-          "type": "string"
-        },
-        "attributes": {
-          "description": "The edges attributes & values",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "boolean"
-              }
-            ]
-          }
-        }
-      },
-      "required": [
-        "key",
-        "source",
-        "target",
-        "attributes"
-      ]
-    },
-    "def-2": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Graph Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "options": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "description": "Type of the graph: either directed or undirected",
-              "enum": [
-                "directed",
-                "undirected"
-              ]
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "additionalProperties": false
-        },
-        "nodes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/def-0"
-          }
-        },
-        "edges": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/def-1"
-          }
-        }
-      },
-      "required": [
-        "options",
-        "nodes",
-        "edges"
-      ]
-    },
-    "def-3": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Graph Instantiated Attribute Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "type": {
-          "enum": [
-            "randexp",
-            "jsonLogic",
-            "faker"
-          ]
-        },
-        "args": {
-          "type": "object",
-          "properties": {},
-          "additionalProperties": true
-        }
-      },
-      "required": [
-        "type",
-        "args"
-      ]
-    },
-    "def-4": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Rewriting Rule Processing Config Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "rule": {
-          "description": "The key of the graph rewriting rule to execute",
-          "type": "string"
-        },
-        "options": {
-          "description": "The processing configuration for the rule",
-          "type": "object",
-          "properties": {
-            "mode": {
-              "description": "Replace either 'all', only the 'first' or between x and y pattern matches",
-              "enum": [
-                "all",
-                "first",
-                "interval"
-              ],
-              "default": "first"
-            },
-            "interval": {
-              "type": "object",
-              "properties": {
-                "min": {
-                  "type": "integer"
-                },
-                "max": {
-                  "type": "integer"
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "min",
-                "max"
-              ]
-            },
-            "repeat": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "integer"
-                  },
-                  "minItems": 2,
-                  "maxItems": 2
-                }
-              ]
-            }
-          },
-          "additionalProperties": false,
-          "if": {
-            "properties": {
-              "mode": {
-                "enum": [
-                  "interval"
-                ]
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "interval"
-            ]
-          }
-        }
-      },
-      "required": [
-        "rule",
-        "options"
-      ]
-    },
-    "def-5": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Pattern Node Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "attributes": {
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              },
-              {
-                "type": "array",
-                "items": {
-                  "anyOf": [
-                    {
-                      "type": "number"
-                    },
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "boolean"
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        }
-      },
-      "required": [
-        "key"
-      ]
-    },
-    "def-6": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Pattern Graph Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "options": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "description": "Type of the graph: either directed or undirected",
-              "enum": [
-                "directed",
-                "undirected"
-              ]
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "additionalProperties": false
-        },
-        "nodes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/def-5"
-          }
-        },
-        "edges": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/def-1"
-          }
-        },
-        "nacs": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/nacSchema"
-          }
-        }
-      },
-      "required": [
-        "options",
-        "nodes",
-        "edges"
-      ],
-      "$defs": {
-        "nacSchema": {
-          "type": "object",
-          "properties": {
-            "options": {
-              "type": "object",
-              "properties": {
-                "type": {
-                  "description": "Type of the graph: either directed or undirected",
-                  "enum": [
-                    "directed",
-                    "undirected"
-                  ]
-                }
-              }
-            },
-            "nodes": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/def-5"
-              }
-            },
-            "edges": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/def-1"
-              }
-            }
-          },
-          "required": [
-            "nodes",
-            "edges"
-          ],
-          "additionalProperties": false
-        }
-      }
-    },
-    "def-7": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Replacement Edge Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "key": {
-          "description": "The edge's ID",
-          "type": "string"
-        },
-        "source": {
-          "description": "The key of the node at the edge's source",
-          "type": "string"
-        },
-        "target": {
-          "description": "The key of the node at the edge's target",
-          "type": "string"
-        },
-        "attributes": {
-          "description": "The edges attributes & values",
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string"
-            }
-          },
-          "patternProperties": {
-            "^(?!type$).*": {
-              "oneOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "boolean"
-                },
-                {
-                  "$ref": "#/definitions/def-3"
-                }
-              ]
-            }
-          }
-        },
-        "rewriteOptions": {
-          "type": "object",
-          "properties": {
-            "attributeReplacementMode": {
-              "description": "Defines how the attributes are handles during rewrite. 'Modify' mode adds or updates the given attributes (setting an attribute to null deletes it). 'Replace' mode deletes all attributes of the matched node and then sets the given attributes. 'Delete' mode deletes all attributes and doesn't add any new ones.",
-              "enum": [
-                "modify",
-                "replace",
-                "delete"
-              ],
-              "default": "modify"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "key",
-        "source",
-        "target",
-        "attributes"
-      ]
-    },
-    "def-8": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Replacement Node Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "attributes": {
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/definitions/def-3"
-              }
-            ]
-          }
-        },
-        "rewriteOptions": {
-          "type": "object",
-          "properties": {
-            "attributeReplacementMode": {
-              "description": "Defines how the attributes are handles during rewrite. 'Modify' mode adds or updates the given attributes. Setting an attribute to null deletes it. 'Replace' mode deletes all attributes of the matched node and then sets the given attributes. 'Delete' mode deletes all attributes and doesn't add any new ones.",
-              "enum": [
-                "modify",
-                "replace",
-                "delete"
-              ],
-              "default": "modify"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "key"
-      ]
-    },
-    "def-9": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Replacement Graph Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "options": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "description": "Type of the graph: either directed or undirected",
-              "enum": [
-                "directed",
-                "undirected"
-              ]
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "additionalProperties": false
-        },
-        "nodes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/def-8"
-          }
-        },
-        "edges": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/def-7"
-          }
-        }
-      },
-      "required": [
-        "options",
-        "nodes",
-        "edges"
-      ]
-    },
-    "def-10": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Graph Rewriting Rule Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "patternGraph": {
-          "$ref": "#/definitions/def-6"
-        },
-        "replacementGraph": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/def-9"
-            },
-            {
-              "$ref": "#/$defs/externalReplacementGraphConfig"
-            }
-          ]
-        },
-        "options": {
-          "type": "object",
-          "properties": {
-            "homomorphic": {
-              "type": "boolean"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "key",
-        "patternGraph",
-        "replacementGraph"
-      ],
-      "$defs": {
-        "externalReplacementGraphConfig": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "enum": [
-                "externalApi"
-              ]
-            },
-            "args": {
-              "$ref": "#/$defs/externalApiInstantiationOptions"
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "additionalProperties": false
-        },
-        "externalApiInstantiationOptions": {
-          "type": "object",
-          "properties": {
-            "endpoint": {
-              "type": "string"
-            },
-            "additionalRequestBodyParameters": {
-              "type": "object"
-            }
-          },
-          "required": [
-            "endpoint"
-          ],
-          "additionalProperties": false
-        }
-      }
-    },
-    "def-11": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Graph Find Rule Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "patternGraph": {
-          "$ref": "#/definitions/def-6"
-        },
-        "options": {
-          "type": "object",
-          "properties": {
-            "homomorphic": {
-              "type": "boolean"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "patternGraph"
-      ]
-    },
-    "def-12": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Graph Rewriting Request Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "hostgraph": {
-          "$ref": "#/definitions/def-2"
-        },
-        "rules": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/def-10"
-          }
-        },
-        "sequence": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/def-4"
-          }
-        },
-        "options": {
-          "type": "object",
-          "properties": {
-            "returnHistory": {
-              "description": "If set to true, the resultset will include the exported hostgraph after each rewriting step in chronological order.",
-              "type": "boolean",
-              "default": false
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "hostgraph"
-      ]
-    },
-    "def-13": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Graph Find Pattern Request Schema",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "hostgraph": {
-          "$ref": "#/definitions/def-2"
-        },
-        "rules": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/def-11"
-          },
-          "minItems": 1,
-          "maxItems": 1
-        }
-      },
-      "required": [
-        "hostgraph",
-        "rules"
-      ]
-    }
-  },
-  "paths": {
-    "/health": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/neo4j/health": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/node": {
-      "post": {
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "schema": {
-              "$schema": "http://json-schema.org/draft-07/schema#",
-              "$id": "todo.com",
-              "title": "Graph Node Schema",
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "key": {
-                  "description": "The node's ID, also used as node in an edges source/target etc.",
-                  "type": "string"
-                },
-                "attributes": {
-                  "description": "The node's attributes. ",
-                  "type": "object",
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "boolean"
-                      }
-                    ]
-                  }
-                }
-              },
-              "required": [
-                "key",
-                "attributes"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/node/{nodeInternalId}": {
-      "get": {
-        "parameters": [
-          {
-            "type": "string",
-            "required": true,
-            "in": "path",
-            "name": "nodeInternalId"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      },
-      "delete": {
-        "parameters": [
-          {
-            "type": "string",
-            "required": true,
-            "in": "path",
-            "name": "nodeInternalId"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/nodes": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      },
-      "delete": {
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/edge": {
-      "post": {
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "schema": {
-              "$schema": "http://json-schema.org/draft-07/schema#",
-              "$id": "todo.com",
-              "title": "Graph Edge Schema",
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "key": {
-                  "description": "The edge's ID",
-                  "type": "string"
-                },
-                "source": {
-                  "description": "The key of the node at the edge's source",
-                  "type": "string"
-                },
-                "target": {
-                  "description": "The key of the node at the edge's target",
-                  "type": "string"
-                },
-                "attributes": {
-                  "description": "The edges attributes & values",
-                  "type": "object",
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "boolean"
-                      }
-                    ]
-                  }
-                }
-              },
-              "required": [
-                "key",
-                "source",
-                "target",
-                "attributes"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/edge/{edgeInternalId}": {
-      "get": {
-        "parameters": [
-          {
-            "type": "string",
-            "required": true,
-            "in": "path",
-            "name": "edgeInternalId"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      },
-      "delete": {
-        "parameters": [
-          {
-            "type": "string",
-            "required": true,
-            "in": "path",
-            "name": "edgeInternalId"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    }
-  }
+	"swagger": "2.0",
+	"info": {
+		"version": "9.4.2",
+		"title": "@fastify/swagger"
+	},
+	"definitions": {
+		"def-0": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Graph Node Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"description": "The node's ID, also used as node in an edges source/target etc.",
+					"type": "string"
+				},
+				"attributes": {
+					"description": "The node's attributes. ",
+					"type": "object",
+					"additionalProperties": {
+						"anyOf": [
+							{
+								"type": "number"
+							},
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						]
+					}
+				}
+			},
+			"required": ["key", "attributes"]
+		},
+		"def-1": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Graph Edge Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"description": "The edge's ID",
+					"type": "string"
+				},
+				"source": {
+					"description": "The key of the node at the edge's source",
+					"type": "string"
+				},
+				"target": {
+					"description": "The key of the node at the edge's target",
+					"type": "string"
+				},
+				"attributes": {
+					"description": "The edges attributes & values",
+					"type": "object",
+					"additionalProperties": {
+						"anyOf": [
+							{
+								"type": "number"
+							},
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						]
+					}
+				}
+			},
+			"required": ["key", "source", "target", "attributes"]
+		},
+		"def-2": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Graph Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"options": {
+					"type": "object",
+					"properties": {
+						"type": {
+							"description": "Type of the graph: either directed or undirected",
+							"enum": ["directed", "undirected"]
+						}
+					},
+					"required": ["type"],
+					"additionalProperties": false
+				},
+				"nodes": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/def-0"
+					}
+				},
+				"edges": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/def-1"
+					}
+				}
+			},
+			"required": ["options", "nodes", "edges"]
+		},
+		"def-3": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Graph Instantiated Attribute Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"type": {
+					"enum": ["randexp", "jsonLogic", "faker"]
+				},
+				"args": {
+					"type": "object",
+					"properties": {},
+					"additionalProperties": true
+				}
+			},
+			"required": ["type", "args"]
+		},
+		"def-4": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Rewriting Rule Processing Config Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"rule": {
+					"description": "The key of the graph rewriting rule to execute",
+					"type": "string"
+				},
+				"options": {
+					"description": "The processing configuration for the rule",
+					"type": "object",
+					"properties": {
+						"mode": {
+							"description": "Replace either 'all', only the 'first' or between x and y pattern matches",
+							"enum": ["all", "first", "interval"],
+							"default": "first"
+						},
+						"interval": {
+							"type": "object",
+							"properties": {
+								"min": {
+									"type": "integer"
+								},
+								"max": {
+									"type": "integer"
+								}
+							},
+							"additionalProperties": false,
+							"required": ["min", "max"]
+						},
+						"repeat": {
+							"anyOf": [
+								{
+									"type": "integer"
+								},
+								{
+									"type": "array",
+									"items": {
+										"type": "integer"
+									},
+									"minItems": 2,
+									"maxItems": 2
+								}
+							]
+						}
+					},
+					"additionalProperties": false,
+					"if": {
+						"properties": {
+							"mode": {
+								"enum": ["interval"]
+							}
+						}
+					},
+					"then": {
+						"required": ["interval"]
+					}
+				}
+			},
+			"required": ["rule", "options"]
+		},
+		"def-5": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Pattern Node Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"type": "string"
+				},
+				"attributes": {
+					"type": "object",
+					"additionalProperties": {
+						"anyOf": [
+							{
+								"type": "number"
+							},
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							},
+							{
+								"type": "null"
+							},
+							{
+								"type": "array",
+								"items": {
+									"anyOf": [
+										{
+											"type": "number"
+										},
+										{
+											"type": "string"
+										},
+										{
+											"type": "boolean"
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			},
+			"required": ["key"]
+		},
+		"def-6": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Pattern Graph Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"options": {
+					"type": "object",
+					"properties": {
+						"type": {
+							"description": "Type of the graph: either directed or undirected",
+							"enum": ["directed", "undirected"]
+						}
+					},
+					"required": ["type"],
+					"additionalProperties": false
+				},
+				"nodes": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/def-5"
+					}
+				},
+				"edges": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/def-1"
+					}
+				},
+				"nacs": {
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/nacSchema"
+					}
+				}
+			},
+			"required": ["options", "nodes", "edges"],
+			"$defs": {
+				"nacSchema": {
+					"type": "object",
+					"properties": {
+						"options": {
+							"type": "object",
+							"properties": {
+								"type": {
+									"description": "Type of the graph: either directed or undirected",
+									"enum": ["directed", "undirected"]
+								}
+							}
+						},
+						"nodes": {
+							"type": "array",
+							"items": {
+								"$ref": "#/definitions/def-5"
+							}
+						},
+						"edges": {
+							"type": "array",
+							"items": {
+								"$ref": "#/definitions/def-1"
+							}
+						}
+					},
+					"required": ["nodes", "edges"],
+					"additionalProperties": false
+				}
+			}
+		},
+		"def-7": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Replacement Edge Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"description": "The edge's ID",
+					"type": "string"
+				},
+				"source": {
+					"description": "The key of the node at the edge's source",
+					"type": "string"
+				},
+				"target": {
+					"description": "The key of the node at the edge's target",
+					"type": "string"
+				},
+				"attributes": {
+					"description": "The edges attributes & values",
+					"type": "object",
+					"properties": {
+						"type": {
+							"type": "string"
+						}
+					},
+					"patternProperties": {
+						"^(?!type$).*": {
+							"oneOf": [
+								{
+									"type": "number"
+								},
+								{
+									"type": "string"
+								},
+								{
+									"type": "boolean"
+								},
+								{
+									"$ref": "#/definitions/def-3"
+								}
+							]
+						}
+					}
+				},
+				"rewriteOptions": {
+					"type": "object",
+					"properties": {
+						"attributeReplacementMode": {
+							"description": "Defines how the attributes are handles during rewrite. 'Modify' mode adds or updates the given attributes (setting an attribute to null deletes it). 'Replace' mode deletes all attributes of the matched node and then sets the given attributes. 'Delete' mode deletes all attributes and doesn't add any new ones.",
+							"enum": ["modify", "replace", "delete"],
+							"default": "modify"
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"required": ["key", "source", "target", "attributes"]
+		},
+		"def-8": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Replacement Node Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"type": "string"
+				},
+				"attributes": {
+					"type": "object",
+					"additionalProperties": {
+						"anyOf": [
+							{
+								"type": "number"
+							},
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							},
+							{
+								"type": "null"
+							},
+							{
+								"$ref": "#/definitions/def-3"
+							}
+						]
+					}
+				},
+				"rewriteOptions": {
+					"type": "object",
+					"properties": {
+						"attributeReplacementMode": {
+							"description": "Defines how the attributes are handles during rewrite. 'Modify' mode adds or updates the given attributes. Setting an attribute to null deletes it. 'Replace' mode deletes all attributes of the matched node and then sets the given attributes. 'Delete' mode deletes all attributes and doesn't add any new ones.",
+							"enum": ["modify", "replace", "delete"],
+							"default": "modify"
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"required": ["key"]
+		},
+		"def-9": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Replacement Graph Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"options": {
+					"type": "object",
+					"properties": {
+						"type": {
+							"description": "Type of the graph: either directed or undirected",
+							"enum": ["directed", "undirected"]
+						}
+					},
+					"required": ["type"],
+					"additionalProperties": false
+				},
+				"nodes": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/def-8"
+					}
+				},
+				"edges": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/def-7"
+					}
+				}
+			},
+			"required": ["options", "nodes", "edges"]
+		},
+		"def-10": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Graph Rewriting Rule Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"type": "string"
+				},
+				"patternGraph": {
+					"$ref": "#/definitions/def-6"
+				},
+				"replacementGraph": {
+					"anyOf": [
+						{
+							"$ref": "#/definitions/def-9"
+						},
+						{
+							"$ref": "#/$defs/externalReplacementGraphConfig"
+						}
+					]
+				},
+				"options": {
+					"type": "object",
+					"properties": {
+						"homomorphic": {
+							"type": "boolean"
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"required": ["key", "patternGraph", "replacementGraph"],
+			"$defs": {
+				"externalReplacementGraphConfig": {
+					"type": "object",
+					"properties": {
+						"type": {
+							"enum": ["externalApi"]
+						},
+						"args": {
+							"$ref": "#/$defs/externalApiInstantiationOptions"
+						}
+					},
+					"required": ["type"],
+					"additionalProperties": false
+				},
+				"externalApiInstantiationOptions": {
+					"type": "object",
+					"properties": {
+						"endpoint": {
+							"type": "string"
+						},
+						"additionalRequestBodyParameters": {
+							"type": "object"
+						}
+					},
+					"required": ["endpoint"],
+					"additionalProperties": false
+				}
+			}
+		},
+		"def-11": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Graph Find Rule Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"type": "string"
+				},
+				"patternGraph": {
+					"$ref": "#/definitions/def-6"
+				},
+				"options": {
+					"type": "object",
+					"properties": {
+						"homomorphic": {
+							"type": "boolean"
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"required": ["patternGraph"]
+		},
+		"def-12": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Graph Rewriting Request Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"hostgraph": {
+					"$ref": "#/definitions/def-2"
+				},
+				"rules": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/def-10"
+					}
+				},
+				"sequence": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/def-4"
+					}
+				},
+				"options": {
+					"type": "object",
+					"properties": {
+						"returnHistory": {
+							"description": "If set to true, the resultset will include the exported hostgraph after each rewriting step in chronological order.",
+							"type": "boolean",
+							"default": false
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"required": ["hostgraph"]
+		},
+		"def-13": {
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"title": "Graph Find Pattern Request Schema",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"hostgraph": {
+					"$ref": "#/definitions/def-2"
+				},
+				"rules": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/def-11"
+					},
+					"minItems": 1,
+					"maxItems": 1
+				}
+			},
+			"required": ["hostgraph", "rules"]
+		}
+	},
+	"paths": {
+		"/health": {
+			"get": {
+				"responses": {
+					"200": {
+						"description": "Default Response"
+					}
+				}
+			}
+		},
+		"/neo4j/health": {
+			"get": {
+				"responses": {
+					"200": {
+						"description": "Default Response"
+					}
+				}
+			}
+		},
+		"/node": {
+			"post": {
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"$schema": "http://json-schema.org/draft-07/schema#",
+							"$id": "todo.com",
+							"title": "Graph Node Schema",
+							"type": "object",
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"description": "The node's ID, also used as node in an edges source/target etc.",
+									"type": "string"
+								},
+								"attributes": {
+									"description": "The node's attributes. ",
+									"type": "object",
+									"additionalProperties": {
+										"anyOf": [
+											{
+												"type": "number"
+											},
+											{
+												"type": "string"
+											},
+											{
+												"type": "boolean"
+											}
+										]
+									}
+								}
+							},
+							"required": ["key", "attributes"]
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Default Response"
+					}
+				}
+			}
+		},
+		"/node/{nodeInternalId}": {
+			"get": {
+				"parameters": [
+					{
+						"type": "string",
+						"required": true,
+						"in": "path",
+						"name": "nodeInternalId"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Default Response"
+					}
+				}
+			},
+			"delete": {
+				"parameters": [
+					{
+						"type": "string",
+						"required": true,
+						"in": "path",
+						"name": "nodeInternalId"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Default Response"
+					}
+				}
+			}
+		},
+		"/nodes": {
+			"get": {
+				"responses": {
+					"200": {
+						"description": "Default Response"
+					}
+				}
+			},
+			"delete": {
+				"responses": {
+					"200": {
+						"description": "Default Response"
+					}
+				}
+			}
+		},
+		"/edge": {
+			"post": {
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"$schema": "http://json-schema.org/draft-07/schema#",
+							"$id": "todo.com",
+							"title": "Graph Edge Schema",
+							"type": "object",
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"description": "The edge's ID",
+									"type": "string"
+								},
+								"source": {
+									"description": "The key of the node at the edge's source",
+									"type": "string"
+								},
+								"target": {
+									"description": "The key of the node at the edge's target",
+									"type": "string"
+								},
+								"attributes": {
+									"description": "The edges attributes & values",
+									"type": "object",
+									"additionalProperties": {
+										"anyOf": [
+											{
+												"type": "number"
+											},
+											{
+												"type": "string"
+											},
+											{
+												"type": "boolean"
+											}
+										]
+									}
+								}
+							},
+							"required": ["key", "source", "target", "attributes"]
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Default Response"
+					}
+				}
+			}
+		},
+		"/edge/{edgeInternalId}": {
+			"get": {
+				"parameters": [
+					{
+						"type": "string",
+						"required": true,
+						"in": "path",
+						"name": "edgeInternalId"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Default Response"
+					}
+				}
+			},
+			"delete": {
+				"parameters": [
+					{
+						"type": "string",
+						"required": true,
+						"in": "path",
+						"name": "edgeInternalId"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Default Response"
+					}
+				}
+			}
+		}
+	}
 }

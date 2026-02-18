@@ -13,7 +13,7 @@
 		"generate:openapi": "NODE_ENV=test tsx scripts/generate-openapi.ts",
 		"prettier": "npx prettier . --check",
 		"prettier-watch": "onchange \"**/*\" -- prettier --write --ignore-unknown {{changed}}",
-		"lint": "npx eslint .",
+		"lint": "npx eslint ./src",
 		"compile-schemas": "json2ts --cwd src/schemas -i src/schemas -o src/types"
 	},
 	"keywords": [
