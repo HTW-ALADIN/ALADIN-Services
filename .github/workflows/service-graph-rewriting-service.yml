@@ -3,14 +3,8 @@ name: graph-rewriting-service
 on:
   push:
     branches: ["master"]
-    paths:
-      - "services/graph-rewriting-service/**"
-      - "packages/typescript/**"
   pull_request:
     branches: ["master"]
-    paths:
-      - "services/graph-rewriting-service/**"
-      - "packages/typescript/**"
 
 defaults:
   run:
