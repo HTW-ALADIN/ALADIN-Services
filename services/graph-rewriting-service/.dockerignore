@@ -1,0 +1,27 @@
+# Dependencies and build output
+node_modules/
+dist/
+
+# Test artefacts
+test/
+coverage/
+
+# Neo4j local data volumes
+neo4j_db/
+
+# Secrets
+.env
+.env.*
+
+# Generated specs
+openapi.json
+openapi.yaml
+
+# Dev/demo content not needed in the image
+demo/
+examples/
+
+# Editor and VCS
+.git/
+.vscode/
+.github/

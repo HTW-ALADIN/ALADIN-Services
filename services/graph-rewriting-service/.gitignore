@@ -10,3 +10,7 @@
 
 .env
 .env.local
+
+# Generated OpenAPI spec
+/openapi.json
+/openapi.yaml

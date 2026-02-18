@@ -1,0 +1,15 @@
+name: graph-rewriting-as-a-service-prod
+
+services:
+  graph-rewriting-service:
+    build: .
+    image: graph-rewriting-service:latest
+    ports:
+      - "8080:8080"
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - APP_ENV=production
+      - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set}
+    restart: unless-stopped
