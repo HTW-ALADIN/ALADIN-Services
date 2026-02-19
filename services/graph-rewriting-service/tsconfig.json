@@ -3,7 +3,9 @@
 	"compilerOptions": {
 		"preserveConstEnums": true,
 		"outDir": "dist/",
-		"resolveJsonModule": true
+		"resolveJsonModule": true,
+		"moduleResolution": "bundler",
+		"module": "esnext"
 	},
 	"include": ["src/**/*", "src/types/*.d.ts"],
 	"exclude": ["**/*.spec.ts"]

@@ -4,6 +4,7 @@ import type { AdditionalOperation, RulesLogic } from 'json-logic-js';
 import { IValueInstantiator, IInstantiatorOptions } from '../types';
 import { GraphSchema } from '../../../types/graph.schema';
 import { logger } from '../../../utils/logger';
+import { LogicEngine } from 'json-logic-engine';
 
 type JsonLogicRule = RulesLogic<AdditionalOperation>;
 
@@ -25,12 +26,12 @@ export enum JsonPathErrors {
 	'PathUnresolvable' = 'JSON Path could not be resolved',
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let logicEngine: any;
-(async () => {
-	const { LogicEngine } = await import('json-logic-engine');
-	logicEngine = new LogicEngine();
-})();
+// // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// let logicEngine: any;
+// (async () => {
+// 	const { LogicEngine } = await import('json-logic-engine');
+// 	logicEngine = new LogicEngine();
+// })();
 
 export class JsonLogicInstantiator
 	implements IValueInstantiator<JsonLogicInstantiatorOptions>
@@ -40,6 +41,8 @@ export class JsonLogicInstantiator
 	get instantiatorKey() {
 		return this._instantiatorKey;
 	}
+
+	private logicEngine = new LogicEngine();
 
 	public instantiateValue(
 		args: JsonLogicInstantiatorOptions
@@ -82,7 +85,7 @@ export class JsonLogicInstantiator
 			// since JsonLogic results can be different data types (e.g. arrays)
 			// we need to turn these into strings if not primary data type
 
-			const result = logicEngine.run(rule, data);
+			const result = this.logicEngine.run(rule, data);
 			if (['string', 'boolean', 'number'].includes(typeof result)) {
 				logger.info(
 					{ result },
