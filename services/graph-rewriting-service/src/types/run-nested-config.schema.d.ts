@@ -5,6 +5,32 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
+export interface RewritingNestedRuleProcessingConfigSchema {
+  /**
+   * The graph rewriting rules to execute
+   *
+   * @minItems 2
+   */
+  rules: [
+    RewritingRuleProcessingConfigSchema,
+    RewritingRuleProcessingConfigSchema,
+    ...RewritingRuleProcessingConfigSchema[]
+  ];
+  /**
+   * The processing configuration for the rule
+   */
+  options: {
+    /**
+     * Replace either 'all', only the 'first' or between x and y pattern matches
+     */
+    mode?: "all" | "first" | "interval";
+    interval?: {
+      min: number;
+      max: number;
+    };
+    repeat?: number | [number, number];
+  };
+}
 export interface RewritingRuleProcessingConfigSchema {
   /**
    * The key of the graph rewriting rule to execute

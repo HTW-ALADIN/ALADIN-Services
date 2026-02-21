@@ -11,6 +11,7 @@ import ReplacementnodeSchema from '../../schemas/replacementnode.schema.json';
 import ReplacementedgeSchema from '../../schemas/replacementedge.schema.json';
 import ReplacementgraphSchema from '../../schemas/replacementgraph.schema.json';
 import RewritingRuleProcessingConfigSchema from '../../schemas/run-config.schema.json';
+import RewritingNestedRuleProcessingConfigSchema from '../../schemas/run-nested-config.schema.json';
 
 import grsRoutes from '../grs/routes/grs';
 
@@ -24,6 +25,7 @@ const grsPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 
 	fastify.log.debug('GraphTransformation Plugin: Adding relevant schemas');
 	fastify.addSchema(RewritingRuleProcessingConfigSchema);
+	fastify.addSchema(RewritingNestedRuleProcessingConfigSchema);
 	fastify.addSchema(PatternnodeSchema);
 	fastify.addSchema(PatterngraphSchema);
 	fastify.addSchema(ReplacementedgeSchema);

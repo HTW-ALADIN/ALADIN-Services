@@ -17,7 +17,14 @@
 		"sequence": {
 			"type": "array",
 			"items": {
-				"$ref": "run-config.schema.json"
+				"anyOf": [
+					{
+						"$ref": "run-config.schema.json"
+					},
+					{
+						"$ref": "run-nested-config.schema.json"
+					}
+				]
 			}
 		},
 		"options": {

@@ -8,7 +8,7 @@
 export interface GraphRewritingRequestSchema {
   hostgraph: GraphSchema;
   rules?: GraphRewritingRuleSchema[];
-  sequence?: RewritingRuleProcessingConfigSchema[];
+  sequence?: (RewritingRuleProcessingConfigSchema | RewritingNestedRuleProcessingConfigSchema)[];
   options?: {
     /**
      * If set to true, the resultset will include the exported hostgraph after each rewriting step in chronological order.
@@ -168,6 +168,32 @@ export interface RewritingRuleProcessingConfigSchema {
    * The key of the graph rewriting rule to execute
    */
   rule: string;
+  /**
+   * The processing configuration for the rule
+   */
+  options: {
+    /**
+     * Replace either 'all', only the 'first' or between x and y pattern matches
+     */
+    mode?: "all" | "first" | "interval";
+    interval?: {
+      min: number;
+      max: number;
+    };
+    repeat?: number | [number, number];
+  };
+}
+export interface RewritingNestedRuleProcessingConfigSchema {
+  /**
+   * The graph rewriting rules to execute
+   *
+   * @minItems 2
+   */
+  rules: [
+    RewritingRuleProcessingConfigSchema,
+    RewritingRuleProcessingConfigSchema,
+    ...RewritingRuleProcessingConfigSchema[]
+  ];
   /**
    * The processing configuration for the rule
    */
