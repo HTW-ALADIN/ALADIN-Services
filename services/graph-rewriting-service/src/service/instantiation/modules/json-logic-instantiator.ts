@@ -26,13 +26,6 @@ export enum JsonPathErrors {
 	'PathUnresolvable' = 'JSON Path could not be resolved',
 }
 
-// // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// let logicEngine: any;
-// (async () => {
-// 	const { LogicEngine } = await import('json-logic-engine');
-// 	logicEngine = new LogicEngine();
-// })();
-
 export class JsonLogicInstantiator
 	implements IValueInstantiator<JsonLogicInstantiatorOptions>
 {
@@ -79,6 +72,12 @@ export class JsonLogicInstantiator
 
 		if (data && typeof data === 'object') {
 			data = this.replacePlaceholderValues(data, graph);
+		}
+
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		if (!data && (rule as any)?.var) {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			rule = { preserve: (rule as any).var };
 		}
 
 		try {
