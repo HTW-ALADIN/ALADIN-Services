@@ -76,6 +76,13 @@
                                     "options": {}
                                 }
                             },
+                            "patternId": {
+                                "type": "faker",
+                                "args": {
+                                    "module": "string",
+                                    "method": "uuid"
+                                }
+                            },
                             "type": "pattern"
                         }
                     },
@@ -101,7 +108,7 @@
             }
         },
         {
-            "key": "replace_pattern_with_gate_sequence",
+            "key": "replace_pattern_with_gate",
             "options": {
                 "homomorphic": false
             },
@@ -150,12 +157,6 @@
                         "attributes": {}
                     },
                     {
-                        "key": "Sequence1",
-                        "attributes": {
-                            "type": "Sequence"
-                        }
-                    },
-                    {
                         "key": "Gate1",
                         "attributes": {
                             "type": "Gate",
@@ -191,13 +192,16 @@
                                         ]
                                     }
                                 }
+                            },
+                            "gateType": "open",
+                            "patternId": {
+                                "type": "jsonLogic",
+                                "args": {
+                                    "rule": {
+                                        "var": "$.nodes.[?(@.key === 'Pattern')].attributes.patternId"
+                                    }
+                                }
                             }
-                        }
-                    },
-                    {
-                        "key": "Sequence2",
-                        "attributes": {
-                            "type": "Sequence"
                         }
                     },
                     {
@@ -236,13 +240,16 @@
                                         ]
                                     }
                                 }
+                            },
+                            "gateType": "closed",
+                            "patternId": {
+                                "type": "jsonLogic",
+                                "args": {
+                                    "rule": {
+                                        "var": "$.nodes.[?(@.key === 'Pattern')].attributes.patternId"
+                                    }
+                                }
                             }
-                        }
-                    },
-                    {
-                        "key": "Sequence3",
-                        "attributes": {
-                            "type": "Sequence"
                         }
                     },
                     {
@@ -252,39 +259,116 @@
                 ],
                 "edges": [
                     {
-                        "key": "AToSequence1",
+                        "key": "AToGate1",
                         "source": "A",
-                        "target": "Sequence1",
-                        "attributes": {}
-                    },
-                    {
-                        "key": "Sequence1toGate1",
-                        "source": "Sequence1",
                         "target": "Gate1",
-                        "attributes": {}
+                        "attributes": {
+                            "patternId": {
+                                "type": "jsonLogic",
+                                "args": {
+                                    "rule": {
+                                        "var": "$.nodes.[?(@.key === 'Pattern')].attributes.patternId"
+                                    }
+                                }
+                            }
+                        }
                     },
                     {
-                        "key": "Gate1ToSequence2",
+                        "key": "Gate1ToGate2",
                         "source": "Gate1",
-                        "target": "Sequence2",
-                        "attributes": {}
-                    },
-                    {
-                        "key": "Sequence2ToGate2",
-                        "source": "Sequence2",
                         "target": "Gate2",
-                        "attributes": {}
+                        "attributes": {
+                            "patternId": {
+                                "type": "jsonLogic",
+                                "args": {
+                                    "rule": {
+                                        "var": "$.nodes.[?(@.key === 'Pattern')].attributes.patternId"
+                                    }
+                                }
+                            }
+                        }
                     },
                     {
-                        "key": "Gate2ToSequence3",
+                        "key": "Gate2ToB",
                         "source": "Gate2",
-                        "target": "Sequence3",
+                        "target": "B",
+                        "attributes": {
+                            "patternId": {
+                                "type": "jsonLogic",
+                                "args": {
+                                    "rule": {
+                                        "var": "$.nodes.[?(@.key === 'Pattern')].attributes.patternId"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "key": "add_branches_to_gates",
+            "options": {
+                "homomorphic": false
+            },
+            "patternGraph": {
+                "options": {
+                    "type": "directed"
+                },
+                "nodes": [
+                    {
+                        "key": "GateA",
+                        "attributes": {
+                            "type": "Gate",
+                            "gateType": "open"
+                        }
+                    },
+                    {
+                        "key": "GateB",
+                        "attributes": {
+                            "type": "Gate",
+                            "gateType": "closed"
+                        }
+                    }
+                ],
+                "edges": [
+                    {
+                        "key": "GateAToSequence",
+                        "source": "GateA",
+                        "target": "GateB",
+                        "attributes": {}
+                    }
+                ]
+            },
+            "replacementGraph": {
+                "options": {
+                    "type": "directed"
+                },
+                "nodes": [
+                    {
+                        "key": "GateA",
+                        "attributes": {
+                            "type": "Gate"
+                        }
+                    },
+                    {
+                        "key": "GateB",
+                        "attributes": {
+                            "type": "Gate"
+                        }
+                    }
+                ],
+                "edges": [
+                    {
+                        "key": "GateAToGateB",
+                        "source": "GateA",
+                        "target": "GateB",
                         "attributes": {}
                     },
                     {
-                        "key": "Sequence3ToB",
-                        "source": "Sequence3",
-                        "target": "B",
+                        "key": "GateAToGateB",
+                        "source": "GateA",
+                        "target": "GateB",
                         "attributes": {}
                     }
                 ]
@@ -309,7 +393,13 @@
                     }
                 },
                 {
-                    "rule": "replace_pattern_with_gate_sequence",
+                    "rule": "replace_pattern_with_gate",
+                    "options": {
+                        "mode": "all"
+                    }
+                },
+                {
+                    "rule": "add_branches_to_gates",
                     "options": {
                         "mode": "all"
                     }
