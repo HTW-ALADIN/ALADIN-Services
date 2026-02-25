@@ -1,0 +1,7 @@
+build/
+node_modules/
+.npmrc
+.env
+npm-logs/
+.stefan_DB
+output.*

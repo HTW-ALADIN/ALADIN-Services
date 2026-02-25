@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<link rel="stylesheet" href="test-page.css">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Selection</title>
+</head>
+
+<body>
+    <div id="test-selection">
+        <h2>Select a Test</h2>
+        <select id="test-dropdown"></select>
+        <button id="start-btn">Start Test</button>
+    </div>
+
+    <div id="test-container" style="display: none;">
+        <div id="question-content">
+            <h2 id="question-text"></h2>
+            <div id="input-container"></div>
+            <div id="button-container">
+                <button id="submit-btn">Submit</button>
+                <button id="next-btn" disabled>Next</button>
+            </div>
+            <div id="feedback-box" style="display: none;"></div>
+        </div>
+        <div id="image-container">
+            <img id="question-image" src="" alt="Question related image">
+        </div>
+    </div>
+
+    <script type="module" src="test-page-script.js"></script>
+</body>
+
+</html>

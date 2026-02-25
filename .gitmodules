@@ -1,3 +1,0 @@
-[submodule "services/sql-assessment-service"]
-	path = services/sql-assessment-service
-	url = git@github.com:HTW-ALADIN/SQL-Assessment.git

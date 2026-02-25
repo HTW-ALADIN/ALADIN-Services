@@ -1,0 +1,73 @@
+POST http://localhost:3333/api/database/analyze-database
+content-type: application/json
+
+{
+    "connectionInfo": {
+        "type": "postgres",
+        "host": "132.176.75.244",
+        "port": "5995",
+        "username": "test",
+        "password": "test",
+        "database": "test",
+        "schema": "public"
+    }
+}
+
+# {
+#     "connectionInfo": {
+#         "type": "postgres",
+#         "host": "localhost",
+#         "port": "5432",
+#         "username": "myuser",
+#         "password": "mypass",
+#         "database": "fussballdb",
+#         "schema": "public"
+#     }
+# }
+
+###
+GET http://localhost:3333/api/generation/generate
+
+{
+	"connectionInfo": {
+		"type": "postgres",
+		"host": "localhost",
+		"port": "5432",
+		"username": "myuser",
+		"password": "mypass",
+		"database": "fussballdb",
+		"schema": "public"
+	},
+	"taskConfiguration": {
+		"aggregation": false,
+		"columnCount": 2,
+		"predicateCount": 2,
+		"operationTypes": [],
+		"joinDepth": 2,
+		"joinTypes": [],
+		"groupby": false,
+		"having": false,
+		"orderby": true
+	}
+}
+
+###
+POST http://localhost:3333/api/grading/grade
+content-type: application/json
+
+{
+	"connectionInfo": {
+        "type": "postgres",
+        "host": "132.176.75.244",
+        "port": "5995",
+        "username": "test",
+        "password": "test",
+        "database": "test",
+        "schema": "public"
+    },
+	"gradingRequest": {
+		"taskId": "4f7c66ed-e4e5-422e-8d6f-ef4ee3876d07",
+		"studentQuery": "SELECT PROJEKT.\"PNAME\", ANG_PRO.\"ANGNR\", ANGEST.\"NAME\" FROM PROJEKT LEFT JOIN ANG_PRO ON PROJEKT.\"PNR\" = ANG_PRO.\"PNR\" LEFT OUTER JOIN ANGEST ON ANG_PRO.\"ANGNR\" = ANGEST.\"ANGNR\";",
+        "referenceQuery": "SELECT * FROM PROJEKT"
+	}
+}

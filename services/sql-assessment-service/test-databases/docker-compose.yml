@@ -1,0 +1,63 @@
+version: '3.8'
+services:
+  postgres_simple:
+    image: postgres:latest
+    container_name: postgres_simple
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PW}
+      POSTGRES_DB: db_simple
+    volumes:
+      - ./simple_large.sql:/docker-entrypoint-initdb.d/simple_large.sql
+    ports:
+      - "5433:5432"
+
+  postgres_complex:
+    image: postgres:latest
+    container_name: postgres_complex
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PW}
+      POSTGRES_DB: db_complex
+    volumes:
+      - ./complex_large.sql:/docker-entrypoint-initdb.d/complex_large.sql
+    ports:
+      - "5434:5432"
+
+  postgres_schema_only:
+    image: postgres:latest
+    container_name: postgres_schema_only
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PW}
+      POSTGRES_DB: db_schema_only
+    volumes:
+      - ./schema_only.sql:/docker-entrypoint-initdb.d/schema_only.sql
+    ports:
+      - "5435:5432"
+
+  postgres_empty:
+    image: postgres:latest
+    user: 999:999
+    container_name: postgres_empty
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PW}
+      POSTGRES_DB: db_empty
+    ports:
+      - "5436:5432"
+
+  postgres_13:
+    build:
+      context: services/postgres
+      dockerfile: postgres13.Dockerfile
+    container_name: postgres_13
+    user: 999:999
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PW}
+      POSTGRES_DB: db
+    ports:
+      - "5437:5432"
+    volumes:
+      - postgres-data:/docker-entrypoint-initdb.d/northwind.sql
