@@ -100,14 +100,15 @@ describe('ASTComparator', () => {
             expect(result.columnsMatch).toBe(false);
         });
 
-        it('includes feedback when columns do not match', () => {
+        it('includes ast.columns feedback when columns do not match', () => {
             const result = comparator.compare(parse(SQL.selectWrongCol), parse(SQL.selectCols));
-            expect(result.feedback.length).toBeGreaterThan(0);
+            expect(result.ast?.columns).toBeDefined();
         });
 
-        it('includes feedbackWithSolution listing the required columns', () => {
+        it('includes ast.columns.solution listing the required columns', () => {
             const result = comparator.compare(parse(SQL.selectFewCols), parse(SQL.selectCols));
-            expect(result.feedbackWithSolution.some(s => s.includes('columns'))).toBe(true);
+            expect(result.ast?.columns?.solution).toBeDefined();
+            expect(result.ast?.columns?.solution).toContain('columns');
         });
     });
 
@@ -316,7 +317,7 @@ describe('ASTComparator', () => {
             const s10 = parse(SQL.withOffset) as Select;  // LIMIT 10 OFFSET 3
             const result = comparator.compareLimitOffset(s5, s10);
             expect(result.match).toBe(false);
-            expect(result.feedback.some(f => f.includes('LIMIT'))).toBe(true);
+            expect(result.ast?.limit?.message).toContain('LIMIT');
         });
 
         it('returns match=false when OFFSET values differ', () => {
@@ -324,7 +325,7 @@ describe('ASTComparator', () => {
             const withoutOffset = parse(SQL.withLimit)       as Select; // LIMIT 5
             const result = comparator.compareLimitOffset(withOffset, withoutOffset);
             expect(result.match).toBe(false);
-            expect(result.feedback.some(f => f.includes('OFFSET'))).toBe(true);
+            expect(result.ast?.offset?.message).toContain('OFFSET');
         });
 
         it('returns match=true when neither query has LIMIT', () => {
@@ -332,11 +333,11 @@ describe('ASTComparator', () => {
             expect(comparator.compareLimitOffset(s, s).match).toBe(true);
         });
 
-        it('includes feedbackWithSolution when LIMIT differs', () => {
+        it('includes ast.limit.solution when LIMIT differs', () => {
             const s5  = parse(SQL.withLimit)  as Select;
             const s10 = parse(SQL.withOffset) as Select;
             const result = comparator.compareLimitOffset(s5, s10);
-            expect(result.feedbackWithSolution.length).toBeGreaterThan(0);
+            expect(result.ast?.limit?.solution).toBeDefined();
         });
     });
 
@@ -350,12 +351,12 @@ describe('ASTComparator', () => {
             expect(comparator.compare(ast, ast).limitMatch).toBe(true);
         });
 
-        it('sets limitMatch=false and adds feedback when LIMIT clauses differ', () => {
+        it('sets limitMatch=false and adds ast.limit feedback when LIMIT clauses differ', () => {
             const s5  = parse(SQL.withLimit);  // LIMIT 5
             const s10 = parse(SQL.withOffset); // LIMIT 10 OFFSET 3
             const result = comparator.compare(s5, s10);
             expect(result.limitMatch).toBe(false);
-            expect(result.feedback.some(f => f.includes('LIMIT'))).toBe(true);
+            expect(result.ast?.limit?.message).toContain('LIMIT');
         });
     });
 });

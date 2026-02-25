@@ -3,6 +3,7 @@ import { AST, Join } from 'node-sql-parser';
 import { IParsedExecutionPlan, ParsedSubplan } from '../../shared/interfaces/execution-plan';
 import { ExecutionPlanParser } from '../execution-plan-parser';
 import { JoinComparator } from '../join-comparator';
+import { AssembledFeedback, ExecutionPlanFeedback, SubplanFeedback } from '../../shared/interfaces/feedback';
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -14,8 +15,7 @@ export interface ExecutionPlanComparisonResult {
      * WHERE, JOIN, DISTINCT, subplans, CTEs, LIMIT, window functions).
      */
     plansMatch: boolean;
-    feedback: string[];
-    feedbackWithSolution: string[];
+    executionPlan: ExecutionPlanFeedback;
     /** Number of grade points to deduct (one per differing plan element). */
     penaltyPoints: number;
 }
@@ -58,8 +58,7 @@ export class ExecutionPlanComparator {
         studentQuery: string,
         referenceQuery: string
     ): Promise<ExecutionPlanComparisonResult> {
-        const feedback: string[] = [];
-        const feedbackWithSolution: string[] = [];
+        const executionPlan: ExecutionPlanFeedback = {};
 
         const queryRunner = dataSource.createQueryRunner();
         let studentRawPlan: any;
@@ -73,8 +72,8 @@ export class ExecutionPlanComparator {
         }
 
         if (!studentRawPlan || !referenceRawPlan) {
-            feedback.push('Unable to retrieve execution plans.');
-            return { plansMatch: false, feedback, feedbackWithSolution, penaltyPoints: 0 };
+            executionPlan.planRetrieval = { message: 'Unable to retrieve execution plans.' };
+            return { plansMatch: false, executionPlan, penaltyPoints: 0 };
         }
 
         const parsedStudent   = this.executionPlanParser.parse(studentRawPlan[0],   studentAliasMap);
@@ -84,22 +83,19 @@ export class ExecutionPlanComparator {
             throw new Error('Unable to parse execution plans.');
         }
 
-        const [planFeedback, planFeedbackWithSolution, penaltyPoints] = this.diffPlans(
+        const penaltyPoints = this.diffPlans(
             parsedStudent,
             parsedReference,
             studentAST,
             referenceAST,
             studentAliasMap,
-            referenceAliasMap
+            referenceAliasMap,
+            executionPlan
         );
-
-        feedback.push(...planFeedback);
-        feedbackWithSolution.push(...planFeedbackWithSolution);
 
         return {
             plansMatch: penaltyPoints === 0,
-            feedback,
-            feedbackWithSolution,
+            executionPlan,
             penaltyPoints,
         };
     }
@@ -109,10 +105,12 @@ export class ExecutionPlanComparator {
     // =========================================================================
 
     /**
-     * Diffs all plan elements and returns [feedback, feedbackWithSolution, penaltyPoints].
+     * Diffs all plan elements and writes results into `target`.
+     * Returns the total penalty points for this level.
      *
-     * @param context - Optional prefix label for feedback messages, used when
-     *   this method is called recursively for subplans (e.g. "In subquery 'InitPlan 1': ").
+     * @param target  - The object to write feedback entries into (either the
+     *   top-level executionPlan block or a SubplanFeedback entry).
+     * @param depth   - Current recursion depth; diffing stops at MAX_RECURSION_DEPTH.
      */
     private diffPlans(
         studentPlan: IParsedExecutionPlan,
@@ -121,19 +119,17 @@ export class ExecutionPlanComparator {
         referenceAST: any,
         studentAliasMap: Record<string, string>,
         referenceAliasMap: Record<string, string>,
-        context = '',
+        target: ExecutionPlanFeedback | SubplanFeedback,
         depth = 0
-    ): [string[], string[], number] {
-        const feedback: string[] = [];
-        const feedbackWithSolution: string[] = [];
+    ): number {
         let penaltyPoints = 0;
-
-        const prefix = context ? `${context}: ` : '';
 
         // ── GROUP BY ─────────────────────────────────────────────────────────
         if (!this.compareArrays(studentPlan.groupKey, referencePlan.groupKey, studentAliasMap, referenceAliasMap)) {
-            feedback.push(`${prefix}Incorrect Group key.`);
-            feedbackWithSolution.push(`${prefix}Expected ${referencePlan.groupKey}, got ${studentPlan.groupKey}.`);
+            target.groupKey = {
+                message:  'Incorrect Group key.',
+                solution: `Expected ${referencePlan.groupKey}, got ${studentPlan.groupKey}.`,
+            };
             penaltyPoints++;
         }
 
@@ -142,22 +138,28 @@ export class ExecutionPlanComparator {
             this.joinComparator.normalizeFilter(studentPlan.havingFilter,   studentAliasMap) !==
             this.joinComparator.normalizeFilter(referencePlan.havingFilter, referenceAliasMap)
         ) {
-            feedback.push(`${prefix}Incorrect Having filter.`);
-            feedbackWithSolution.push(`${prefix}Expected ${referencePlan.havingFilter}, got ${studentPlan.havingFilter}.`);
+            target.having = {
+                message:  'Incorrect Having filter.',
+                solution: `Expected ${referencePlan.havingFilter}, got ${studentPlan.havingFilter}.`,
+            };
             penaltyPoints++;
         }
 
         // ── ORDER BY ─────────────────────────────────────────────────────────
         if (!this.compareArrays(studentPlan.sortKey, referencePlan.sortKey, studentAliasMap, referenceAliasMap)) {
-            feedback.push(`${prefix}Incorrect Order By sort key.`);
-            feedbackWithSolution.push(`${prefix}Expected ${referencePlan.sortKey}, got ${studentPlan.sortKey}.`);
+            target.orderBy = {
+                message:  'Incorrect Order By sort key.',
+                solution: `Expected ${referencePlan.sortKey}, got ${studentPlan.sortKey}.`,
+            };
             penaltyPoints++;
         }
 
         // ── WHERE ────────────────────────────────────────────────────────────
         if (!this.compareArrays(studentPlan.whereFilter, referencePlan.whereFilter, studentAliasMap, referenceAliasMap)) {
-            feedback.push(`${prefix}Incorrect Where filter.`);
-            feedbackWithSolution.push(`${prefix}Expected ${referencePlan.whereFilter}, got ${studentPlan.whereFilter}.`);
+            target.where = {
+                message:  'Incorrect Where filter.',
+                solution: `Expected ${referencePlan.whereFilter}, got ${studentPlan.whereFilter}.`,
+            };
             penaltyPoints++;
         }
 
@@ -170,20 +172,19 @@ export class ExecutionPlanComparator {
                 referenceAliasMap
             );
             if (!joinStatementsEqual) {
-                const [joinEqual, feedbackJoin, solution] = this.joinComparator.compareJoinAST(
+                const [joinEqual, joinEntry] = this.joinComparator.compareJoinAST(
                     referenceAST.from as Join[],
                     studentAST.from  as Join[],
                     studentAliasMap,
                     referenceAliasMap
                 );
-                feedback.push(...feedbackJoin.map(m => `${prefix}${m}`));
-                feedbackWithSolution.push(...solution.map(m => `${prefix}${m}`));
+                if (joinEntry) target.join = joinEntry;
                 if (!joinEqual) penaltyPoints++;
             }
         } else if (studentPlan.joinStatement && !referencePlan.joinStatement) {
-            feedback.push(`${prefix}Incorrect inclusion of Join statement.`);
+            target.join = { message: 'Incorrect inclusion of Join statement.' };
         } else if (referencePlan.joinStatement && !studentPlan.joinStatement) {
-            feedback.push(`${prefix}Join statement missing.`);
+            target.join = { message: 'Join statement missing.' };
         }
 
         // ── DISTINCT ─────────────────────────────────────────────────────────
@@ -192,11 +193,15 @@ export class ExecutionPlanComparator {
 
         if (studentDistinct !== referenceDistinct) {
             if (referenceDistinct) {
-                feedback.push(`${prefix}DISTINCT keyword is missing from the query.`);
-                feedbackWithSolution.push(`${prefix}The query should use SELECT DISTINCT.`);
+                target.distinct = {
+                    message:  'DISTINCT keyword is missing from the query.',
+                    solution: 'The query should use SELECT DISTINCT.',
+                };
             } else {
-                feedback.push(`${prefix}DISTINCT keyword should not be used in this query.`);
-                feedbackWithSolution.push(`${prefix}The query should use plain SELECT without DISTINCT.`);
+                target.distinct = {
+                    message:  'DISTINCT keyword should not be used in this query.',
+                    solution: 'The query should use plain SELECT without DISTINCT.',
+                };
             }
             penaltyPoints++;
         } else if (
@@ -205,11 +210,11 @@ export class ExecutionPlanComparator {
             studentPlan.distinctStrategy !== referencePlan.distinctStrategy
         ) {
             // Same presence but different strategy — informational only, no penalty
-            feedback.push(
-                `${prefix}Note: different DISTINCT implementation strategy ` +
-                `(student: ${studentPlan.distinctStrategy ?? 'unknown'}, ` +
-                `reference: ${referencePlan.distinctStrategy ?? 'unknown'}).`
-            );
+            target.distinctStrategy = {
+                message: `Note: different DISTINCT implementation strategy ` +
+                    `(student: ${studentPlan.distinctStrategy ?? 'unknown'}, ` +
+                    `reference: ${referencePlan.distinctStrategy ?? 'unknown'}).`,
+            };
         }
 
         // ── CTEs ─────────────────────────────────────────────────────────────
@@ -217,11 +222,11 @@ export class ExecutionPlanComparator {
         const referenceCTEs = [...(referencePlan.cteNames ?? [])].sort();
 
         if (JSON.stringify(studentCTEs) !== JSON.stringify(referenceCTEs)) {
-            feedback.push(`${prefix}Incorrect CTE usage.`);
-            feedbackWithSolution.push(
-                `${prefix}Expected CTEs: [${referenceCTEs.join(', ') || 'none'}], ` +
-                `got: [${studentCTEs.join(', ') || 'none'}].`
-            );
+            target.cte = {
+                message:  'Incorrect CTE usage.',
+                solution: `Expected CTEs: [${referenceCTEs.join(', ') || 'none'}], ` +
+                    `got: [${studentCTEs.join(', ') || 'none'}].`,
+            };
             penaltyPoints++;
         }
 
@@ -234,11 +239,15 @@ export class ExecutionPlanComparator {
 
         if (studentHasLimit !== referenceHasLimit) {
             if (referenceHasLimit) {
-                feedback.push(`${prefix}LIMIT clause is missing.`);
-                feedbackWithSolution.push(`${prefix}The query should include a LIMIT clause.`);
+                target.limit = {
+                    message:  'LIMIT clause is missing.',
+                    solution: 'The query should include a LIMIT clause.',
+                };
             } else {
-                feedback.push(`${prefix}LIMIT clause should not be present in this query.`);
-                feedbackWithSolution.push(`${prefix}Remove the LIMIT clause from the query.`);
+                target.limit = {
+                    message:  'LIMIT clause should not be present in this query.',
+                    solution: 'Remove the LIMIT clause from the query.',
+                };
             }
             penaltyPoints++;
         }
@@ -249,10 +258,14 @@ export class ExecutionPlanComparator {
 
         if (hasStudentWindow !== hasReferenceWindow) {
             if (hasReferenceWindow) {
-                feedback.push(`${prefix}Window function (OVER) is missing.`);
-                feedbackWithSolution.push(`${prefix}The query should use a window function with OVER.`);
+                target.window = {
+                    message:  'Window function (OVER) is missing.',
+                    solution: 'The query should use a window function with OVER.',
+                };
             } else {
-                feedback.push(`${prefix}Window function (OVER) should not be used in this query.`);
+                target.window = {
+                    message: 'Window function (OVER) should not be used in this query.',
+                };
             }
             penaltyPoints++;
         } else if (hasStudentWindow && hasReferenceWindow) {
@@ -264,11 +277,11 @@ export class ExecutionPlanComparator {
                     referenceAliasMap
                 )
             ) {
-                feedback.push(`${prefix}Incorrect PARTITION BY in window function.`);
-                feedbackWithSolution.push(
-                    `${prefix}Expected PARTITION BY: [${(referencePlan.windowPartitionKey ?? []).join(', ')}], ` +
-                    `got: [${(studentPlan.windowPartitionKey ?? []).join(', ')}].`
-                );
+                target.windowPartition = {
+                    message:  'Incorrect PARTITION BY in window function.',
+                    solution: `Expected PARTITION BY: [${(referencePlan.windowPartitionKey ?? []).join(', ')}], ` +
+                        `got: [${(studentPlan.windowPartitionKey ?? []).join(', ')}].`,
+                };
                 penaltyPoints++;
             }
 
@@ -280,32 +293,32 @@ export class ExecutionPlanComparator {
                     referenceAliasMap
                 )
             ) {
-                feedback.push(`${prefix}Incorrect ORDER BY in window function.`);
-                feedbackWithSolution.push(
-                    `${prefix}Expected window ORDER BY: [${(referencePlan.windowOrderKey ?? []).join(', ')}], ` +
-                    `got: [${(studentPlan.windowOrderKey ?? []).join(', ')}].`
-                );
+                target.windowOrderBy = {
+                    message:  'Incorrect ORDER BY in window function.',
+                    solution: `Expected window ORDER BY: [${(referencePlan.windowOrderKey ?? []).join(', ')}], ` +
+                        `got: [${(studentPlan.windowOrderKey ?? []).join(', ')}].`,
+                };
                 penaltyPoints++;
             }
         }
 
         // ── Subplans (recursive) ─────────────────────────────────────────────
         if (depth < ExecutionPlanComparator.MAX_RECURSION_DEPTH) {
-            const [subFeedback, subFeedbackWithSolution, subPenalty] = this.diffSubplans(
+            // Only top-level executionPlan block carries subplans
+            const topLevelTarget = target as ExecutionPlanFeedback;
+            penaltyPoints += this.diffSubplans(
                 studentPlan.subplans  ?? [],
                 referencePlan.subplans ?? [],
                 studentAST,
                 referenceAST,
                 studentAliasMap,
                 referenceAliasMap,
+                topLevelTarget,
                 depth
             );
-            feedback.push(...subFeedback);
-            feedbackWithSolution.push(...subFeedbackWithSolution);
-            penaltyPoints += subPenalty;
         }
 
-        return [feedback, feedbackWithSolution, penaltyPoints];
+        return penaltyPoints;
     }
 
     // =========================================================================
@@ -319,23 +332,19 @@ export class ExecutionPlanComparator {
         referenceAST: any,
         studentAliasMap: Record<string, string>,
         referenceAliasMap: Record<string, string>,
+        topLevelTarget: ExecutionPlanFeedback,
         depth: number
-    ): [string[], string[], number] {
-        const feedback: string[] = [];
-        const feedbackWithSolution: string[] = [];
+    ): number {
         let penaltyPoints = 0;
 
         if (studentSubplans.length !== referenceSubplans.length) {
-            feedback.push(
-                `Incorrect number of subqueries: expected ${referenceSubplans.length}, ` +
-                `got ${studentSubplans.length}.`
-            );
-            feedbackWithSolution.push(
-                `The query should contain exactly ${referenceSubplans.length} subquer` +
-                `${referenceSubplans.length === 1 ? 'y' : 'ies'}.`
-            );
+            topLevelTarget!.subqueryCount = {
+                message:  `Incorrect number of subqueries: expected ${referenceSubplans.length}, got ${studentSubplans.length}.`,
+                solution: `The query should contain exactly ${referenceSubplans.length} subquer` +
+                    `${referenceSubplans.length === 1 ? 'y' : 'ies'}.`,
+            };
             penaltyPoints++;
-            return [feedback, feedbackWithSolution, penaltyPoints];
+            return penaltyPoints;
         }
 
         for (let i = 0; i < referenceSubplans.length; i++) {
@@ -343,33 +352,44 @@ export class ExecutionPlanComparator {
             const stuSubplan = studentSubplans[i];
             const subContext = refSubplan.name ?? `Subquery ${i + 1}`;
 
+            // Initialise the subplan bucket
+            if (!topLevelTarget!.subplans) topLevelTarget!.subplans = {};
+            const subTarget: SubplanFeedback = {};
+            topLevelTarget!.subplans[subContext] = subTarget;
+
             // Check subplan type (InitPlan vs SubPlan)
             if (stuSubplan.type !== refSubplan.type) {
-                feedback.push(
-                    `In ${subContext}: expected a ${refSubplan.type}, ` +
-                    `got a ${stuSubplan.type}.`
-                );
+                subTarget.type = {
+                    message: `In ${subContext}: expected a ${refSubplan.type}, got a ${stuSubplan.type}.`,
+                };
                 penaltyPoints++;
                 continue;
             }
 
             // Recursively diff the subplan's own plan tree
-            const [subFb, subFbSol, subPenalty] = this.diffPlans(
+            penaltyPoints += this.diffPlans(
                 stuSubplan.plan,
                 refSubplan.plan,
                 studentAST,
                 referenceAST,
                 studentAliasMap,
                 referenceAliasMap,
-                `In ${subContext}`,
+                subTarget,
                 depth + 1
             );
-            feedback.push(...subFb);
-            feedbackWithSolution.push(...subFbSol);
-            penaltyPoints += subPenalty;
+
+            // Remove empty subplan entries (no issues found)
+            if (Object.keys(subTarget).length === 0) {
+                delete topLevelTarget!.subplans[subContext];
+            }
         }
 
-        return [feedback, feedbackWithSolution, penaltyPoints];
+        // Remove the subplans key entirely if it ended up empty
+        if (topLevelTarget!.subplans && Object.keys(topLevelTarget!.subplans).length === 0) {
+            delete topLevelTarget!.subplans;
+        }
+
+        return penaltyPoints;
     }
 
     // =========================================================================

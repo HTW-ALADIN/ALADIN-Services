@@ -1,5 +1,6 @@
 import { Binary, ColumnRefItem, Join } from 'node-sql-parser';
 import { JoinStatement } from '../shared/interfaces/execution-plan';
+import { FeedbackEntry } from '../shared/interfaces/feedback';
 
 /**
  * Compares join structures between student and reference queries using both
@@ -50,40 +51,48 @@ export class JoinComparator {
         return isEqual;
     }
 
+    /**
+     * Compares two AST JOIN arrays and returns a structured feedback entry.
+     *
+     * Returns [isEqual, entry] where `entry` is a FeedbackEntry when there is a
+     * mismatch, or undefined when the joins are equal.  The `solution` field of
+     * the entry contains a formatted Expected/Received comparison string.
+     */
     compareJoinAST(
         referenceJoin: Join[],
         studentJoin: Join[],
         studentAliasMap?: Record<string, string>,
         referenceAliasMap?: Record<string, string>
-    ): [boolean, string[], string[]] {
-        const feedback: string[] = [];
-        const feedbackWithSolution: string[] = [];
+    ): [boolean, FeedbackEntry | undefined] {
+        const messages: string[] = [];
         let isSameJoin = true;
 
         if (referenceJoin.length !== studentJoin.length) {
             isSameJoin = false;
-            feedback.push('Incorrect Join statement: Query does not include the correct number of Joins.');
-            feedbackWithSolution.push(...this.printJoinComparison(referenceJoin, studentJoin));
-            return [isSameJoin, feedback, feedbackWithSolution];
+            messages.push('Incorrect Join statement: Query does not include the correct number of Joins.');
+            return [isSameJoin, {
+                message:  messages.join(' '),
+                solution: this.buildJoinComparisonSolution(referenceJoin, studentJoin),
+            }];
         }
 
-        if (referenceJoin.length == 1 && studentJoin.length == 1) {
+        if (referenceJoin.length === 1 && studentJoin.length === 1) {
             if (referenceJoin[0].table !== studentJoin[0].table) {
                 isSameJoin = false;
-                feedback.push('Incorrect Join statement: Query uses incorrect table in Join statement');
+                messages.push('Incorrect Join statement: Query uses incorrect table in Join statement');
             }
         }
 
         for (let i = 1; i < referenceJoin.length; i++) {
             const reference = referenceJoin[i];
-            const student = studentJoin[i];
+            const student   = studentJoin[i];
 
             const joinType1 = reference.join;
             const joinType2 = student.join;
 
             if (!this.areJoinTypesCompatible(joinType1, joinType2)) {
                 isSameJoin = false;
-                feedback.push('Incorrect Join statement: Query uses wrong Join type.');
+                messages.push('Incorrect Join statement: Query uses wrong Join type.');
             }
 
             if (reference.table !== student.table) {
@@ -91,20 +100,24 @@ export class JoinComparator {
                     !(i > 0 && reference.table === studentJoin[i - 1]?.table && student.table === referenceJoin[i - 1]?.table)
                 ) {
                     isSameJoin = false;
-                    feedback.push('Incorrect Join statement: Query uses incorrect table in Join statement.');
+                    messages.push('Incorrect Join statement: Query uses incorrect table in Join statement.');
                 }
             }
 
             if (!this.areJoinConditionsEqual(reference.on, student.on, studentAliasMap, referenceAliasMap)) {
                 isSameJoin = false;
-                feedback.push('Incorrect Join statement: Query uses incorrect Join condition.');
+                messages.push('Incorrect Join statement: Query uses incorrect Join condition.');
             }
         }
 
-        if (feedback.length > 0) {
-            feedbackWithSolution.push(...this.printJoinComparison(referenceJoin, studentJoin));
+        if (messages.length > 0) {
+            return [isSameJoin, {
+                message:  messages.join(' '),
+                solution: this.buildJoinComparisonSolution(referenceJoin, studentJoin),
+            }];
         }
-        return [isSameJoin, feedback, feedbackWithSolution];
+
+        return [isSameJoin, undefined];
     }
 
     normalizeCondition(condition: any, aliasMap?: Record<string, string>): string | undefined {
@@ -148,7 +161,7 @@ export class JoinComparator {
         }
 
         const referenceNormalized = this.normalizeCondition(referenceCondition, referenceAliasMap);
-        const studentNormalized = this.normalizeCondition(studentCondition, studentAliasMap);
+        const studentNormalized   = this.normalizeCondition(studentCondition, studentAliasMap);
 
         return referenceNormalized === studentNormalized;
     }
@@ -161,24 +174,28 @@ export class JoinComparator {
         return false;
     }
 
-    private printJoinComparison(joins1: Join[], joins2: Join[]): string[] {
-        const feedback: string[] = [];
+    /**
+     * Builds a multi-line Expected/Received comparison string used as the
+     * `solution` field of a join FeedbackEntry.
+     */
+    private buildJoinComparisonSolution(joins1: Join[], joins2: Join[]): string {
+        const lines: string[] = [];
         const formatJoin = (join: Join, parent?: Join) => {
             const parentTable = parent?.table;
             return `${parentTable || ''} ${join?.join || ''} ${join?.table || ''} ${this.normalizeCondition(join?.on) || ''}`;
         };
 
         for (let i = 0; i < Math.max(joins1.length, joins2.length); i++) {
-            const join1 = joins1[i];
-            const join2 = joins2[i];
+            const join1   = joins1[i];
+            const join2   = joins2[i];
             const parent1 = joins1[i - 1];
             const parent2 = joins2[i - 1];
 
             const expected = join1 ? formatJoin(join1, parent1) : '';
             const received = join2 ? formatJoin(join2, parent2) : '';
-            feedback.push(`Expected: ${expected}`);
-            feedback.push(`Received: ${received}`);
+            lines.push(`Expected: ${expected}`);
+            lines.push(`Received: ${received}`);
         }
-        return feedback;
+        return lines.join('\n');
     }
 }

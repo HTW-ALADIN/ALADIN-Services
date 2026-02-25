@@ -1,5 +1,6 @@
 import { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
 import { GenerationOptions, GptOptions, ITaskConfiguration } from './domain';
+import { AssembledFeedback } from './feedback';
 
 /**
  * Statistics attached to a reference query, recording how prior student
@@ -85,8 +86,7 @@ export interface TaskResponse {
 }
 
 export interface ComparisonResult {
-	feedback: string[];
-	feedbackWithSolution: string[];
+	feedbackDetails: AssembledFeedback;
 	grade: number;
 	/** Whether the student query is semantically equivalent to the reference query. */
 	equivalent: boolean;
@@ -164,7 +164,7 @@ export interface IRequestComparisonOptions {
 export interface ResultSetComparisonResponse {
 	/** Whether both queries return identical result sets. */
 	match: boolean;
-	feedback: string[];
+	feedback: AssembledFeedback['resultSet'];
 }
 
 /** Response from POST /api/grading/compare/ast */
@@ -172,20 +172,18 @@ export interface ASTComparisonResponse {
 	/** Whether the SELECT column lists match. */
 	columnsMatch: boolean;
 	/**
-	 * Whether the query uses a supported structure (no DISTINCT, no subqueries).
+	 * Whether the query uses a supported structure (no FROM-clause derived-table subqueries).
 	 * When false, only result-set equivalence is meaningful for grading.
 	 */
 	supported: boolean;
-	feedback: string[];
-	feedbackWithSolution: string[];
+	feedback: AssembledFeedback['ast'];
 }
 
 /** Response from POST /api/grading/compare/execution-plan */
 export interface ExecutionPlanComparisonResponse {
 	/** Whether all compared plan elements (WHERE, GROUP BY, ORDER BY, JOIN) match. */
 	plansMatch: boolean;
-	feedback: string[];
-	feedbackWithSolution: string[];
+	feedback: AssembledFeedback['executionPlan'];
 	/** Number of grade points deducted based on plan differences. */
 	penaltyPoints: number;
 }

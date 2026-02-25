@@ -9,23 +9,21 @@ import type { ExecutionPlanComparisonResult } from '../../../src/grading/compara
 
 function makeASTResult(overrides: Partial<ASTComparisonResult> = {}): ASTComparisonResult {
     return {
-        columnsMatch:        true,
-        supported:           true,
-        limitMatch:          true,
-        feedback:            [],
-        feedbackWithSolution: [],
-        studentAliasMap:     {},
-        referenceAliasMap:   {},
+        columnsMatch:      true,
+        supported:         true,
+        limitMatch:        true,
+        ast:               {},
+        studentAliasMap:   {},
+        referenceAliasMap: {},
         ...overrides,
     };
 }
 
 function makePlanResult(overrides: Partial<ExecutionPlanComparisonResult> = {}): ExecutionPlanComparisonResult {
     return {
-        plansMatch:          true,
-        feedback:            [],
-        feedbackWithSolution: [],
-        penaltyPoints:       0,
+        plansMatch:    true,
+        executionPlan: {},
+        penaltyPoints: 0,
         ...overrides,
     };
 }
@@ -41,50 +39,56 @@ describe('FeedbackAssembler', () => {
         assembler = new FeedbackAssembler();
     });
 
-    describe('build — result-set verdict line', () => {
-        it('includes "Same result set" when resultSetMatch is true', () => {
-            const { feedback } = assembler.build(true, makeASTResult(), makePlanResult());
-            expect(feedback).toContain('Same result set of both queries.');
+    describe('build — result-set verdict', () => {
+        it('includes "Same result set" message when resultSetMatch is true', () => {
+            const result = assembler.build(true, makeASTResult(), makePlanResult());
+            expect(result.resultSet?.verdict.message).toBe('Same result set of both queries.');
         });
 
-        it('includes "Result sets differ" when resultSetMatch is false', () => {
-            const { feedback } = assembler.build(false, makeASTResult(), makePlanResult());
-            expect(feedback).toContain('Result sets differ.');
+        it('includes "Result sets differ" message when resultSetMatch is false', () => {
+            const result = assembler.build(false, makeASTResult(), makePlanResult());
+            expect(result.resultSet?.verdict.message).toBe('Result sets differ.');
         });
     });
 
     describe('build — AST feedback propagation', () => {
-        it('propagates AST feedback messages', () => {
-            const ast = makeASTResult({ feedback: ['Column X is missing.'] });
-            const { feedback } = assembler.build(true, ast, makePlanResult());
-            expect(feedback).toContain('Column X is missing.');
+        it('propagates AST columns feedback when columns do not match', () => {
+            const ast = makeASTResult({
+                ast: { columns: { message: 'The column selection is incorrect: Incorrect columns selected.' } },
+            });
+            const result = assembler.build(true, ast, makePlanResult());
+            expect(result.ast?.columns?.message).toContain('column selection is incorrect');
         });
 
-        it('propagates AST feedbackWithSolution messages', () => {
-            const ast = makeASTResult({ feedbackWithSolution: ['Expected: col_a, col_b'] });
-            const { feedbackWithSolution } = assembler.build(true, ast, makePlanResult());
-            expect(feedbackWithSolution).toContain('Expected: col_a, col_b');
+        it('propagates AST columns solution when present', () => {
+            const ast = makeASTResult({
+                ast: { columns: { message: 'The column selection is incorrect.', solution: 'Expected: col_a, col_b' } },
+            });
+            const result = assembler.build(true, ast, makePlanResult());
+            expect(result.ast?.columns?.solution).toContain('col_a');
         });
     });
 
     describe('build — execution-plan feedback propagation', () => {
-        it('propagates plan feedback messages when planResult is provided', () => {
-            const plan = makePlanResult({ feedback: ['Incorrect Group key.'] });
-            const { feedback } = assembler.build(true, makeASTResult(), plan);
-            expect(feedback).toContain('Incorrect Group key.');
+        it('propagates plan groupKey feedback when planResult is provided', () => {
+            const plan = makePlanResult({ executionPlan: { groupKey: { message: 'Incorrect Group key.' } } });
+            const result = assembler.build(true, makeASTResult(), plan);
+            expect(result.executionPlan?.groupKey?.message).toBe('Incorrect Group key.');
         });
 
-        it('propagates plan feedbackWithSolution when planResult is provided', () => {
-            const plan = makePlanResult({ feedbackWithSolution: ['Expected [col_a], got [col_b].'] });
-            const { feedbackWithSolution } = assembler.build(true, makeASTResult(), plan);
-            expect(feedbackWithSolution).toContain('Expected [col_a], got [col_b].');
+        it('propagates plan groupKey solution when planResult is provided', () => {
+            const plan = makePlanResult({
+                executionPlan: {
+                    groupKey: { message: 'Incorrect Group key.', solution: 'Expected [col_a], got [col_b].' },
+                },
+            });
+            const result = assembler.build(true, makeASTResult(), plan);
+            expect(result.executionPlan?.groupKey?.solution).toContain('col_a');
         });
 
-        it('does not include plan feedback when planResult is null (unsupported structure)', () => {
-            const ast  = makeASTResult({ feedback: ['Unsupported DISTINCT.'] });
-            const { feedback } = assembler.build(false, ast, null);
-            // Plan-level messages must not be present
-            expect(feedback).not.toContain('Incorrect Group key.');
+        it('does not include executionPlan when planResult is null (unsupported structure)', () => {
+            const result = assembler.build(false, makeASTResult(), null);
+            expect(result.executionPlan).toBeUndefined();
         });
     });
 
@@ -94,12 +98,20 @@ describe('FeedbackAssembler', () => {
     });
 
     describe('build — empty inputs', () => {
-        it('returns two non-empty arrays even when all comparators report no issues', () => {
-            const { feedback, feedbackWithSolution } = assembler.build(
-                true, makeASTResult(), makePlanResult()
-            );
-            expect(feedback.length).toBeGreaterThan(0);
-            expect(Array.isArray(feedbackWithSolution)).toBe(true);
+        it('returns an object with a resultSet key even when all comparators report no issues', () => {
+            const result = assembler.build(true, makeASTResult(), makePlanResult());
+            expect(result.resultSet).toBeDefined();
+            expect(result.resultSet?.verdict).toBeDefined();
+        });
+
+        it('does not include ast key when there are no AST issues', () => {
+            const result = assembler.build(true, makeASTResult(), makePlanResult());
+            expect(result.ast).toBeUndefined();
+        });
+
+        it('does not include executionPlan key when there are no plan issues', () => {
+            const result = assembler.build(true, makeASTResult(), makePlanResult());
+            expect(result.executionPlan).toBeUndefined();
         });
     });
 });

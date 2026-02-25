@@ -1,5 +1,6 @@
 import { AST, Select } from 'node-sql-parser';
 import { JoinComparator } from '../join-comparator';
+import { AssembledFeedback, FeedbackEntry } from '../../shared/interfaces/feedback';
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -7,8 +8,7 @@ import { JoinComparator } from '../join-comparator';
 
 export interface LimitComparisonResult {
     match: boolean;
-    feedback: string[];
-    feedbackWithSolution: string[];
+    ast: AssembledFeedback['ast'];
 }
 
 export interface ASTComparisonResult {
@@ -28,8 +28,7 @@ export interface ASTComparisonResult {
     supported: boolean;
     /** Whether the LIMIT / OFFSET clauses match between both queries. */
     limitMatch: boolean;
-    feedback: string[];
-    feedbackWithSolution: string[];
+    ast: AssembledFeedback['ast'];
     /** Alias→real-table map derived from the student query's FROM clause. */
     studentAliasMap: Record<string, string>;
     /** Alias→real-table map derived from the reference query's FROM clause. */
@@ -66,8 +65,7 @@ export class ASTComparator {
      * SQL parsing itself.
      */
     public compare(studentAST: AST, referenceAST: AST): ASTComparisonResult {
-        const feedback: string[] = [];
-        const feedbackWithSolution: string[] = [];
+        const ast: AssembledFeedback['ast'] = {};
         const emptyMaps = { studentAliasMap: {}, referenceAliasMap: {} };
         const defaultLimitMatch = true;
 
@@ -80,8 +78,7 @@ export class ASTComparator {
                 columnsMatch: false,
                 supported:    false,
                 limitMatch:   defaultLimitMatch,
-                feedback,
-                feedbackWithSolution,
+                ast,
                 ...emptyMaps,
             };
         }
@@ -89,13 +86,12 @@ export class ASTComparator {
         // ── SELECT-only guard ────────────────────────────────────────────────
 
         if (studentAST.type !== 'select' || referenceAST.type !== 'select') {
-            feedback.push('Error: Not a select statement.');
+            ast.selectStatement = { message: 'Error: Not a select statement.' };
             return {
                 columnsMatch: false,
                 supported:    false,
                 limitMatch:   defaultLimitMatch,
-                feedback,
-                feedbackWithSolution,
+                ast,
                 ...emptyMaps,
             };
         }
@@ -104,13 +100,12 @@ export class ASTComparator {
         const referenceSelect = referenceAST as Select;
 
         if (!studentSelect.columns || !referenceSelect.columns) {
-            feedback.push('Error: Not a select statement.');
+            ast.selectStatement = { message: 'Error: Not a select statement.' };
             return {
                 columnsMatch: false,
                 supported:    false,
                 limitMatch:   defaultLimitMatch,
-                feedback,
-                feedbackWithSolution,
+                ast,
                 ...emptyMaps,
             };
         }
@@ -122,7 +117,7 @@ export class ASTComparator {
 
         // ── Column comparison ────────────────────────────────────────────────
 
-        const [sameColumns, feedbackCol] = this.areColumnsEqual(
+        const [sameColumns, columnFeedbackMsg] = this.areColumnsEqual(
             studentSelect.columns,
             referenceSelect.columns,
             studentAliasMap,
@@ -130,34 +125,40 @@ export class ASTComparator {
         );
 
         if (!sameColumns) {
-            feedback.push(`The column selection is incorrect: ${feedbackCol}`);
-            feedbackWithSolution.push('The task requires the selection of the following columns:');
+            const solutionParts: string[] = [];
             referenceSelect.columns.forEach((column: any) => {
                 if (column?.expr?.type === 'column_ref') {
-                    feedbackWithSolution.push(
+                    solutionParts.push(
                         `${column?.expr?.table}.${column?.expr?.column?.expr?.value}`
                     );
                 }
                 if (column?.expr?.type === 'aggr_func') {
-                    feedbackWithSolution.push(
+                    solutionParts.push(
                         `${column?.expr?.name}(${column?.expr?.args?.expr?.table}.${column?.expr?.args?.expr?.column?.expr?.value})`
                     );
                 }
             });
+
+            const entry: FeedbackEntry = {
+                message: `The column selection is incorrect: ${columnFeedbackMsg}`,
+            };
+            if (solutionParts.length > 0) {
+                entry.solution = `The task requires the selection of the following columns: ${solutionParts.join(', ')}`;
+            }
+            ast.columns = entry;
         }
 
         // ── LIMIT / OFFSET comparison ────────────────────────────────────────
 
-        const limitResult   = this.compareLimitOffset(studentSelect, referenceSelect);
-        feedback.push(...limitResult.feedback);
-        feedbackWithSolution.push(...limitResult.feedbackWithSolution);
+        const limitResult = this.compareLimitOffset(studentSelect, referenceSelect);
+        if (limitResult.ast?.limit) ast.limit   = limitResult.ast.limit;
+        if (limitResult.ast?.offset) ast.offset = limitResult.ast.offset;
 
         return {
             columnsMatch:     sameColumns,
             supported:        true,
             limitMatch:       limitResult.match,
-            feedback,
-            feedbackWithSolution,
+            ast,
             studentAliasMap,
             referenceAliasMap,
         };
@@ -257,8 +258,7 @@ export class ASTComparator {
         studentSelect: Select,
         referenceSelect: Select
     ): LimitComparisonResult {
-        const feedback: string[] = [];
-        const feedbackWithSolution: string[] = [];
+        const ast: AssembledFeedback['ast'] = {};
 
         const stuLimit  = this.parseLimitClause((studentSelect  as any).limit).limit;
         const refLimit  = this.parseLimitClause((referenceSelect as any).limit).limit;
@@ -269,17 +269,21 @@ export class ASTComparator {
 
         if (stuLimit !== refLimit) {
             match = false;
-            feedback.push('Incorrect LIMIT value.');
-            feedbackWithSolution.push(`Expected LIMIT ${refLimit ?? 'none'}, got ${stuLimit ?? 'none'}.`);
+            ast.limit = {
+                message:  'Incorrect LIMIT value.',
+                solution: `Expected LIMIT ${refLimit ?? 'none'}, got ${stuLimit ?? 'none'}.`,
+            };
         }
 
         if (stuOffset !== refOffset) {
             match = false;
-            feedback.push('Incorrect OFFSET value.');
-            feedbackWithSolution.push(`Expected OFFSET ${refOffset ?? 'none'}, got ${stuOffset ?? 'none'}.`);
+            ast.offset = {
+                message:  'Incorrect OFFSET value.',
+                solution: `Expected OFFSET ${refOffset ?? 'none'}, got ${stuOffset ?? 'none'}.`,
+            };
         }
 
-        return { match, feedback, feedbackWithSolution };
+        return { match, ast };
     }
 
     /**
@@ -347,15 +351,13 @@ export class ASTComparator {
         reference: any[],
         studentAliasMap:   Record<string, string>,
         referenceAliasMap: Record<string, string>
-    ): [boolean, string[]] {
-        const feedback: string[] = [];
-
+    ): [boolean, string] {
         if (student.length !== reference.length) {
-            feedback.push('Incorrect number of columns selected.');
-            return [false, feedback];
+            return [false, 'Incorrect number of columns selected.'];
         }
 
         let allSame = true;
+        let firstMismatch = '';
         reference.forEach((refCol) => {
             const found = student.find((stuCol: any) => {
                 if (refCol?.expr?.type === 'aggr_func') {
@@ -389,11 +391,11 @@ export class ASTComparator {
 
             if (!found) {
                 allSame = false;
-                feedback.push('Incorrect columns selected.');
+                if (!firstMismatch) firstMismatch = 'Incorrect columns selected.';
             }
         });
 
-        return [allSame, feedback];
+        return [allSame, firstMismatch];
     }
 
     // =========================================================================

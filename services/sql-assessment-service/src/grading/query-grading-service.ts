@@ -1,6 +1,7 @@
 import { DataSource } from 'typeorm';
 import { AST, Parser } from 'node-sql-parser';
 import { ComparisonResult } from '../shared/interfaces/index';
+import { AssembledFeedback } from '../shared/interfaces/feedback';
 import { ResultSetComparator } from './result-set-comparator';
 import { ASTComparator } from './comparators/ast-comparator';
 import { ExecutionPlanComparator } from './comparators/execution-plan-comparator';
@@ -46,10 +47,17 @@ export class SQLQueryGradingService {
             await this.resultSetComparator.isExecutable(studentQuery, dataSource);
 
         if (!executable) {
+            const feedbackDetails: AssembledFeedback = {
+                general: {
+                    executability: {
+                        message: execFeedback[0] ?? 'Query is not executable.',
+                        solution: execFeedback[1],
+                    },
+                },
+            };
             return {
                 grade: 0,
-                feedback: execFeedback,
-                feedbackWithSolution: [],
+                feedbackDetails,
                 equivalent: false,
                 supportedQueryType: false,
             };
@@ -60,6 +68,25 @@ export class SQLQueryGradingService {
         const [resultSetMatch, rsFeedback] =
             await this.resultSetComparator.compare(referenceQuery, studentQuery, dataSource);
 
+        // Build a base feedbackDetails that may be extended below
+        const buildWithGeneral = (
+            generalEntry: AssembledFeedback['general'],
+            extra?: Partial<AssembledFeedback>
+        ): AssembledFeedback => {
+            const fd: AssembledFeedback = {};
+            if (rsFeedback.length > 0) {
+                fd.general = {
+                    ...generalEntry,
+                    executability: rsFeedback[0]
+                        ? { message: rsFeedback[0] }
+                        : undefined,
+                };
+            } else if (generalEntry) {
+                fd.general = generalEntry;
+            }
+            return { ...fd, ...extra };
+        };
+
         // ── 3. AST parsing & validation ──────────────────────────────────────
 
         let studentAST   = this.parser.astify(studentQuery,   { database: 'postgresql' });
@@ -68,23 +95,33 @@ export class SQLQueryGradingService {
         // Multi-statement input
         if (Array.isArray(studentAST) || Array.isArray(referenceAST)) {
             const grade = resultSetMatch ? SQLQueryGradingService.FULL_GRADE : 0;
+            const feedbackDetails: AssembledFeedback = {
+                general: { astArray: { message: 'AST array not supported.' } },
+            };
+            if (rsFeedback.length > 0) {
+                feedbackDetails.general!.executability = { message: rsFeedback[0] };
+            }
             return {
                 grade,
-                feedback:             [...execFeedback, ...rsFeedback, 'AST array not supported.'],
-                feedbackWithSolution: [],
-                equivalent:           grade === SQLQueryGradingService.FULL_GRADE,
-                supportedQueryType:   false,
+                feedbackDetails,
+                equivalent:         grade === SQLQueryGradingService.FULL_GRADE,
+                supportedQueryType: false,
             };
         }
 
         if (!studentAST || !referenceAST) {
             const grade = resultSetMatch ? SQLQueryGradingService.FULL_GRADE : 0;
+            const feedbackDetails: AssembledFeedback = {
+                general: { astParsing: { message: 'AST parsing failed.' } },
+            };
+            if (rsFeedback.length > 0) {
+                feedbackDetails.general!.executability = { message: rsFeedback[0] };
+            }
             return {
                 grade,
-                feedback:             [...execFeedback, ...rsFeedback, 'AST parsing failed.'],
-                feedbackWithSolution: [],
-                equivalent:           grade === SQLQueryGradingService.FULL_GRADE,
-                supportedQueryType:   false,
+                feedbackDetails,
+                equivalent:         grade === SQLQueryGradingService.FULL_GRADE,
+                supportedQueryType: false,
             };
         }
 
@@ -94,14 +131,19 @@ export class SQLQueryGradingService {
         // Wrong statement type
         if (studentAST.type !== referenceAST.type) {
             const grade = resultSetMatch ? SQLQueryGradingService.FULL_GRADE : 0;
+            const feedbackDetails: AssembledFeedback = {
+                general: {
+                    sqlClauseType: {
+                        message: `Incorrect SQL clause, the task requires a clause of type: ${referenceAST.type}`,
+                    },
+                },
+            };
+            if (rsFeedback.length > 0) {
+                feedbackDetails.general!.executability = { message: rsFeedback[0] };
+            }
             return {
                 grade,
-                feedback: [
-                    ...execFeedback,
-                    ...rsFeedback,
-                    `Incorrect SQL clause, the task requires a clause of type: ${referenceAST.type}`,
-                ],
-                feedbackWithSolution: [],
+                feedbackDetails,
                 equivalent:         grade === SQLQueryGradingService.FULL_GRADE,
                 supportedQueryType: false,
             };
@@ -116,13 +158,16 @@ export class SQLQueryGradingService {
         // are now handled by the execution-plan comparator.
         if (!astResult.supported) {
             const grade = resultSetMatch ? SQLQueryGradingService.FULL_GRADE : 0;
-            const { feedback, feedbackWithSolution } = this.feedbackAssembler.build(
-                resultSetMatch, astResult, null
-            );
+            const assembled = this.feedbackAssembler.build(resultSetMatch, astResult, null);
+            if (rsFeedback.length > 0) {
+                assembled.general = {
+                    ...assembled.general,
+                    executability: { message: rsFeedback[0] },
+                };
+            }
             return {
                 grade,
-                feedback:           [...execFeedback, ...rsFeedback, ...feedback],
-                feedbackWithSolution,
+                feedbackDetails:    assembled,
                 equivalent:         grade === SQLQueryGradingService.FULL_GRADE,
                 supportedQueryType: false,
             };
@@ -151,14 +196,17 @@ export class SQLQueryGradingService {
 
         // ── 7. Feedback assembly ─────────────────────────────────────────────
 
-        const { feedback, feedbackWithSolution } = this.feedbackAssembler.build(
-            resultSetMatch, astResult, planResult
-        );
+        const feedbackDetails = this.feedbackAssembler.build(resultSetMatch, astResult, planResult);
+        if (rsFeedback.length > 0) {
+            feedbackDetails.general = {
+                ...feedbackDetails.general,
+                executability: { message: rsFeedback[0] },
+            };
+        }
 
         return {
             grade,
-            feedback:           [...execFeedback, ...rsFeedback, ...feedback],
-            feedbackWithSolution,
+            feedbackDetails,
             equivalent:         grade === SQLQueryGradingService.FULL_GRADE,
             supportedQueryType: true,
         };

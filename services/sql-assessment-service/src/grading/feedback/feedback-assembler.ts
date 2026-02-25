@@ -1,13 +1,11 @@
 import { ASTComparisonResult } from '../comparators/ast-comparator';
 import { ExecutionPlanComparisonResult } from '../comparators/execution-plan-comparator';
+import { AssembledFeedback } from '../../shared/interfaces/feedback';
 
-export interface AssembledFeedback {
-    feedback: string[];
-    feedbackWithSolution: string[];
-}
+export type { AssembledFeedback };
 
 /**
- * Assembles the final user-facing feedback arrays from the individual comparison
+ * Assembles the final user-facing feedback object from the individual comparison
  * results produced by ResultSetComparator, ASTComparator, and
  * ExecutionPlanComparator.
  *
@@ -17,8 +15,8 @@ export interface AssembledFeedback {
 export class FeedbackAssembler {
 
     /**
-     * Builds the combined feedback and feedbackWithSolution arrays from all
-     * three comparison stages.
+     * Builds the combined AssembledFeedback object from all three comparison
+     * stages.
      *
      * @param resultSetMatch  - Whether the two queries return the same rows.
      * @param astResult       - Output from ASTComparator.compare().
@@ -32,22 +30,30 @@ export class FeedbackAssembler {
         astResult: ASTComparisonResult,
         planResult: ExecutionPlanComparisonResult | null
     ): AssembledFeedback {
-        const feedback: string[] = [];
-        const feedbackWithSolution: string[] = [];
+        const assembled: AssembledFeedback = {};
 
         // ── Result-set verdict ────────────────────────────────────────────────
-        feedback.push(resultSetMatch ? 'Same result set of both queries.' : 'Result sets differ.');
+        assembled.resultSet = {
+            verdict: {
+                message: resultSetMatch
+                    ? 'Same result set of both queries.'
+                    : 'Result sets differ.',
+            },
+        };
 
         // ── AST-level feedback ────────────────────────────────────────────────
-        feedback.push(...astResult.feedback);
-        feedbackWithSolution.push(...astResult.feedbackWithSolution);
+        if (astResult.ast && Object.keys(astResult.ast).length > 0) {
+            assembled.ast = astResult.ast;
+        }
 
         // ── Execution-plan feedback (only when structure is supported) ────────
         if (planResult) {
-            feedback.push(...planResult.feedback);
-            feedbackWithSolution.push(...planResult.feedbackWithSolution);
+            const ep = planResult.executionPlan;
+            if (ep && Object.keys(ep).length > 0) {
+                assembled.executionPlan = ep;
+            }
         }
 
-        return { feedback, feedbackWithSolution };
+        return assembled;
     }
 }

@@ -341,8 +341,12 @@ export class GradingController {
         }
 
         if (studentTaskDescription) {
-            comparisonResult.feedback.push('\n Your query solves the task with the following description:');
-            comparisonResult.feedback.push(studentTaskDescription);
+            comparisonResult.feedbackDetails.taskDescription = {
+                description: {
+                    message: '\n Your query solves the task with the following description:',
+                    solution: studentTaskDescription,
+                },
+            };
         }
     }
 
@@ -371,12 +375,15 @@ export class GradingController {
         );
 
         try {
-            const [match, feedback] = await this.resultSetComparator.compare(
+            const [match, rsFeedback] = await this.resultSetComparator.compare(
                 referenceQuery,
                 studentQuery,
                 dataSource
             );
             await dataSource.destroy();
+            const feedback = rsFeedback.length > 0
+                ? { verdict: { message: rsFeedback[0] } }
+                : undefined;
             return res.status(200).json({ match, feedback });
         } catch (error) {
             await dataSource.destroy();
@@ -429,10 +436,9 @@ export class GradingController {
         try {
             const result = this.astComparator.compare(studentAST as AST, referenceAST as AST);
             return res.status(200).json({
-                columnsMatch:        result.columnsMatch,
-                supported:           result.supported,
-                feedback:            result.feedback,
-                feedbackWithSolution: result.feedbackWithSolution,
+                columnsMatch: result.columnsMatch,
+                supported:    result.supported,
+                feedback:     result.ast,
             });
         } catch (error) {
             return res.status(500).json({ message: t('GRADING_FAILED_WITH_ERROR', lang, String(error)) });
@@ -496,7 +502,11 @@ export class GradingController {
                 referenceQuery
             );
             await dataSource.destroy();
-            return res.status(200).json(result);
+            return res.status(200).json({
+                plansMatch:    result.plansMatch,
+                feedback:      result.executionPlan,
+                penaltyPoints: result.penaltyPoints,
+            });
         } catch (error) {
             await dataSource.destroy();
             return res.status(500).json({ message: t('GRADING_FAILED_WITH_ERROR', lang, String(error)) });
