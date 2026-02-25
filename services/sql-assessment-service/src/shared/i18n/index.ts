@@ -10,8 +10,11 @@
  *   // simple message
  *   return res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
  *
- *   // message with interpolation
+ *   // legacy positional interpolation (replaces {{value}})
  *   return res.status(400).json({ message: t('QUERY_NON_SELECT', lang, statementType) });
+ *
+ *   // named-placeholder interpolation (replaces {{expected}}, {{received}}, …)
+ *   entry.message = t('FEEDBACK_GROUP_KEY', lang, { expected: refKey, received: stuKey });
  */
 
 import { MESSAGES, MessageKey, SupportedLanguage } from './messages';
@@ -40,13 +43,35 @@ export function resolveLanguageCode(raw: string | undefined | null): SupportedLa
 /**
  * Looks up the translated message for the given key and language.
  *
+ * Supports two interpolation styles:
+ *
+ * 1. Legacy positional: pass a single `string` as the third argument.
+ *    It replaces the first `{{value}}` placeholder in the template.
+ *
+ * 2. Named placeholders: pass a `Record<string, string>` as the third argument.
+ *    Every `{{key}}` occurrence in the template is replaced by the matching
+ *    value from the record.  For example:
+ *
+ *    ```ts
+ *    t('FEEDBACK_GROUP_KEY', lang, { expected: 'id', received: 'name' })
+ *    // → "Expected id, got name."
+ *    ```
+ *
  * @param key     - The MessageKey identifying the message.
  * @param lang    - The target language (use resolveLanguageCode to obtain this).
- * @param value   - Optional interpolation value replacing the {{value}} placeholder.
+ * @param params  - Optional interpolation: a positional string or a named-placeholder record.
  */
-export function t(key: MessageKey, lang: SupportedLanguage, value?: string): string {
+export function t(
+    key: MessageKey,
+    lang: SupportedLanguage,
+    params?: string | Record<string, string>
+): string {
     const catalogue = MESSAGES[lang] ?? MESSAGES[DEFAULT_LANGUAGE];
     const template = catalogue[key] ?? MESSAGES[DEFAULT_LANGUAGE][key];
-    if (value === undefined) return template;
-    return template.replace('{{value}}', value);
+    if (params === undefined) return template;
+    if (typeof params === 'string') {
+        return template.replace('{{value}}', params);
+    }
+    // Named-placeholder substitution
+    return template.replace(/\{\{(\w+)\}\}/g, (_, name: string) => params[name] ?? `{{${name}}}`);
 }

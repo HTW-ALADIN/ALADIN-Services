@@ -235,7 +235,8 @@ export class GradingController {
                     resolvedReferenceQuery,
                     gradingRequest.studentQuery,
                     dataSource,
-                    databaseKey
+                    databaseKey,
+                    lang
                 );
 
                 await this.appendTaskDescription(
@@ -243,6 +244,7 @@ export class GradingController {
                     gradingRequest.studentQuery,
                     connectionInfo.schema!,
                     databaseKey,
+                    lang,
                     gradingRequestOptions.generationStrategy,
                     gradingRequestOptions.gptOption
                 );
@@ -284,6 +286,7 @@ export class GradingController {
         studentQuery:     string,
         schema:           string,
         databaseKey:      string,
+        lang:             SupportedLanguage,
         strategy?:        GenerationOptions,
         gptOption?:       GptOptions
     ): Promise<void> {
@@ -343,7 +346,7 @@ export class GradingController {
         if (studentTaskDescription) {
             comparisonResult.feedbackDetails.taskDescription = {
                 description: {
-                    message: '\n Your query solves the task with the following description:',
+                    message: t('FEEDBACK_TASK_DESCRIPTION', lang),
                     solution: studentTaskDescription,
                 },
             };

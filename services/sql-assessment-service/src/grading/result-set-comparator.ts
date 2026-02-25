@@ -1,4 +1,5 @@
 import { DataSource, QueryFailedError } from 'typeorm';
+import { t, SupportedLanguage } from '../shared/i18n';
 
 /**
  * Handles dynamic execution and row-level comparison of two query result sets.
@@ -8,7 +9,8 @@ export class ResultSetComparator {
     async compare(
         referenceQuery: string,
         studentQuery: string,
-        dataSource: DataSource
+        dataSource: DataSource,
+        lang: SupportedLanguage = 'en'
     ): Promise<[boolean, string[]]> {
         let referenceResultSet: any[];
         let studentResultSet: any[];
@@ -22,21 +24,25 @@ export class ResultSetComparator {
             comparisonResult = this.areResultsEqual(referenceResultSet, studentResultSet);
             queryRunner.release();
         } catch (error) {
-            feedback.push('Unable to execute query comparison: ' + error);
+            feedback.push(t('FEEDBACK_QUERY_COMPARISON_ERROR', lang, String(error)));
             return [false, feedback];
         }
 
         return [comparisonResult, feedback];
     }
 
-    async isExecutable(query: string, dataSource: DataSource): Promise<[boolean, string[]]> {
+    async isExecutable(
+        query: string,
+        dataSource: DataSource,
+        lang: SupportedLanguage = 'en'
+    ): Promise<[boolean, string[]]> {
         const feedback: string[] = [];
         try {
             const queryRunner = dataSource.createQueryRunner();
             await queryRunner.query(query);
             queryRunner.release();
         } catch (error) {
-            feedback.push('Query is not executable due to following syntax error:');
+            feedback.push(t('FEEDBACK_QUERY_EXECUTION_ERROR', lang));
             feedback.push((error as QueryFailedError)?.driverError?.message);
             return [false, feedback];
         }

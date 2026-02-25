@@ -1,6 +1,7 @@
 import { ASTComparisonResult } from '../comparators/ast-comparator';
 import { ExecutionPlanComparisonResult } from '../comparators/execution-plan-comparator';
 import { AssembledFeedback } from '../../shared/interfaces/feedback';
+import { t, SupportedLanguage } from '../../shared/i18n';
 
 export type { AssembledFeedback };
 
@@ -24,11 +25,13 @@ export class FeedbackAssembler {
      *                          Pass null when the AST comparison determined that
      *                          the query structure is unsupported (execution-plan
      *                          comparison is skipped in that case).
+     * @param lang            - Language for user-facing messages (default: 'en').
      */
     public build(
         resultSetMatch: boolean,
         astResult: ASTComparisonResult,
-        planResult: ExecutionPlanComparisonResult | null
+        planResult: ExecutionPlanComparisonResult | null,
+        lang: SupportedLanguage = 'en'
     ): AssembledFeedback {
         const assembled: AssembledFeedback = {};
 
@@ -36,8 +39,8 @@ export class FeedbackAssembler {
         assembled.resultSet = {
             verdict: {
                 message: resultSetMatch
-                    ? 'Same result set of both queries.'
-                    : 'Result sets differ.',
+                    ? t('FEEDBACK_RESULT_SET_MATCH', lang)
+                    : t('FEEDBACK_RESULT_SET_MISMATCH', lang),
             },
         };
 

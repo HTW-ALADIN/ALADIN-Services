@@ -1,6 +1,7 @@
 import { Binary, ColumnRefItem, Join } from 'node-sql-parser';
 import { JoinStatement } from '../shared/interfaces/execution-plan';
 import { FeedbackEntry } from '../shared/interfaces/feedback';
+import { t, SupportedLanguage } from '../shared/i18n';
 
 /**
  * Compares join structures between student and reference queries using both
@@ -62,24 +63,25 @@ export class JoinComparator {
         referenceJoin: Join[],
         studentJoin: Join[],
         studentAliasMap?: Record<string, string>,
-        referenceAliasMap?: Record<string, string>
+        referenceAliasMap?: Record<string, string>,
+        lang: SupportedLanguage = 'en'
     ): [boolean, FeedbackEntry | undefined] {
         const messages: string[] = [];
         let isSameJoin = true;
 
         if (referenceJoin.length !== studentJoin.length) {
             isSameJoin = false;
-            messages.push('Incorrect Join statement: Query does not include the correct number of Joins.');
+            messages.push(t('FEEDBACK_JOIN_COUNT_WRONG', lang));
             return [isSameJoin, {
                 message:  messages.join(' '),
-                solution: this.buildJoinComparisonSolution(referenceJoin, studentJoin),
+                solution: this.buildJoinComparisonSolution(referenceJoin, studentJoin, lang),
             }];
         }
 
         if (referenceJoin.length === 1 && studentJoin.length === 1) {
             if (referenceJoin[0].table !== studentJoin[0].table) {
                 isSameJoin = false;
-                messages.push('Incorrect Join statement: Query uses incorrect table in Join statement');
+                messages.push(t('FEEDBACK_JOIN_WRONG_TABLE', lang));
             }
         }
 
@@ -92,7 +94,7 @@ export class JoinComparator {
 
             if (!this.areJoinTypesCompatible(joinType1, joinType2)) {
                 isSameJoin = false;
-                messages.push('Incorrect Join statement: Query uses wrong Join type.');
+                messages.push(t('FEEDBACK_JOIN_WRONG_TYPE', lang));
             }
 
             if (reference.table !== student.table) {
@@ -100,20 +102,20 @@ export class JoinComparator {
                     !(i > 0 && reference.table === studentJoin[i - 1]?.table && student.table === referenceJoin[i - 1]?.table)
                 ) {
                     isSameJoin = false;
-                    messages.push('Incorrect Join statement: Query uses incorrect table in Join statement.');
+                    messages.push(t('FEEDBACK_JOIN_WRONG_TABLE', lang));
                 }
             }
 
             if (!this.areJoinConditionsEqual(reference.on, student.on, studentAliasMap, referenceAliasMap)) {
                 isSameJoin = false;
-                messages.push('Incorrect Join statement: Query uses incorrect Join condition.');
+                messages.push(t('FEEDBACK_JOIN_WRONG_CONDITION', lang));
             }
         }
 
         if (messages.length > 0) {
             return [isSameJoin, {
                 message:  messages.join(' '),
-                solution: this.buildJoinComparisonSolution(referenceJoin, studentJoin),
+                solution: this.buildJoinComparisonSolution(referenceJoin, studentJoin, lang),
             }];
         }
 
@@ -178,7 +180,11 @@ export class JoinComparator {
      * Builds a multi-line Expected/Received comparison string used as the
      * `solution` field of a join FeedbackEntry.
      */
-    private buildJoinComparisonSolution(joins1: Join[], joins2: Join[]): string {
+    private buildJoinComparisonSolution(
+        joins1: Join[],
+        joins2: Join[],
+        lang: SupportedLanguage = 'en'
+    ): string {
         const lines: string[] = [];
         const formatJoin = (join: Join, parent?: Join) => {
             const parentTable = parent?.table;
@@ -193,8 +199,8 @@ export class JoinComparator {
 
             const expected = join1 ? formatJoin(join1, parent1) : '';
             const received = join2 ? formatJoin(join2, parent2) : '';
-            lines.push(`Expected: ${expected}`);
-            lines.push(`Received: ${received}`);
+            lines.push(t('FEEDBACK_JOIN_SOLUTION_EXPECTED', lang, expected));
+            lines.push(t('FEEDBACK_JOIN_SOLUTION_RECEIVED', lang, received));
         }
         return lines.join('\n');
     }

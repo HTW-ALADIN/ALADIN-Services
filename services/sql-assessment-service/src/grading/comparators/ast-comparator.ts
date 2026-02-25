@@ -1,6 +1,7 @@
 import { AST, Select } from 'node-sql-parser';
 import { JoinComparator } from '../join-comparator';
 import { AssembledFeedback, FeedbackEntry } from '../../shared/interfaces/feedback';
+import { t, SupportedLanguage } from '../../shared/i18n';
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -64,7 +65,7 @@ export class ASTComparator {
      * Both ASTs must already be parsed by the caller; this class performs no
      * SQL parsing itself.
      */
-    public compare(studentAST: AST, referenceAST: AST): ASTComparisonResult {
+    public compare(studentAST: AST, referenceAST: AST, lang: SupportedLanguage = 'en'): ASTComparisonResult {
         const ast: AssembledFeedback['ast'] = {};
         const emptyMaps = { studentAliasMap: {}, referenceAliasMap: {} };
         const defaultLimitMatch = true;
@@ -86,7 +87,7 @@ export class ASTComparator {
         // ── SELECT-only guard ────────────────────────────────────────────────
 
         if (studentAST.type !== 'select' || referenceAST.type !== 'select') {
-            ast.selectStatement = { message: 'Error: Not a select statement.' };
+            ast.selectStatement = { message: t('FEEDBACK_AST_NOT_SELECT', lang) };
             return {
                 columnsMatch: false,
                 supported:    false,
@@ -100,7 +101,7 @@ export class ASTComparator {
         const referenceSelect = referenceAST as Select;
 
         if (!studentSelect.columns || !referenceSelect.columns) {
-            ast.selectStatement = { message: 'Error: Not a select statement.' };
+            ast.selectStatement = { message: t('FEEDBACK_AST_NOT_SELECT', lang) };
             return {
                 columnsMatch: false,
                 supported:    false,
@@ -121,7 +122,8 @@ export class ASTComparator {
             studentSelect.columns,
             referenceSelect.columns,
             studentAliasMap,
-            referenceAliasMap
+            referenceAliasMap,
+            lang
         );
 
         if (!sameColumns) {
@@ -140,17 +142,17 @@ export class ASTComparator {
             });
 
             const entry: FeedbackEntry = {
-                message: `The column selection is incorrect: ${columnFeedbackMsg}`,
+                message: t('FEEDBACK_COLUMNS_MESSAGE', lang, columnFeedbackMsg),
             };
             if (solutionParts.length > 0) {
-                entry.solution = `The task requires the selection of the following columns: ${solutionParts.join(', ')}`;
+                entry.solution = t('FEEDBACK_COLUMNS_SOLUTION', lang, solutionParts.join(', '));
             }
             ast.columns = entry;
         }
 
         // ── LIMIT / OFFSET comparison ────────────────────────────────────────
 
-        const limitResult = this.compareLimitOffset(studentSelect, referenceSelect);
+        const limitResult = this.compareLimitOffset(studentSelect, referenceSelect, lang);
         if (limitResult.ast?.limit) ast.limit   = limitResult.ast.limit;
         if (limitResult.ast?.offset) ast.offset = limitResult.ast.offset;
 
@@ -256,7 +258,8 @@ export class ASTComparator {
      */
     public compareLimitOffset(
         studentSelect: Select,
-        referenceSelect: Select
+        referenceSelect: Select,
+        lang: SupportedLanguage = 'en'
     ): LimitComparisonResult {
         const ast: AssembledFeedback['ast'] = {};
 
@@ -270,16 +273,22 @@ export class ASTComparator {
         if (stuLimit !== refLimit) {
             match = false;
             ast.limit = {
-                message:  'Incorrect LIMIT value.',
-                solution: `Expected LIMIT ${refLimit ?? 'none'}, got ${stuLimit ?? 'none'}.`,
+                message:  t('FEEDBACK_LIMIT_INCORRECT', lang),
+                solution: t('FEEDBACK_LIMIT_SOLUTION', lang, {
+                    expected: String(refLimit ?? 'none'),
+                    received: String(stuLimit ?? 'none'),
+                }),
             };
         }
 
         if (stuOffset !== refOffset) {
             match = false;
             ast.offset = {
-                message:  'Incorrect OFFSET value.',
-                solution: `Expected OFFSET ${refOffset ?? 'none'}, got ${stuOffset ?? 'none'}.`,
+                message:  t('FEEDBACK_OFFSET_INCORRECT', lang),
+                solution: t('FEEDBACK_OFFSET_SOLUTION', lang, {
+                    expected: String(refOffset ?? 'none'),
+                    received: String(stuOffset ?? 'none'),
+                }),
             };
         }
 
@@ -350,10 +359,11 @@ export class ASTComparator {
         student: any[],
         reference: any[],
         studentAliasMap:   Record<string, string>,
-        referenceAliasMap: Record<string, string>
+        referenceAliasMap: Record<string, string>,
+        lang: SupportedLanguage = 'en'
     ): [boolean, string] {
         if (student.length !== reference.length) {
-            return [false, 'Incorrect number of columns selected.'];
+            return [false, t('FEEDBACK_COLUMNS_WRONG_COUNT', lang)];
         }
 
         let allSame = true;
@@ -391,7 +401,7 @@ export class ASTComparator {
 
             if (!found) {
                 allSame = false;
-                if (!firstMismatch) firstMismatch = 'Incorrect columns selected.';
+                if (!firstMismatch) firstMismatch = t('FEEDBACK_COLUMNS_INCORRECT', lang);
             }
         });
 

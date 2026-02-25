@@ -4,6 +4,7 @@ import { IParsedExecutionPlan, ParsedSubplan } from '../../shared/interfaces/exe
 import { ExecutionPlanParser } from '../execution-plan-parser';
 import { JoinComparator } from '../join-comparator';
 import { AssembledFeedback, ExecutionPlanFeedback, SubplanFeedback } from '../../shared/interfaces/feedback';
+import { t, SupportedLanguage } from '../../shared/i18n';
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -56,7 +57,8 @@ export class ExecutionPlanComparator {
         referenceAliasMap: Record<string, string>,
         dataSource: DataSource,
         studentQuery: string,
-        referenceQuery: string
+        referenceQuery: string,
+        lang: SupportedLanguage = 'en'
     ): Promise<ExecutionPlanComparisonResult> {
         const executionPlan: ExecutionPlanFeedback = {};
 
@@ -72,7 +74,7 @@ export class ExecutionPlanComparator {
         }
 
         if (!studentRawPlan || !referenceRawPlan) {
-            executionPlan.planRetrieval = { message: 'Unable to retrieve execution plans.' };
+            executionPlan.planRetrieval = { message: t('FEEDBACK_PLAN_RETRIEVAL_FAILED', lang) };
             return { plansMatch: false, executionPlan, penaltyPoints: 0 };
         }
 
@@ -80,7 +82,7 @@ export class ExecutionPlanComparator {
         const parsedReference = this.executionPlanParser.parse(referenceRawPlan[0], referenceAliasMap);
 
         if (!parsedStudent || !parsedReference) {
-            throw new Error('Unable to parse execution plans.');
+            throw new Error(t('FEEDBACK_PLAN_PARSE_FAILED', lang));
         }
 
         const penaltyPoints = this.diffPlans(
@@ -90,7 +92,9 @@ export class ExecutionPlanComparator {
             referenceAST,
             studentAliasMap,
             referenceAliasMap,
-            executionPlan
+            executionPlan,
+            0,
+            lang
         );
 
         return {
@@ -120,15 +124,19 @@ export class ExecutionPlanComparator {
         studentAliasMap: Record<string, string>,
         referenceAliasMap: Record<string, string>,
         target: ExecutionPlanFeedback | SubplanFeedback,
-        depth = 0
+        depth = 0,
+        lang: SupportedLanguage = 'en'
     ): number {
         let penaltyPoints = 0;
 
         // ── GROUP BY ─────────────────────────────────────────────────────────
         if (!this.compareArrays(studentPlan.groupKey, referencePlan.groupKey, studentAliasMap, referenceAliasMap)) {
             target.groupKey = {
-                message:  'Incorrect Group key.',
-                solution: `Expected ${referencePlan.groupKey}, got ${studentPlan.groupKey}.`,
+                message:  t('FEEDBACK_GROUP_KEY', lang),
+                solution: t('FEEDBACK_GROUP_KEY_SOLUTION', lang, {
+                    expected: String(referencePlan.groupKey),
+                    received: String(studentPlan.groupKey),
+                }),
             };
             penaltyPoints++;
         }
@@ -139,8 +147,11 @@ export class ExecutionPlanComparator {
             this.joinComparator.normalizeFilter(referencePlan.havingFilter, referenceAliasMap)
         ) {
             target.having = {
-                message:  'Incorrect Having filter.',
-                solution: `Expected ${referencePlan.havingFilter}, got ${studentPlan.havingFilter}.`,
+                message:  t('FEEDBACK_HAVING', lang),
+                solution: t('FEEDBACK_HAVING_SOLUTION', lang, {
+                    expected: String(referencePlan.havingFilter),
+                    received: String(studentPlan.havingFilter),
+                }),
             };
             penaltyPoints++;
         }
@@ -148,8 +159,11 @@ export class ExecutionPlanComparator {
         // ── ORDER BY ─────────────────────────────────────────────────────────
         if (!this.compareArrays(studentPlan.sortKey, referencePlan.sortKey, studentAliasMap, referenceAliasMap)) {
             target.orderBy = {
-                message:  'Incorrect Order By sort key.',
-                solution: `Expected ${referencePlan.sortKey}, got ${studentPlan.sortKey}.`,
+                message:  t('FEEDBACK_ORDER_BY', lang),
+                solution: t('FEEDBACK_ORDER_BY_SOLUTION', lang, {
+                    expected: String(referencePlan.sortKey),
+                    received: String(studentPlan.sortKey),
+                }),
             };
             penaltyPoints++;
         }
@@ -157,8 +171,11 @@ export class ExecutionPlanComparator {
         // ── WHERE ────────────────────────────────────────────────────────────
         if (!this.compareArrays(studentPlan.whereFilter, referencePlan.whereFilter, studentAliasMap, referenceAliasMap)) {
             target.where = {
-                message:  'Incorrect Where filter.',
-                solution: `Expected ${referencePlan.whereFilter}, got ${studentPlan.whereFilter}.`,
+                message:  t('FEEDBACK_WHERE', lang),
+                solution: t('FEEDBACK_WHERE_SOLUTION', lang, {
+                    expected: String(referencePlan.whereFilter),
+                    received: String(studentPlan.whereFilter),
+                }),
             };
             penaltyPoints++;
         }
@@ -176,15 +193,16 @@ export class ExecutionPlanComparator {
                     referenceAST.from as Join[],
                     studentAST.from  as Join[],
                     studentAliasMap,
-                    referenceAliasMap
+                    referenceAliasMap,
+                    lang
                 );
                 if (joinEntry) target.join = joinEntry;
                 if (!joinEqual) penaltyPoints++;
             }
         } else if (studentPlan.joinStatement && !referencePlan.joinStatement) {
-            target.join = { message: 'Incorrect inclusion of Join statement.' };
+            target.join = { message: t('FEEDBACK_JOIN_EXTRA', lang) };
         } else if (referencePlan.joinStatement && !studentPlan.joinStatement) {
-            target.join = { message: 'Join statement missing.' };
+            target.join = { message: t('FEEDBACK_JOIN_MISSING', lang) };
         }
 
         // ── DISTINCT ─────────────────────────────────────────────────────────
@@ -194,13 +212,13 @@ export class ExecutionPlanComparator {
         if (studentDistinct !== referenceDistinct) {
             if (referenceDistinct) {
                 target.distinct = {
-                    message:  'DISTINCT keyword is missing from the query.',
-                    solution: 'The query should use SELECT DISTINCT.',
+                    message:  t('FEEDBACK_DISTINCT_MISSING', lang),
+                    solution: t('FEEDBACK_DISTINCT_MISSING_SOLUTION', lang),
                 };
             } else {
                 target.distinct = {
-                    message:  'DISTINCT keyword should not be used in this query.',
-                    solution: 'The query should use plain SELECT without DISTINCT.',
+                    message:  t('FEEDBACK_DISTINCT_EXTRA', lang),
+                    solution: t('FEEDBACK_DISTINCT_EXTRA_SOLUTION', lang),
                 };
             }
             penaltyPoints++;
@@ -211,9 +229,10 @@ export class ExecutionPlanComparator {
         ) {
             // Same presence but different strategy — informational only, no penalty
             target.distinctStrategy = {
-                message: `Note: different DISTINCT implementation strategy ` +
-                    `(student: ${studentPlan.distinctStrategy ?? 'unknown'}, ` +
-                    `reference: ${referencePlan.distinctStrategy ?? 'unknown'}).`,
+                message: t('FEEDBACK_DISTINCT_STRATEGY', lang, {
+                    student:   studentPlan.distinctStrategy  ?? 'unknown',
+                    reference: referencePlan.distinctStrategy ?? 'unknown',
+                }),
             };
         }
 
@@ -223,9 +242,11 @@ export class ExecutionPlanComparator {
 
         if (JSON.stringify(studentCTEs) !== JSON.stringify(referenceCTEs)) {
             target.cte = {
-                message:  'Incorrect CTE usage.',
-                solution: `Expected CTEs: [${referenceCTEs.join(', ') || 'none'}], ` +
-                    `got: [${studentCTEs.join(', ') || 'none'}].`,
+                message:  t('FEEDBACK_CTE_INCORRECT', lang),
+                solution: t('FEEDBACK_CTE_SOLUTION', lang, {
+                    expected: referenceCTEs.join(', ') || 'none',
+                    received: studentCTEs.join(', ')   || 'none',
+                }),
             };
             penaltyPoints++;
         }
@@ -240,13 +261,13 @@ export class ExecutionPlanComparator {
         if (studentHasLimit !== referenceHasLimit) {
             if (referenceHasLimit) {
                 target.limit = {
-                    message:  'LIMIT clause is missing.',
-                    solution: 'The query should include a LIMIT clause.',
+                    message:  t('FEEDBACK_LIMIT_MISSING', lang),
+                    solution: t('FEEDBACK_LIMIT_MISSING_SOLUTION', lang),
                 };
             } else {
                 target.limit = {
-                    message:  'LIMIT clause should not be present in this query.',
-                    solution: 'Remove the LIMIT clause from the query.',
+                    message:  t('FEEDBACK_LIMIT_EXTRA', lang),
+                    solution: t('FEEDBACK_LIMIT_EXTRA_SOLUTION', lang),
                 };
             }
             penaltyPoints++;
@@ -259,12 +280,12 @@ export class ExecutionPlanComparator {
         if (hasStudentWindow !== hasReferenceWindow) {
             if (hasReferenceWindow) {
                 target.window = {
-                    message:  'Window function (OVER) is missing.',
-                    solution: 'The query should use a window function with OVER.',
+                    message:  t('FEEDBACK_WINDOW_MISSING', lang),
+                    solution: t('FEEDBACK_WINDOW_MISSING_SOLUTION', lang),
                 };
             } else {
                 target.window = {
-                    message: 'Window function (OVER) should not be used in this query.',
+                    message: t('FEEDBACK_WINDOW_EXTRA', lang),
                 };
             }
             penaltyPoints++;
@@ -278,9 +299,11 @@ export class ExecutionPlanComparator {
                 )
             ) {
                 target.windowPartition = {
-                    message:  'Incorrect PARTITION BY in window function.',
-                    solution: `Expected PARTITION BY: [${(referencePlan.windowPartitionKey ?? []).join(', ')}], ` +
-                        `got: [${(studentPlan.windowPartitionKey ?? []).join(', ')}].`,
+                    message:  t('FEEDBACK_WINDOW_PARTITION', lang),
+                    solution: t('FEEDBACK_WINDOW_PARTITION_SOLUTION', lang, {
+                        expected: (referencePlan.windowPartitionKey ?? []).join(', '),
+                        received: (studentPlan.windowPartitionKey   ?? []).join(', '),
+                    }),
                 };
                 penaltyPoints++;
             }
@@ -294,9 +317,11 @@ export class ExecutionPlanComparator {
                 )
             ) {
                 target.windowOrderBy = {
-                    message:  'Incorrect ORDER BY in window function.',
-                    solution: `Expected window ORDER BY: [${(referencePlan.windowOrderKey ?? []).join(', ')}], ` +
-                        `got: [${(studentPlan.windowOrderKey ?? []).join(', ')}].`,
+                    message:  t('FEEDBACK_WINDOW_ORDER_BY', lang),
+                    solution: t('FEEDBACK_WINDOW_ORDER_BY_SOLUTION', lang, {
+                        expected: (referencePlan.windowOrderKey ?? []).join(', '),
+                        received: (studentPlan.windowOrderKey   ?? []).join(', '),
+                    }),
                 };
                 penaltyPoints++;
             }
@@ -314,7 +339,8 @@ export class ExecutionPlanComparator {
                 studentAliasMap,
                 referenceAliasMap,
                 topLevelTarget,
-                depth
+                depth,
+                lang
             );
         }
 
@@ -333,15 +359,25 @@ export class ExecutionPlanComparator {
         studentAliasMap: Record<string, string>,
         referenceAliasMap: Record<string, string>,
         topLevelTarget: ExecutionPlanFeedback,
-        depth: number
+        depth: number,
+        lang: SupportedLanguage = 'en'
     ): number {
         let penaltyPoints = 0;
 
         if (studentSubplans.length !== referenceSubplans.length) {
+            const count = referenceSubplans.length;
             topLevelTarget!.subqueryCount = {
-                message:  `Incorrect number of subqueries: expected ${referenceSubplans.length}, got ${studentSubplans.length}.`,
-                solution: `The query should contain exactly ${referenceSubplans.length} subquer` +
-                    `${referenceSubplans.length === 1 ? 'y' : 'ies'}.`,
+                message:  t('FEEDBACK_SUBQUERY_COUNT', lang, {
+                    expected: String(count),
+                    received: String(studentSubplans.length),
+                }),
+                solution: t(
+                    count === 1
+                        ? 'FEEDBACK_SUBQUERY_COUNT_SOLUTION_SINGULAR'
+                        : 'FEEDBACK_SUBQUERY_COUNT_SOLUTION_PLURAL',
+                    lang,
+                    { count: String(count) }
+                ),
             };
             penaltyPoints++;
             return penaltyPoints;
@@ -360,7 +396,11 @@ export class ExecutionPlanComparator {
             // Check subplan type (InitPlan vs SubPlan)
             if (stuSubplan.type !== refSubplan.type) {
                 subTarget.type = {
-                    message: `In ${subContext}: expected a ${refSubplan.type}, got a ${stuSubplan.type}.`,
+                    message: t('FEEDBACK_SUBQUERY_TYPE', lang, {
+                        context:  subContext,
+                        expected: refSubplan.type,
+                        received: stuSubplan.type,
+                    }),
                 };
                 penaltyPoints++;
                 continue;
@@ -375,7 +415,8 @@ export class ExecutionPlanComparator {
                 studentAliasMap,
                 referenceAliasMap,
                 subTarget,
-                depth + 1
+                depth + 1,
+                lang
             );
 
             // Remove empty subplan entries (no issues found)
