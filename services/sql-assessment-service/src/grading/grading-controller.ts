@@ -11,12 +11,14 @@ import {
     GptOptions,
     IRequestGradingOptions,
     IRequestComparisonOptions,
+    ReferenceQuery,
 } from '../shared/interfaces/index';
 import { TaskDescriptionGenerationService } from '../generation/description/task-description-generation-service';
 import { t, resolveLanguageCode, SupportedLanguage } from '../shared/i18n';
 import { ResultSetComparator } from './result-set-comparator';
 import { ASTComparator } from './comparators/ast-comparator';
 import { ExecutionPlanComparator } from './comparators/execution-plan-comparator';
+import { ProximityHeuristic, QueryProximityService } from './query-proximity-service';
 
 // ---------------------------------------------------------------------------
 // Internal helper types
@@ -41,6 +43,11 @@ interface ValidatedConnection {
  *   POST /api/grading/compare/ast              — AST / column comparison only
  *   POST /api/grading/compare/execution-plan   — execution-plan comparison only
  *
+ * All endpoints accept either a single `referenceQuery` string (legacy) or a
+ * `referenceQueries` array (preferred).  When multiple reference queries are
+ * provided the {@link QueryProximityService} selects the structurally closest
+ * one to the student query before comparison.
+ *
  * All endpoints share the same connection-validation boilerplate via the
  * private validateAndConnect() helper.
  */
@@ -48,11 +55,12 @@ export class GradingController {
     public router: Router;
 
     constructor(
-        private readonly queryGradingService:            SQLQueryGradingService,
+        private readonly queryGradingService:              SQLQueryGradingService,
         private readonly taskDescriptionGenerationService: TaskDescriptionGenerationService,
-        private readonly resultSetComparator:            ResultSetComparator,
-        private readonly astComparator:                  ASTComparator,
-        private readonly executionPlanComparator:        ExecutionPlanComparator
+        private readonly resultSetComparator:              ResultSetComparator,
+        private readonly astComparator:                    ASTComparator,
+        private readonly executionPlanComparator:          ExecutionPlanComparator,
+        private readonly queryProximityService:            QueryProximityService = new QueryProximityService()
     ) {
         this.router = Router();
         this.initializeRoutes();
@@ -93,7 +101,10 @@ export class GradingController {
             return null;
         }
 
-        if (!body.referenceQuery || typeof body.referenceQuery !== 'string' || !body.referenceQuery.trim()) {
+        // At least one reference query source must be provided
+        const hasLegacy     = typeof body.referenceQuery === 'string' && body.referenceQuery.trim().length > 0;
+        const hasCollection = Array.isArray(body.referenceQueries) && body.referenceQueries.length > 0;
+        if (!hasLegacy && !hasCollection) {
             res.status(400).json({ message: t('GRADING_READ_ERROR', lang) });
             return null;
         }
@@ -133,6 +144,39 @@ export class GradingController {
         }
 
         return { connectionInfo: body.connectionInfo, databaseKey, dataSource, lang };
+    }
+
+    // =========================================================================
+    // Reference-query resolution helper
+    // =========================================================================
+
+    /**
+     * Resolves the single reference query string to use for comparison.
+     *
+     * When `referenceQueries` is supplied (preferred), the
+     * {@link QueryProximityService} selects the structurally closest candidate
+     * to `studentQuery`.  The legacy `referenceQuery` string is used as a
+     * fallback when no collection is present.
+     *
+     * The optional `heuristic` parameter is forwarded to the proximity service.
+     * Defaults to {@link ProximityHeuristic.ASTEditDistance}.
+     */
+    private resolveReferenceQuery(
+        studentQuery:      string,
+        referenceQuery?:   string,
+        referenceQueries?: ReferenceQuery[],
+        heuristic?:        ProximityHeuristic
+    ): string {
+        if (Array.isArray(referenceQueries) && referenceQueries.length > 0) {
+            const result = this.queryProximityService.selectClosest(
+                studentQuery,
+                referenceQueries,
+                heuristic
+            );
+            return result.referenceQuery.query;
+        }
+        // Fallback to legacy single string (already validated to be non-empty by this point)
+        return referenceQuery!;
     }
 
     // =========================================================================
@@ -181,8 +225,14 @@ export class GradingController {
         const gradingRequest = gradingRequestOptions.gradingRequest;
         if (isConnected) {
             try {
-                const comparisonResult = await this.queryGradingService.gradeQuery(
+                const resolvedReferenceQuery = this.resolveReferenceQuery(
+                    gradingRequest.studentQuery,
                     gradingRequest.referenceQuery,
+                    gradingRequest.referenceQueries
+                );
+
+                const comparisonResult = await this.queryGradingService.gradeQuery(
+                    resolvedReferenceQuery,
                     gradingRequest.studentQuery,
                     dataSource,
                     databaseKey
@@ -311,7 +361,14 @@ export class GradingController {
         if (!validated) return res;
 
         const { dataSource, lang } = validated;
-        const { referenceQuery, studentQuery } = req.body as IRequestComparisonOptions;
+        const body = req.body as IRequestComparisonOptions;
+        const { studentQuery } = body;
+
+        const referenceQuery = this.resolveReferenceQuery(
+            studentQuery,
+            body.referenceQuery,
+            body.referenceQueries
+        );
 
         try {
             const [match, feedback] = await this.resultSetComparator.compare(
@@ -343,7 +400,15 @@ export class GradingController {
         if (!validated) return res;
 
         const { dataSource, lang } = validated;
-        const { referenceQuery, studentQuery } = req.body as IRequestComparisonOptions;
+        const body = req.body as IRequestComparisonOptions;
+        const { studentQuery } = body;
+
+        const referenceQuery = this.resolveReferenceQuery(
+            studentQuery,
+            body.referenceQuery,
+            body.referenceQueries
+        );
+
         await dataSource.destroy(); // No DB call needed for AST comparison
 
         const parser = new Parser();
@@ -390,7 +455,14 @@ export class GradingController {
         if (!validated) return res;
 
         const { dataSource, lang } = validated;
-        const { referenceQuery, studentQuery } = req.body as IRequestComparisonOptions;
+        const body = req.body as IRequestComparisonOptions;
+        const { studentQuery } = body;
+
+        const referenceQuery = this.resolveReferenceQuery(
+            studentQuery,
+            body.referenceQuery,
+            body.referenceQueries
+        );
 
         const parser = new Parser();
         let studentAST:   any;

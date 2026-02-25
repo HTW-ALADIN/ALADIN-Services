@@ -1,8 +1,52 @@
 import { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
 import { GenerationOptions, GptOptions, ITaskConfiguration } from './domain';
 
+/**
+ * Statistics attached to a reference query, recording how prior student
+ * cohorts have interacted with it.  All fields are optional — callers may
+ * supply as much or as little context as they have available.
+ */
+export interface ReferenceQueryStats {
+	/**
+	 * Number of times this exact query was submitted by a student across all
+	 * prior attempts (across all students and sessions).
+	 */
+	timesFoundByStudents?: number;
+	/**
+	 * Average number of attempts a student needed before arriving at this query.
+	 * A low value (e.g. 1–2) indicates it is a commonly reached solution;
+	 * a high value suggests it is an uncommon, advanced variant.
+	 */
+	averageAttemptsToFind?: number;
+	/** Any additional free-form metadata the caller wishes to persist. */
+	[key: string]: unknown;
+}
+
+/**
+ * A single reference (model) query together with optional prior-cohort
+ * statistics.  Endpoints that accept a collection of reference solutions
+ * use this shape for each element.
+ */
+export interface ReferenceQuery {
+	/** The SQL string of the reference (model) solution. */
+	query: string;
+	/** Optional statistics from prior student cohorts. */
+	stats?: ReferenceQueryStats;
+}
+
 export interface GradingRequest {
-	referenceQuery: string;
+	/**
+	 * A single reference query string.
+	 * @deprecated Prefer `referenceQueries` (collection with optional stats).
+	 *   When both are supplied `referenceQueries` takes precedence.
+	 */
+	referenceQuery?: string;
+	/**
+	 * One or more reference (model) solutions.  The grading pipeline will
+	 * select the closest one to the student query before comparison.
+	 * At least one of `referenceQuery` or `referenceQueries` must be present.
+	 */
+	referenceQueries?: ReferenceQuery[];
 	studentQuery: string;
 }
 
@@ -89,7 +133,17 @@ export interface QueryExecutionResult {
  */
 export interface IRequestComparisonOptions {
 	connectionInfo: PostgresConnectionOptions;
-	referenceQuery: string;
+	/**
+	 * A single reference query string.
+	 * @deprecated Prefer `referenceQueries`.  When both are supplied,
+	 *   `referenceQueries` takes precedence.
+	 */
+	referenceQuery?: string;
+	/**
+	 * One or more reference solutions.  The closest one to the student query
+	 * is selected automatically before the comparison is run.
+	 */
+	referenceQueries?: ReferenceQuery[];
 	studentQuery: string;
 	/** BCP 47 language code for error messages (e.g. "en", "de"). Defaults to "en". */
 	languageCode?: string;
