@@ -28,6 +28,25 @@ export const SQL_TEMPLATES: { [key: string]: string } = {
     "SELECT_DISTINCT_COLUMNS_JOIN": "Retrieve unique {columns} from the following data combination in the {database} database.",
 
     // -------------------------------------------------------------------------
+    // Structural words used inline by the engine (not sentence-level templates)
+    // -------------------------------------------------------------------------
+    /**
+     * Definite article placed before a table or column display name.
+     * e.g. "the employees first name"
+     */
+    "COLUMN_PREFIX": "the ",
+    /** Word used to join two items in a column list (e.g. "col1 and col2"). */
+    "AND_JOINER": "and",
+    /** Sort direction label for ASC. */
+    "ORDER_ASC": "ascending",
+    /** Sort direction label for DESC. */
+    "ORDER_DESC": "descending",
+    /** CASE expression structural words. */
+    "CASE_WHEN": "when",
+    "CASE_THEN": "then",
+    "CASE_ELSE": "otherwise",
+
+    // -------------------------------------------------------------------------
     // Boolean operators (used when combining WHERE / HAVING sub-conditions)
     // -------------------------------------------------------------------------
     "AND": "{left} and {right}",

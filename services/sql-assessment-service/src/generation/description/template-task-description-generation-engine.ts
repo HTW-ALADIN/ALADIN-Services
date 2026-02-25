@@ -93,7 +93,7 @@ export class TemplateTaskDescriptionGenerationEngine {
                     ? '*'
                     : (node.columns as any[])
                         .map(col => this.getColumnName(col.expr, aliasMap, schemaAliasMap, lang))
-                        .join(' and ');
+                        .join(` ${T.AND_JOINER} `);
 
                 if (isSelectAll) {
                     result += T.SELECT_ALL_JOIN.replace('{database}', schema);
@@ -126,7 +126,7 @@ export class TemplateTaskDescriptionGenerationEngine {
                     ? '*'
                     : (node.columns as any[])
                         .map(col => this.getColumnName(col.expr, aliasMap, schemaAliasMap, lang))
-                        .join(' and ');
+                        .join(` ${T.AND_JOINER} `);
 
                 if (isSelectAll) {
                     result += T.SELECT_ALL
@@ -173,8 +173,8 @@ export class TemplateTaskDescriptionGenerationEngine {
         if (node.orderby) {
             const orderByColumns = (node.orderby as any[]).map((col: any) => {
                 const columnName = this.getColumnName(col.expr, aliasMap, schemaAliasMap, lang);
-                const orderType = col.type?.toUpperCase() === 'DESC' ? 'descending' : 'ascending';
-                return `${columnName} in ${orderType} order`;
+                const orderLabel = col.type?.toUpperCase() === 'DESC' ? T.ORDER_DESC : T.ORDER_ASC;
+                return `${columnName} in ${orderLabel} order`;
             }).join(', ');
             result += ' ' + T.ORDER_BY.replace('{columns}', orderByColumns);
         }
@@ -464,7 +464,7 @@ export class TemplateTaskDescriptionGenerationEngine {
                     ? this.resolveTableDisplayName(resolvedTable, schemaAliasMap)
                     : null;
                 const displayColumn = this.resolveColumnDisplayName(resolvedTable, column.column, schemaAliasMap);
-                const tablePart = displayTable ? `the ${displayTable} ` : '';
+                const tablePart = displayTable ? `${T.COLUMN_PREFIX}${displayTable} ` : '';
                 return `${tablePart}${displayColumn}`;
             }
             else if (column.column.expr) {
@@ -472,7 +472,7 @@ export class TemplateTaskDescriptionGenerationEngine {
                     ? this.resolveTableDisplayName(resolvedTable, schemaAliasMap)
                     : null;
                 const displayColumn = this.resolveColumnDisplayName(resolvedTable, column.column.expr.value, schemaAliasMap);
-                const tablePart = displayTable ? `the ${displayTable} ` : '';
+                const tablePart = displayTable ? `${T.COLUMN_PREFIX}${displayTable} ` : '';
                 return `${tablePart}${displayColumn}`;
             }
         }
@@ -573,10 +573,10 @@ export class TemplateTaskDescriptionGenerationEngine {
             if (arg.type === 'when') {
                 const cond = this.handleCondition(arg.cond ?? arg.condition, aliasMap, schemaAliasMap, undefined, lang);
                 const result = this.getColumnName(arg.result ?? arg.then, aliasMap, schemaAliasMap, lang);
-                clauses.push(`when ${cond} then ${result}`);
+                clauses.push(`${T.CASE_WHEN} ${cond} ${T.CASE_THEN} ${result}`);
             } else if (arg.type === 'else') {
                 const result = this.getColumnName(arg.result ?? arg.value, aliasMap, schemaAliasMap, lang);
-                clauses.push(`otherwise ${result}`);
+                clauses.push(`${T.CASE_ELSE} ${result}`);
             }
         }
 

@@ -16,6 +16,26 @@ export const SQL_TEMPLATES_DE: { [key: string]: string } = {
     "SELECT_DISTINCT_COLUMNS_JOIN": "Rufe eindeutige {columns} aus der folgenden Datenkombination in der {database}-Datenbank ab.",
 
     // -------------------------------------------------------------------------
+    // Strukturwörter, die inline von der Engine verwendet werden
+    // -------------------------------------------------------------------------
+    /**
+     * Bestimmter Artikel vor einem Tabellen- oder Spaltennamen.
+     * Im Deutschen wird der Artikel weggelassen, da das grammatikalische
+     * Geschlecht nicht automatisch bestimmt werden kann.
+     */
+    "COLUMN_PREFIX": "",
+    /** Verbindungswort zum Verbinden von zwei Elementen in einer Spaltenliste. */
+    "AND_JOINER": "und",
+    /** Sortierrichtungslabel für ASC. */
+    "ORDER_ASC": "aufsteigend",
+    /** Sortierrichtungslabel für DESC. */
+    "ORDER_DESC": "absteigend",
+    /** Strukturwörter für CASE-Ausdrücke. */
+    "CASE_WHEN": "wenn",
+    "CASE_THEN": "dann",
+    "CASE_ELSE": "sonst",
+
+    // -------------------------------------------------------------------------
     // Boolesche Operatoren (werden beim Kombinieren von WHERE- / HAVING-Teilbedingungen verwendet)
     // -------------------------------------------------------------------------
     "AND": "{left} und {right}",
