@@ -184,18 +184,17 @@ export class DescriptionController {
 
 		try {
 			const description =
-				await this.taskDescriptionGenerationService.generateTaskFromQuery(
-					GenerationOptions.Template,
-					options.query,
-					ast,
-					options.connectionInfo.schema!,
+				await this.taskDescriptionGenerationService.generateTaskFromQuery({
+					generationType: GenerationOptions.Template,
+					query: options.query,
+					queryAST: ast,
+					schema: options.connectionInfo.schema!,
 					databaseKey,
-					options.isSelfJoin ?? false,
-					undefined,
+					isSelfJoin: options.isSelfJoin ?? false,
 					schemaAliasMap,
 					tables,
 					lang,
-				);
+				});
 
 			const response: DescriptionResponse = { description, languageCode };
 			return res.status(200).json(response);
@@ -223,18 +222,18 @@ export class DescriptionController {
 
 		try {
 			const description =
-				await this.taskDescriptionGenerationService.generateTaskFromQuery(
-					GenerationOptions.LLM,
-					options.query,
-					null as any,
-					options.connectionInfo.schema!,
+				await this.taskDescriptionGenerationService.generateTaskFromQuery({
+					generationType: GenerationOptions.LLM,
+					query: options.query,
+					queryAST: null as any,
+					schema: options.connectionInfo.schema!,
 					databaseKey,
-					options.isSelfJoin ?? false,
-					GptOptions.Default,
+					isSelfJoin: options.isSelfJoin ?? false,
+					option: GptOptions.Default,
 					schemaAliasMap,
 					tables,
 					lang,
-				);
+				});
 
 			const response: DescriptionResponse = { description, languageCode };
 			return res.status(200).json(response);
@@ -262,18 +261,18 @@ export class DescriptionController {
 
 		try {
 			const description =
-				await this.taskDescriptionGenerationService.generateTaskFromQuery(
-					GenerationOptions.LLM,
-					options.query,
-					null as any,
-					options.connectionInfo.schema!,
+				await this.taskDescriptionGenerationService.generateTaskFromQuery({
+					generationType: GenerationOptions.LLM,
+					query: options.query,
+					queryAST: null as any,
+					schema: options.connectionInfo.schema!,
 					databaseKey,
-					options.isSelfJoin ?? false,
-					GptOptions.Creative,
+					isSelfJoin: options.isSelfJoin ?? false,
+					option: GptOptions.Creative,
 					schemaAliasMap,
 					tables,
 					lang,
-				);
+				});
 
 			const response: DescriptionResponse = { description, languageCode };
 			return res.status(200).json(response);
@@ -301,18 +300,18 @@ export class DescriptionController {
 
 		try {
 			const description =
-				await this.taskDescriptionGenerationService.generateTaskFromQuery(
-					GenerationOptions.LLM,
-					options.query,
-					null as any,
-					options.connectionInfo.schema!,
+				await this.taskDescriptionGenerationService.generateTaskFromQuery({
+					generationType: GenerationOptions.LLM,
+					query: options.query,
+					queryAST: null as any,
+					schema: options.connectionInfo.schema!,
 					databaseKey,
-					options.isSelfJoin ?? false,
-					GptOptions.MultiStep,
+					isSelfJoin: options.isSelfJoin ?? false,
+					option: GptOptions.MultiStep,
 					schemaAliasMap,
 					tables,
 					lang,
-				);
+				});
 
 			const response: DescriptionResponse = { description, languageCode };
 			return res.status(200).json(response);
@@ -349,18 +348,18 @@ export class DescriptionController {
 
 		try {
 			const description =
-				await this.taskDescriptionGenerationService.generateTaskFromQuery(
-					GenerationOptions.Hybrid,
-					options.query,
-					ast,
-					options.connectionInfo.schema!,
+				await this.taskDescriptionGenerationService.generateTaskFromQuery({
+					generationType: GenerationOptions.Hybrid,
+					query: options.query,
+					queryAST: ast,
+					schema: options.connectionInfo.schema!,
 					databaseKey,
-					options.isSelfJoin ?? false,
-					undefined,
+					isSelfJoin: options.isSelfJoin ?? false,
+					option: undefined,
 					schemaAliasMap,
 					tables,
 					lang,
-				);
+				});
 
 			const response: DescriptionResponse = { description, languageCode };
 			return res.status(200).json(response);

@@ -11,9 +11,16 @@
  *              are joined into a single comma-separated string.
  */
 export interface FeedbackEntry {
-    message: string;
-    solution?: string;
+	message: string;
+	solution?: FeedbackEntrySolution[] | FeedbackEntrySolution;
 }
+
+export type FeedbackEntrySolution =
+	| string
+	| {
+			expected: string;
+			received: string;
+	  };
 
 // ---------------------------------------------------------------------------
 // Execution-plan feedback block (non-optional form used internally)
@@ -26,23 +33,23 @@ export interface FeedbackEntry {
  * `AssembledFeedback['executionPlan']`.
  */
 export interface ExecutionPlanFeedback {
-    planRetrieval?:   FeedbackEntry;
-    groupKey?:        FeedbackEntry;
-    having?:          FeedbackEntry;
-    orderBy?:         FeedbackEntry;
-    where?:           FeedbackEntry;
-    join?:            FeedbackEntry;
-    distinct?:        FeedbackEntry;
-    distinctStrategy?: FeedbackEntry;
-    cte?:             FeedbackEntry;
-    limit?:           FeedbackEntry;
-    window?:          FeedbackEntry;
-    windowPartition?: FeedbackEntry;
-    windowOrderBy?:   FeedbackEntry;
-    subqueryCount?:   FeedbackEntry;
-    subplans?: {
-        [subplanName: string]: SubplanFeedback;
-    };
+	planRetrieval?: FeedbackEntry;
+	groupKey?: FeedbackEntry;
+	having?: FeedbackEntry;
+	orderBy?: FeedbackEntry;
+	where?: FeedbackEntry;
+	join?: FeedbackEntry;
+	distinct?: FeedbackEntry;
+	distinctStrategy?: FeedbackEntry;
+	cte?: FeedbackEntry;
+	limit?: FeedbackEntry;
+	window?: FeedbackEntry;
+	windowPartition?: FeedbackEntry;
+	windowOrderBy?: FeedbackEntry;
+	subqueryCount?: FeedbackEntry;
+	subplans?: {
+		[subplanName: string]: SubplanFeedback;
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -50,21 +57,21 @@ export interface ExecutionPlanFeedback {
 // ---------------------------------------------------------------------------
 
 export interface SubplanFeedback {
-    /** InitPlan vs SubPlan type mismatch */
-    type?:            FeedbackEntry;
-    groupKey?:        FeedbackEntry;
-    having?:          FeedbackEntry;
-    orderBy?:         FeedbackEntry;
-    where?:           FeedbackEntry;
-    join?:            FeedbackEntry;
-    distinct?:        FeedbackEntry;
-    /** Informational only — different DISTINCT strategy, no grade penalty */
-    distinctStrategy?: FeedbackEntry;
-    cte?:             FeedbackEntry;
-    limit?:           FeedbackEntry;
-    window?:          FeedbackEntry;
-    windowPartition?: FeedbackEntry;
-    windowOrderBy?:   FeedbackEntry;
+	/** InitPlan vs SubPlan type mismatch */
+	type?: FeedbackEntry;
+	groupKey?: FeedbackEntry;
+	having?: FeedbackEntry;
+	orderBy?: FeedbackEntry;
+	where?: FeedbackEntry;
+	join?: FeedbackEntry;
+	distinct?: FeedbackEntry;
+	/** Informational only — different DISTINCT strategy, no grade penalty */
+	distinctStrategy?: FeedbackEntry;
+	cte?: FeedbackEntry;
+	limit?: FeedbackEntry;
+	window?: FeedbackEntry;
+	windowPartition?: FeedbackEntry;
+	windowOrderBy?: FeedbackEntry;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,38 +88,38 @@ export interface SubplanFeedback {
  * "no issue found in this area".
  */
 export interface AssembledFeedback {
-    /**
-     * Early-exit or cross-cutting messages that are not tied to a specific
-     * comparator (executability errors, AST parse failures, wrong clause type).
-     */
-    general?: {
-        executability?: FeedbackEntry;
-        astParsing?:    FeedbackEntry;
-        astArray?:      FeedbackEntry;
-        sqlClauseType?: FeedbackEntry;
-    };
+	/**
+	 * Early-exit or cross-cutting messages that are not tied to a specific
+	 * comparator (executability errors, AST parse failures, wrong clause type).
+	 */
+	general?: {
+		executability?: FeedbackEntry;
+		astParsing?: FeedbackEntry;
+		astArray?: FeedbackEntry;
+		sqlClauseType?: FeedbackEntry;
+	};
 
-    /** Result-set equality verdict. Always present on a normal grading run. */
-    resultSet?: {
-        verdict: FeedbackEntry;
-    };
+	/** Result-set equality verdict. Always present on a normal grading run. */
+	resultSet?: {
+		verdict: FeedbackEntry;
+	};
 
-    /** AST-level structural comparison (columns, LIMIT, OFFSET). */
-    ast?: {
-        selectStatement?: FeedbackEntry;
-        columns?:         FeedbackEntry;
-        limit?:           FeedbackEntry;
-        offset?:          FeedbackEntry;
-    };
+	/** AST-level structural comparison (columns, LIMIT, OFFSET). */
+	ast?: {
+		selectStatement?: FeedbackEntry;
+		columns?: FeedbackEntry;
+		limit?: FeedbackEntry;
+		offset?: FeedbackEntry;
+	};
 
-    /** Execution-plan diff feedback. */
-    executionPlan?: ExecutionPlanFeedback;
+	/** Execution-plan diff feedback. */
+	executionPlan?: ExecutionPlanFeedback;
 
-    /**
-     * Natural-language description of what the student query does.
-     * Appended post-grading when the student query is not equivalent.
-     */
-    taskDescription?: {
-        description: FeedbackEntry;
-    };
+	/**
+	 * Natural-language description of what the student query does.
+	 * Appended post-grading when the student query is not equivalent.
+	 */
+	taskDescription?: {
+		description: FeedbackEntry;
+	};
 }

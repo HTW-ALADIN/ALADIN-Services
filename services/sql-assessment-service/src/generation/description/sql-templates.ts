@@ -128,4 +128,42 @@ export const SQL_TEMPLATES: { [key: string]: string } = {
     "UNION_ALL": "{left} Additionally retrieve (including duplicates): {right}",
     "INTERSECT": "{left} Only include results that also appear in: {right}",
     "EXCEPT": "{left} Excluding results that appear in: {right}",
+
+    // -------------------------------------------------------------------------
+    // ORDER BY — column + direction framing
+    // -------------------------------------------------------------------------
+    /** Wraps a single column name with its sort direction label. */
+    "ORDER_BY_COLUMN": "{column} in {direction} order",
+
+    // -------------------------------------------------------------------------
+    // Scalar function descriptions
+    // -------------------------------------------------------------------------
+    "FUNC_COALESCE":      "the first available value of {args}",
+    "FUNC_NULLIF":        "{arg1} (null if equal to {arg2})",
+    "FUNC_IFNULL":        "{arg1} or {arg2} if not defined",
+    "FUNC_UPPER":         "{arg} in upper case",
+    "FUNC_LOWER":         "{arg} in lower case",
+    "FUNC_TRIM":          "{arg} with whitespace removed",
+    "FUNC_LENGTH":        "the length of {arg}",
+    "FUNC_ROUND":         "{arg} rounded",
+    "FUNC_ROUND_DECIMAL": "{arg} rounded to {decimals} decimal places",
+    "FUNC_ABS":           "the absolute value of {arg}",
+    "FUNC_NOW":           "the current timestamp",
+    "FUNC_CURRENT_DATE":  "the current date",
+    "FUNC_CONCAT":        "the concatenation of {args}",
+    "FUNC_SUBSTRING":     "a substring of {arg}",
+    "FUNC_REPLACE":       "{arg} with replacements applied",
+    "FUNC_CAST":          "{arg}",
+
+    // -------------------------------------------------------------------------
+    // Fallback / error strings
+    // -------------------------------------------------------------------------
+    "UNSPECIFIED_CONDITION": "an unspecified condition",
+    "UNKNOWN_COLUMN":        "unknown column",
+    "UNAVAILABLE":           "unavailable",
+    "VARIOUS_CONDITIONS":    "various conditions",
+    "UNSUPPORTED_QUERY":     "Unsupported query type.",
+    "UNSUPPORTED_FROM":      "Unsupported FROM clause structure.",
+    "INVALID_FROM":          "Invalid FROM clause.",
+    "UNSPECIFIED_JOIN":      "Perform an unspecified join.",
 };

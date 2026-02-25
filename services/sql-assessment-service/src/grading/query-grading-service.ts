@@ -45,14 +45,19 @@ export class SQLQueryGradingService {
 		// ── 1. Executability ─────────────────────────────────────────────────
 
 		const [executable, execFeedback] =
-			await this.resultSetComparator.isExecutable(studentQuery, dataSource, lang);
+			await this.resultSetComparator.isExecutable(
+				studentQuery,
+				dataSource,
+				lang,
+			);
 
 		if (!executable) {
 			const feedbackDetails: AssembledFeedback = {
 				general: {
 					executability: {
-						message: execFeedback[0] ?? t('FEEDBACK_QUERY_NOT_EXECUTABLE', lang),
-						solution: execFeedback[1],
+						message:
+							execFeedback[0] ?? t('FEEDBACK_QUERY_NOT_EXECUTABLE', lang),
+						solution: [execFeedback[1]],
 					},
 				},
 			};
@@ -103,7 +108,9 @@ export class SQLQueryGradingService {
 		if (Array.isArray(studentAST) || Array.isArray(referenceAST)) {
 			const grade = resultSetMatch ? SQLQueryGradingService.FULL_GRADE : 0;
 			const feedbackDetails: AssembledFeedback = {
-				general: { astArray: { message: t('FEEDBACK_AST_ARRAY_UNSUPPORTED', lang) } },
+				general: {
+					astArray: { message: t('FEEDBACK_AST_ARRAY_UNSUPPORTED', lang) },
+				},
 			};
 			if (rsFeedback.length > 0) {
 				feedbackDetails.general!.executability = { message: rsFeedback[0] };
@@ -119,7 +126,9 @@ export class SQLQueryGradingService {
 		if (!studentAST || !referenceAST) {
 			const grade = resultSetMatch ? SQLQueryGradingService.FULL_GRADE : 0;
 			const feedbackDetails: AssembledFeedback = {
-				general: { astParsing: { message: t('FEEDBACK_AST_PARSE_FAILED', lang) } },
+				general: {
+					astParsing: { message: t('FEEDBACK_AST_PARSE_FAILED', lang) },
+				},
 			};
 			if (rsFeedback.length > 0) {
 				feedbackDetails.general!.executability = { message: rsFeedback[0] };
@@ -158,7 +167,11 @@ export class SQLQueryGradingService {
 
 		// ── 4. AST structural comparison ─────────────────────────────────────
 
-		const astResult = this.astComparator.compare(studentAST, referenceAST, lang);
+		const astResult = this.astComparator.compare(
+			studentAST,
+			referenceAST,
+			lang,
+		);
 
 		// Unsupported structure: FROM-clause derived-table subqueries only.
 		// DISTINCT, WHERE/HAVING subqueries, CTEs, LIMIT and window functions

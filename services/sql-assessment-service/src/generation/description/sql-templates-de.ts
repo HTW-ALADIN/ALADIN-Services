@@ -117,4 +117,42 @@ export const SQL_TEMPLATES_DE: { [key: string]: string } = {
     "UNION_ALL": "{left} Rufe zusätzlich ab (einschließlich Duplikaten): {right}",
     "INTERSECT": "{left} Schließe nur Ergebnisse ein, die auch vorkommen in: {right}",
     "EXCEPT": "{left} Ausgenommen Ergebnisse, die vorkommen in: {right}",
+
+    // -------------------------------------------------------------------------
+    // ORDER BY — Spalte + Richtung
+    // -------------------------------------------------------------------------
+    /** Verbindet einen Spaltennamen mit der Sortierrichtung. */
+    "ORDER_BY_COLUMN": "{column} in {direction}er Reihenfolge",
+
+    // -------------------------------------------------------------------------
+    // Beschreibungen von Skalarfunktionen
+    // -------------------------------------------------------------------------
+    "FUNC_COALESCE":      "der erste verfügbare Wert von {args}",
+    "FUNC_NULLIF":        "{arg1} (null, wenn gleich {arg2})",
+    "FUNC_IFNULL":        "{arg1} oder {arg2}, falls nicht definiert",
+    "FUNC_UPPER":         "{arg} in Großbuchstaben",
+    "FUNC_LOWER":         "{arg} in Kleinbuchstaben",
+    "FUNC_TRIM":          "{arg} ohne Leerzeichen",
+    "FUNC_LENGTH":        "die Länge von {arg}",
+    "FUNC_ROUND":         "{arg} gerundet",
+    "FUNC_ROUND_DECIMAL": "{arg} gerundet auf {decimals} Dezimalstellen",
+    "FUNC_ABS":           "der Absolutwert von {arg}",
+    "FUNC_NOW":           "der aktuelle Zeitstempel",
+    "FUNC_CURRENT_DATE":  "das aktuelle Datum",
+    "FUNC_CONCAT":        "die Verkettung von {args}",
+    "FUNC_SUBSTRING":     "ein Teilstring von {arg}",
+    "FUNC_REPLACE":       "{arg} mit angewendeten Ersetzungen",
+    "FUNC_CAST":          "{arg}",
+
+    // -------------------------------------------------------------------------
+    // Fallback- / Fehlertexte
+    // -------------------------------------------------------------------------
+    "UNSPECIFIED_CONDITION": "eine nicht spezifizierte Bedingung",
+    "UNKNOWN_COLUMN":        "unbekannte Spalte",
+    "UNAVAILABLE":           "nicht verfügbar",
+    "VARIOUS_CONDITIONS":    "verschiedene Bedingungen",
+    "UNSUPPORTED_QUERY":     "Nicht unterstützter Abfragetyp.",
+    "UNSUPPORTED_FROM":      "Nicht unterstützte FROM-Klausel.",
+    "INVALID_FROM":          "Ungültige FROM-Klausel.",
+    "UNSPECIFIED_JOIN":      "Führe einen nicht spezifizierten Join durch.",
 };

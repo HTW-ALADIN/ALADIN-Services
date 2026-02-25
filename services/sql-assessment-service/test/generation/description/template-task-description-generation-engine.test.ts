@@ -48,7 +48,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
 
         it('returns a description for a simple SELECT * query', () => {
             const ast = parse('SELECT * FROM northwind.employees');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toBe(
                 'Retrieve all information about the employees in the northwind database.'
             );
@@ -58,7 +58,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT employees.first_name, employees.last_name FROM northwind.employees'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toBe(
                 'Retrieve the employees first name and the employees last name in the northwind database.'
             );
@@ -68,7 +68,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT * FROM northwind.products WHERE products.unit_price > 20'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toBe(
                 'Retrieve all information about the products in the northwind database.' +
                 ' Filter the results where the products unit price is greater than 20.'
@@ -82,7 +82,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 ' GROUP BY employees.region' +
                 ' HAVING COUNT(employees.employee_id) > 1'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toBe(
                 'Retrieve the employees region and the number of employee ids in the northwind database.' +
                 ' Group the results based on the employees region.' +
@@ -95,7 +95,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 'SELECT * FROM northwind.orders' +
                 ' INNER JOIN northwind.order_details ON orders.order_id = order_details.order_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toBe(
                 'Retrieve all information about the following data combination in the northwind database.' +
                 ' Combine the data from the orders table and the order details table.'
@@ -108,7 +108,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 ' FROM northwind.employees e1' +
                 ' INNER JOIN northwind.employees e2 ON e1.reports_to = e2.employee_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toBe(
                 'Retrieve the employees first name and the employees first name from the following data combination in the northwind database.' +
                 ' Match records within the employees table where the employees reports to equals the employees employee id.'
@@ -120,7 +120,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 'SELECT AVG(products.unit_price), MAX(products.units_in_stock)' +
                 ' FROM northwind.products'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toBe(
                 'Retrieve the average of unit prices and the maximum units in stock in the northwind database.'
             );
@@ -130,7 +130,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT * FROM northwind.products ORDER BY products.unit_price ASC'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toBe(
                 'Retrieve all information about the products in the northwind database.' +
                 ' Sort the results by the products unit price in ascending order.'
@@ -149,7 +149,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT DISTINCT employees.department FROM northwind.employees'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toBe(
                 'Retrieve unique the employees department in the northwind database.'
             );
@@ -161,7 +161,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 ' FROM northwind.orders' +
                 ' INNER JOIN northwind.order_details ON orders.order_id = order_details.order_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('Retrieve unique');
             expect(result).toContain('following data combination');
         });
@@ -178,7 +178,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT * FROM northwind.products LIMIT 10'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toBe(
                 'Retrieve all information about the products in the northwind database.' +
                 ' Limit the results to 10 record(s).'
@@ -189,7 +189,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT * FROM northwind.products LIMIT 10 OFFSET 5'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toBe(
                 'Retrieve all information about the products in the northwind database.' +
                 ' Limit the results to 10 record(s), starting from record 5.'
@@ -209,7 +209,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 'SELECT employees.name FROM northwind.employees' +
                 ' WHERE employees.salary NOT IN (1000, 2000, 3000)'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('is not one of 1000, 2000, 3000');
         });
 
@@ -218,7 +218,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 'SELECT employees.name FROM northwind.employees' +
                 ' WHERE employees.salary IN (1000, 2000)'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('is one of 1000, 2000');
         });
 
@@ -234,7 +234,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT * FROM northwind.employees UNION SELECT * FROM northwind.managers'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('Retrieve all information about the employees');
             expect(result).toContain('Additionally retrieve');
             expect(result).toContain('Retrieve all information about the managers');
@@ -244,7 +244,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT * FROM northwind.employees UNION ALL SELECT * FROM northwind.managers'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('Additionally retrieve (including duplicates)');
         });
 
@@ -252,7 +252,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT * FROM northwind.employees EXCEPT SELECT * FROM northwind.managers'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('Excluding results that appear in');
         });
 
@@ -260,7 +260,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT * FROM northwind.employees INTERSECT SELECT * FROM northwind.managers'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('Only include results that also appear in');
         });
 
@@ -280,7 +280,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 '   WHERE order_items.order_id = orders.order_id' +
                 ' )'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('there exists a related record where');
         });
 
@@ -300,7 +300,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 ' END' +
                 ' FROM northwind.employees'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('a conditional value based on');
             expect(result).toContain('when');
             expect(result).toContain('then');
@@ -318,7 +318,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT COALESCE(employees.name, employees.department) FROM northwind.employees'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('the first available value of');
         });
 
@@ -326,7 +326,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT UPPER(employees.last_name) FROM northwind.employees'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('in upper case');
         });
 
@@ -334,7 +334,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT LENGTH(employees.last_name) FROM northwind.employees'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('the length of');
         });
 
@@ -359,7 +359,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 ' INNER JOIN northwind.order_item ON orders.order_id = order_item.order_id' +
                 ' INNER JOIN northwind.products ON order_item.product_id = products.product_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', undefined, tables);
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', tables });
 
             // The weak bridge entity (order_item) should be skipped.
             expect(result).not.toContain('order item table');
@@ -379,7 +379,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 'SELECT * FROM northwind.orders' +
                 ' INNER JOIN northwind.order_item ON orders.order_id = order_item.order_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', undefined, tables);
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', tables });
 
             expect(result).toContain('order item');
         });
@@ -397,7 +397,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 ' INNER JOIN northwind.enrollment ON students.student_id = enrollment.student_id' +
                 ' INNER JOIN northwind.courses ON enrollment.course_id = courses.course_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', undefined, tables);
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', tables });
 
             expect(result).not.toContain('enrollment table');
             expect(result).toContain('Retrieve courses data related to each students.');
@@ -410,7 +410,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 ' INNER JOIN northwind.order_item ON orders.order_id = order_item.order_id' +
                 ' INNER JOIN northwind.products ON order_item.product_id = products.product_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
 
             expect(result).toContain('order item');
             expect(result).toContain('products');
@@ -426,7 +426,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 ' FROM northwind.employees e1' +
                 ' INNER JOIN northwind.employees e2 ON e1.reports_to = e2.employee_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', undefined, tables);
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', tables });
 
             expect(result).toContain('Match records within the employees table');
         });
@@ -444,7 +444,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 'SELECT * FROM northwind.products' +
                 ' WHERE products.unit_price > 10 AND products.units_in_stock < 100'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('is greater than 10');
             expect(result).toContain('and');
             expect(result).toContain('is less than 100');
@@ -455,7 +455,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
                 'SELECT * FROM northwind.products' +
                 ' WHERE products.unit_price > 10 OR products.units_in_stock < 100'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('is greater than 10');
             expect(result).toContain('or');
             expect(result).toContain('is less than 100');
@@ -473,7 +473,7 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT * FROM northwind.products ORDER BY products.unit_price DESC'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('in descending order');
         });
 
@@ -487,9 +487,9 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
 
         it('applies table alias from schemaAliasMap', () => {
             const ast = parse('SELECT * FROM northwind.emp');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', {
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: {
                 tables: { emp: 'Employees' },
-            });
+            } });
             // formatName lower-cases the alias; the word "employees" should appear
             // instead of the raw table name "emp".
             expect(result).toContain('employees');
@@ -500,10 +500,10 @@ describe('TemplateTaskDescriptionGenerationEngine', () => {
             const ast = parse(
                 'SELECT emp.sal FROM northwind.emp'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', {
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: {
                 tables:  { emp: 'Employees' },
                 columns: { emp: { sal: 'Salary' } },
-            });
+            } });
             // formatName lower-cases the alias; "salary" should appear instead of "sal".
             expect(result).toContain('salary');
             expect(result).not.toContain(' sal ');

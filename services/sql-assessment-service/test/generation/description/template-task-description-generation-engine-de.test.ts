@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Parser } from 'node-sql-parser';
 import { TemplateTaskDescriptionGenerationEngine } from '../../../src/generation/description/template-task-description-generation-engine';
 import { EntityType, IAliasMap, IParsedTable } from '../../../src/shared/interfaces/domain';
-import northwindDe from '../../_manual/northwind_schema_annotation_de.json';
+import northwindDe from '../../_manual/annotated_schemas/northwind/northwind_schema_annotation_de.json';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,9 +55,10 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
 
         it('translates SELECT * correctly', () => {
             const ast = parse('SELECT * FROM northwind.employees');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // Table alias "Mitarbeiter" is preserved with original casing (German nouns capitalised).
             expect(result).toBe(
-                'Rufe alle Informationen über mitarbeiter aus der northwind-Datenbank ab.'
+                'Rufe alle Informationen über Mitarbeiter aus der northwind-Datenbank ab.'
             );
         });
 
@@ -65,11 +66,12 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT employees.first_name, employees.last_name FROM northwind.employees'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
-            // German COLUMN_PREFIX is empty, so no article before table name.
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // German COLUMN_PREFIX is empty so no table prefix is prepended.
+            // Column aliases "Vorname" / "Nachname" keep their original casing.
             // AND_JOINER is 'und' instead of 'and'.
             expect(result).toBe(
-                'Rufe mitarbeiter vorname und mitarbeiter nachname aus der northwind-Datenbank ab.'
+                'Rufe Vorname und Nachname aus der northwind-Datenbank ab.'
             );
         });
 
@@ -77,9 +79,10 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT DISTINCT customers.country FROM northwind.customers'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // Column alias "Land" keeps its casing; no table prefix (COLUMN_PREFIX="").
             expect(result).toBe(
-                'Rufe eindeutige kunden land aus der northwind-Datenbank ab.'
+                'Rufe eindeutige Land aus der northwind-Datenbank ab.'
             );
         });
 
@@ -95,11 +98,12 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 "SELECT * FROM northwind.customers WHERE customers.country = 'Germany'"
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
-            // German COLUMN_PREFIX is empty: "kunden land" not "die kunden land"
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // Table alias "Kunden", column alias "Land" — both keep original casing.
+            // German COLUMN_PREFIX is empty: no article before column name.
             expect(result).toBe(
-                'Rufe alle Informationen über kunden aus der northwind-Datenbank ab.' +
-                ' Filtere die Ergebnisse, bei denen kunden land ist gleich Germany.'
+                'Rufe alle Informationen über Kunden aus der northwind-Datenbank ab.' +
+                ' Filtere die Ergebnisse, bei denen Land ist gleich Germany.'
             );
         });
 
@@ -107,10 +111,11 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT * FROM northwind.products WHERE products.unit_price > 20'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // Table alias "Produkte", column alias "Stückpreis".
             expect(result).toBe(
-                'Rufe alle Informationen über produkte aus der northwind-Datenbank ab.' +
-                ' Filtere die Ergebnisse, bei denen produkte stückpreis ist größer als 20.'
+                'Rufe alle Informationen über Produkte aus der northwind-Datenbank ab.' +
+                ' Filtere die Ergebnisse, bei denen Stückpreis ist größer als 20.'
             );
         });
 
@@ -118,7 +123,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT * FROM northwind.products WHERE products.unit_price BETWEEN 10 AND 50'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('liegt zwischen');
         });
 
@@ -126,7 +131,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 "SELECT * FROM northwind.customers WHERE customers.company_name LIKE 'A%'"
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('entspricht dem Muster');
         });
 
@@ -134,7 +139,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 "SELECT * FROM northwind.customers WHERE customers.company_name NOT LIKE 'A%'"
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('entspricht nicht dem Muster');
         });
 
@@ -142,7 +147,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 "SELECT * FROM northwind.customers WHERE customers.country IN ('Germany', 'France')"
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('ist eines von');
         });
 
@@ -150,7 +155,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 "SELECT * FROM northwind.customers WHERE customers.country NOT IN ('Germany', 'France')"
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('ist keines von');
         });
 
@@ -158,7 +163,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT * FROM northwind.employees WHERE employees.region IS NULL'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('ist nicht definiert');
         });
 
@@ -166,7 +171,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT * FROM northwind.employees WHERE employees.region IS NOT NULL'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('ist definiert');
         });
 
@@ -174,7 +179,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT * FROM northwind.products WHERE products.unit_price > 10 AND products.units_in_stock < 100'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('ist größer als 10');
             expect(result).toContain('und');
             expect(result).toContain('ist kleiner als 100');
@@ -184,7 +189,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT * FROM northwind.products WHERE products.unit_price > 10 OR products.units_in_stock < 100'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('ist größer als 10');
             expect(result).toContain('oder');
             expect(result).toContain('ist kleiner als 100');
@@ -204,9 +209,10 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 ' FROM northwind.employees' +
                 ' GROUP BY employees.region'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('Gruppiere die Ergebnisse nach');
-            expect(result).toContain('bundesland / region');
+            // Column alias "Bundesland / Region" keeps its original casing.
+            expect(result).toContain('Bundesland / Region');
         });
 
         it('translates GROUP BY with HAVING correctly', () => {
@@ -216,7 +222,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 ' GROUP BY employees.region' +
                 ' HAVING COUNT(employees.employee_id) > 1'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('Gruppiere die Ergebnisse nach');
             expect(result).toContain('Filtere die gruppierten Ergebnisse, bei denen');
         });
@@ -233,18 +239,18 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT * FROM northwind.products ORDER BY products.unit_price ASC'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('Sortiere die Ergebnisse nach');
-            expect(result).toContain('in aufsteigend order');
+            expect(result).toContain('in aufsteigender Reihenfolge');
         });
 
         it('translates ORDER BY DESC using German direction label', () => {
             const ast = parse(
                 'SELECT * FROM northwind.products ORDER BY products.unit_price DESC'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('Sortiere die Ergebnisse nach');
-            expect(result).toContain('in absteigend order');
+            expect(result).toContain('in absteigender Reihenfolge');
         });
 
     });
@@ -257,18 +263,19 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
 
         it('translates LIMIT correctly', () => {
             const ast = parse('SELECT * FROM northwind.products LIMIT 10');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // Table alias "Produkte" keeps its casing.
             expect(result).toBe(
-                'Rufe alle Informationen über produkte aus der northwind-Datenbank ab.' +
+                'Rufe alle Informationen über Produkte aus der northwind-Datenbank ab.' +
                 ' Begrenze die Ergebnisse auf 10 Datensatz/Datensätze.'
             );
         });
 
         it('translates LIMIT with OFFSET correctly', () => {
             const ast = parse('SELECT * FROM northwind.products LIMIT 10 OFFSET 5');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toBe(
-                'Rufe alle Informationen über produkte aus der northwind-Datenbank ab.' +
+                'Rufe alle Informationen über Produkte aus der northwind-Datenbank ab.' +
                 ' Begrenze die Ergebnisse auf 10 Datensatz/Datensätze, beginnend ab Datensatz 5.'
             );
         });
@@ -286,10 +293,11 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 'SELECT * FROM northwind.orders' +
                 ' INNER JOIN northwind.order_details ON orders.order_id = order_details.order_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // Table aliases "Bestellungen" / "Auftragspositionen" keep their casing.
             expect(result).toBe(
                 'Rufe alle Informationen über die folgende Datenkombination aus der northwind-Datenbank ab.' +
-                ' Kombiniere die Daten aus der bestellungen-Tabelle und der auftragspositionen-Tabelle.'
+                ' Kombiniere die Daten aus der Bestellungen-Tabelle und der Auftragspositionen-Tabelle.'
             );
         });
 
@@ -298,9 +306,9 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 'SELECT * FROM northwind.employees' +
                 ' LEFT JOIN northwind.orders ON employees.employee_id = orders.employee_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain(
-                'Schließe alle Daten aus der mitarbeiter-Tabelle sowie die übereinstimmenden Daten aus der bestellungen-Tabelle ein.'
+                'Schließe alle Daten aus der Mitarbeiter-Tabelle sowie die übereinstimmenden Daten aus der Bestellungen-Tabelle ein.'
             );
         });
 
@@ -309,9 +317,9 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 'SELECT * FROM northwind.employees' +
                 ' RIGHT JOIN northwind.orders ON employees.employee_id = orders.employee_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain(
-                'Schließe alle Daten aus der bestellungen-Tabelle sowie die übereinstimmenden Daten aus der mitarbeiter-Tabelle ein.'
+                'Schließe alle Daten aus der Bestellungen-Tabelle sowie die übereinstimmenden Daten aus der Mitarbeiter-Tabelle ein.'
             );
         });
 
@@ -320,9 +328,9 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 'SELECT * FROM northwind.employees' +
                 ' FULL JOIN northwind.orders ON employees.employee_id = orders.employee_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain(
-                'Schließe alle Datensätze aus der mitarbeiter-Tabelle und der bestellungen-Tabelle ein.'
+                'Schließe alle Datensätze aus der Mitarbeiter-Tabelle und der Bestellungen-Tabelle ein.'
             );
         });
 
@@ -332,9 +340,10 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 ' FROM northwind.employees e1' +
                 ' INNER JOIN northwind.employees e2 ON e1.reports_to = e2.employee_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // Table alias "Mitarbeiter" keeps its casing.
             expect(result).toContain(
-                'Verknüpfe Datensätze innerhalb der mitarbeiter-Tabelle'
+                'Verknüpfe Datensätze innerhalb der Mitarbeiter-Tabelle'
             );
         });
 
@@ -344,7 +353,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 ' FROM northwind.orders' +
                 ' INNER JOIN northwind.order_details ON orders.order_id = order_details.order_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('Rufe eindeutige');
             // The German template uses "folgenden Datenkombination" (with 'n')
             expect(result).toContain('folgenden Datenkombination');
@@ -360,31 +369,31 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
 
         it('translates AVG correctly', () => {
             const ast = parse('SELECT AVG(products.unit_price) FROM northwind.products');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('der Durchschnitt von');
         });
 
         it('translates SUM correctly', () => {
             const ast = parse('SELECT SUM(order_details.quantity) FROM northwind.order_details');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('die Summe von');
         });
 
         it('translates COUNT correctly', () => {
             const ast = parse('SELECT COUNT(employees.employee_id) FROM northwind.employees');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('die Anzahl von');
         });
 
         it('translates MAX correctly', () => {
             const ast = parse('SELECT MAX(products.unit_price) FROM northwind.products');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('das Maximum von');
         });
 
         it('translates MIN correctly', () => {
             const ast = parse('SELECT MIN(products.unit_price) FROM northwind.products');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('das Minimum von');
         });
 
@@ -400,8 +409,9 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT * FROM northwind.employees UNION SELECT * FROM northwind.managers'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
-            expect(result).toContain('Rufe alle Informationen über mitarbeiter');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // Table alias "Mitarbeiter" keeps its casing.
+            expect(result).toContain('Rufe alle Informationen über Mitarbeiter');
             expect(result).toContain('Rufe zusätzlich ab:');
         });
 
@@ -409,7 +419,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT * FROM northwind.employees UNION ALL SELECT * FROM northwind.managers'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('Rufe zusätzlich ab (einschließlich Duplikaten):');
         });
 
@@ -417,7 +427,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT * FROM northwind.employees EXCEPT SELECT * FROM northwind.managers'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('Ausgenommen Ergebnisse, die vorkommen in:');
         });
 
@@ -425,7 +435,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT * FROM northwind.employees INTERSECT SELECT * FROM northwind.managers'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('Schließe nur Ergebnisse ein, die auch vorkommen in:');
         });
 
@@ -445,7 +455,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 '   WHERE order_details.order_id = orders.order_id' +
                 ' )'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('es gibt einen zugehörigen Datensatz, bei dem');
         });
 
@@ -465,7 +475,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 ' END' +
                 ' FROM northwind.products'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
             expect(result).toContain('ein bedingter Wert basierend auf');
             expect(result).toContain('wenn');
             expect(result).toContain('dann');
@@ -492,12 +502,12 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 ' INNER JOIN northwind.order_details ON orders.order_id = order_details.order_id' +
                 ' INNER JOIN northwind.products ON order_details.product_id = products.product_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, tables, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, tables, lang: 'de' });
 
-            // The bridge table (order_details / auftragspositionen) should not appear separately
-            expect(result).not.toContain('auftragspositionen-Tabelle');
-            // German WEAK_BRIDGE: "Rufe {table2} data related to each {table1}."
-            expect(result).toContain('Rufe produkte-Daten ab, die zu jedem bestellungen gehören.');
+            // The bridge table (order_details / Auftragspositionen) should not appear separately.
+            expect(result).not.toContain('Auftragspositionen-Tabelle');
+            // German WEAK_BRIDGE with capitalised aliases.
+            expect(result).toContain('Rufe Produkte-Daten ab, die zu jedem Bestellungen gehören.');
         });
 
         it('preserves SELF JOIN with German template even when table metadata is present', () => {
@@ -510,8 +520,9 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 ' FROM northwind.employees e1' +
                 ' INNER JOIN northwind.employees e2 ON e1.reports_to = e2.employee_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, tables, 'de');
-            expect(result).toContain('Verknüpfe Datensätze innerhalb der mitarbeiter-Tabelle');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, tables, lang: 'de' });
+            // Table alias "Mitarbeiter" keeps its casing.
+            expect(result).toContain('Verknüpfe Datensätze innerhalb der Mitarbeiter-Tabelle');
         });
 
     });
@@ -524,20 +535,23 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
 
         it('uses the German column display name for employees.hire_date', () => {
             const ast = parse('SELECT employees.hire_date FROM northwind.employees');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
-            expect(result).toContain('einstellungsdatum');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // Column alias "Einstellungsdatum" — casing preserved.
+            expect(result).toContain('Einstellungsdatum');
         });
 
         it('uses the German column display name for orders.order_date', () => {
             const ast = parse('SELECT orders.order_date FROM northwind.orders');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
-            expect(result).toContain('bestelldatum');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // orders.order_date alias from the JSON — verify it resolves.
+            expect(result).toContain('Bestelldatum');
         });
 
         it('uses the German column display name for products.unit_price in WHERE', () => {
             const ast = parse('SELECT * FROM northwind.products WHERE products.unit_price > 30');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
-            expect(result).toContain('stückpreis');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // Column alias "Stückpreis" — casing preserved.
+            expect(result).toContain('Stückpreis');
         });
 
         it('uses German table display names in a JOIN description', () => {
@@ -545,9 +559,9 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 'SELECT * FROM northwind.orders' +
                 ' INNER JOIN northwind.order_details ON orders.order_id = order_details.order_id'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
-            expect(result).toContain('bestellungen');
-            expect(result).toContain('auftragspositionen');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            expect(result).toContain('Bestellungen');
+            expect(result).toContain('Auftragspositionen');
         });
 
     });
@@ -560,7 +574,7 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
 
         it('falls back to English when no lang is provided', () => {
             const ast = parse('SELECT * FROM northwind.employees');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind' });
             expect(result).toContain('Retrieve all information about the employees');
         });
 
@@ -568,14 +582,14 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
             const ast = parse(
                 'SELECT employees.first_name FROM northwind.employees'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', undefined, undefined, 'en');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', lang: 'en' });
             // English COLUMN_PREFIX is "the " so the output uses "the employees first name"
             expect(result).toContain('the employees first name');
         });
 
         it('falls back to English LIMIT template when lang="en" is explicitly passed', () => {
             const ast = parse('SELECT * FROM northwind.products LIMIT 5');
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', undefined, undefined, 'en');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', lang: 'en' });
             expect(result).toContain('Limit the results to 5 record(s).');
         });
 
@@ -595,17 +609,17 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 " WHERE employees.country = 'Germany'" +
                 ' GROUP BY employees.region'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
 
             // SELECT part: starts with German SELECT_COLUMNS_JOIN
             expect(result).toContain('Rufe');
             expect(result).toContain('northwind-Datenbank ab.');
-            // JOIN part uses German INNER_JOIN template
-            expect(result).toContain('Kombiniere die Daten aus der mitarbeiter-Tabelle und der bestellungen-Tabelle.');
-            // WHERE part uses German WHERE template and operator
+            // JOIN part uses German INNER_JOIN template with capitalised aliases.
+            expect(result).toContain('Kombiniere die Daten aus der Mitarbeiter-Tabelle und der Bestellungen-Tabelle.');
+            // WHERE part uses German WHERE template and operator.
             expect(result).toContain('Filtere die Ergebnisse, bei denen');
             expect(result).toContain('ist gleich Germany');
-            // GROUP BY part uses German GROUP_BY template
+            // GROUP BY part uses German GROUP_BY template.
             expect(result).toContain('Gruppiere die Ergebnisse nach');
         });
 
@@ -616,13 +630,13 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 ' ORDER BY products.unit_price DESC' +
                 ' LIMIT 5'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
-            // German COLUMN_PREFIX is empty: no article before table name
-            // AND_JOINER is 'und'
-            // ORDER_DESC is 'absteigend'
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // Column aliases "Produktname" / "Stückpreis" — casing preserved.
+            // COLUMN_PREFIX="" so no table prefix; AND_JOINER is "und".
+            // ORDER_DESC is "absteigend" → ORDER_BY_COLUMN yields "in absteigender Reihenfolge".
             expect(result).toBe(
-                'Rufe produkte produktname und produkte stückpreis aus der northwind-Datenbank ab.' +
-                ' Sortiere die Ergebnisse nach produkte stückpreis in absteigend order.' +
+                'Rufe Produktname und Stückpreis aus der northwind-Datenbank ab.' +
+                ' Sortiere die Ergebnisse nach Stückpreis in absteigender Reihenfolge.' +
                 ' Begrenze die Ergebnisse auf 5 Datensatz/Datensätze.'
             );
         });
@@ -633,10 +647,11 @@ describe('TemplateTaskDescriptionGenerationEngine — German (lang="de")', () =>
                 " WHERE customers.country = 'Germany'" +
                 ' LIMIT 3'
             );
-            const result = engine.generateTaskFromQuery(ast as any, 'northwind', deAliasMap, undefined, 'de');
+            const result = engine.generateTaskFromQuery({ query: ast as any, schema: 'northwind', schemaAliasMap: deAliasMap, lang: 'de' });
+            // Table alias "Kunden", column alias "Land" — casing preserved.
             expect(result).toBe(
-                'Rufe alle Informationen über kunden aus der northwind-Datenbank ab.' +
-                ' Filtere die Ergebnisse, bei denen kunden land ist gleich Germany.' +
+                'Rufe alle Informationen über Kunden aus der northwind-Datenbank ab.' +
+                ' Filtere die Ergebnisse, bei denen Land ist gleich Germany.' +
                 ' Begrenze die Ergebnisse auf 3 Datensatz/Datensätze.'
             );
         });
