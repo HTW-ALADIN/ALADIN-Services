@@ -11,146 +11,41 @@ content-type: application/json
         "database": "test",
         "schema": "public"
     },
-	"aliasMap": {
-    "tables": {
-        "categories": "Produktkategorien",
-        "customer_customer_demo": "Zuordnungen von Kundendemografien",
-        "customer_demographics": "Kundendemografien",
-        "customers": "Kunden",
-        "employees": "Mitarbeiter",
-        "employee_territories": "Mitarbeitergebiete",
-        "order_details": "Auftragspositionen",
-        "orders": "Bestellungen",
-        "products": "Produkte",
-        "region": "Regionen",
-        "shippers": "Versandunternehmen",
-        "suppliers": "Lieferanten",
-        "territories": "Verkaufsgebiete",
-        "us_states": "US-Bundesstaaten"
-    },
-    "columns": {
-        "categories": {
-            "category_id": "Kategorie-ID",
-            "category_name": "Kategoriename",
-            "description": "Kategoriebeschreibung",
-            "picture": "Kategoriebild"
-        },
-        "customer_customer_demo": {
-            "customer_id": "Kunden-ID",
-            "customer_type_id": "Kundentyp-ID"
-        },
-        "customer_demographics": {
-            "customer_type_id": "Kundentyp-ID",
-            "customer_desc": "Demografische Beschreibung"
-        },
-        "customers": {
-            "customer_id": "Kunden-ID",
-            "company_name": "Firmenname",
-            "contact_name": "Name des Hauptansprechpartners",
-            "contact_title": "Berufsbezeichnung des Ansprechpartners",
-            "address": "Straßenadresse",
-            "city": "Stadt",
-            "region": "Bundesland / Region",
-            "postal_code": "Postleitzahl",
-            "country": "Land",
-            "phone": "Telefonnummer",
-            "fax": "Faxnummer"
-        },
-        "employees": {
-            "employee_id": "Mitarbeiter-ID",
-            "last_name": "Nachname",
-            "first_name": "Vorname",
-            "title": "Berufsbezeichnung",
-            "title_of_courtesy": "Höflichkeitsanrede",
-            "birth_date": "Geburtsdatum",
-            "hire_date": "Einstellungsdatum",
-            "address": "Straßenadresse",
-            "city": "Stadt",
-            "region": "Bundesland / Region",
-            "postal_code": "Postleitzahl",
-            "country": "Land",
-            "home_phone": "Telefon (privat)",
-            "extension": "Telefon-Durchwahl",
-            "photo": "Mitarbeiterfoto",
-            "notes": "Notizen",
-            "reports_to": "Berichtet an",
-            "photo_path": "Pfad zur Fotodatei"
-        },
-        "employee_territories": {
-            "employee_id": "Mitarbeiter-ID",
-            "territory_id": "Gebiets-ID"
-        },
-        "order_details": {
-            "order_id": "Bestell-ID",
-            "product_id": "Produkt-ID",
-            "unit_price": "Stückpreis",
-            "quantity": "Bestellte Menge",
-            "discount": "Rabattprozentsatz"
-        },
-        "orders": {
-            "order_id": "Bestell-ID",
-            "customer_id": "Kunden-ID",
-            "employee_id": "ID des Vertriebsmitarbeiters",
-            "order_date": "Bestelldatum",
-            "required_date": "Erforderliches Lieferdatum",
-            "shipped_date": "Versanddatum",
-            "ship_via": "Versand über (Versanddienst-ID)",
-            "freight": "Versandkosten",
-            "ship_name": "Name des Empfängers",
-            "ship_address": "Lieferadresse",
-            "ship_city": "Lieferstadt",
-            "ship_region": "Liefer-Bundesland / -Region",
-            "ship_postal_code": "Liefer-Postleitzahl",
-            "ship_country": "Lieferland"
-        },
-        "products": {
-            "product_id": "Produkt-ID",
-            "product_name": "Produktname",
-            "supplier_id": "Lieferanten-ID",
-            "category_id": "Kategorie-ID",
-            "quantity_per_unit": "Menge pro Einheit",
-            "unit_price": "Stückpreis",
-            "units_in_stock": "Einheiten auf Lager",
-            "units_on_order": "Einheiten in Bestellung",
-            "reorder_level": "Nachbestellgrenze",
-            "discontinued": "Eingestellt-Kennzeichen"
-        },
-        "region": {
-            "region_id": "Regions-ID",
-            "region_description": "Regionsbeschreibung"
-        },
-        "shippers": {
-            "shipper_id": "Versanddienst-ID",
-            "company_name": "Firmenname",
-            "phone": "Telefonnummer"
-        },
-        "suppliers": {
-            "supplier_id": "Lieferanten-ID",
-            "company_name": "Firmenname",
-            "contact_name": "Name des Hauptansprechpartners",
-            "contact_title": "Berufsbezeichnung des Ansprechpartners",
-            "address": "Straßenadresse",
-            "city": "Stadt",
-            "region": "Bundesland / Region",
-            "postal_code": "Postleitzahl",
-            "country": "Land",
-            "phone": "Telefonnummer",
-            "fax": "Faxnummer",
-            "homepage": "Webseite"
-        },
-        "territories": {
-            "territory_id": "Gebiets-ID",
-            "territory_description": "Gebietsbeschreibung",
-            "region_id": "Regions-ID"
-        },
-        "us_states": {
-            "state_id": "Bundesstaaten-ID",
-            "state_name": "Name des Bundesstaates",
-            "state_abbr": "Abkürzung des Bundesstaates",
-            "state_region": "Volkszählungsregion"
-        }
-    }
-}
+		"aliasMap": {
+			"tables": {
+				"ang_pro": "Mitarbeiter-Projekt-Zuordnungen",
+				"angest": "Mitarbeiter",
+				"kunde": "Kunden",
+				"projekt": "Projekte"
+			},
+			"columns": {
+				"ang_pro": {
+					"PROZ_ARB": "Arbeitsanteil in Prozent",
+					"PNR": "Projekt-ID",
+					"ANGNR": "Mitarbeiter-ID"
+				},
+				"angest": {
+					"ANGNR": "Mitarbeiter-ID",
+					"NAME": "Name",
+					"WOHNORT": "Wohnort",
+					"BERUF": "Berufsbezeichnung",
+					"GEHALT": "Gehalt",
+					"ABTNR": "Abteilungsnummer"
+				},
+				"kunde": {
+					"KDNR": "Kunden-ID",
+					"NAME": "Kundenname",
+					"WOHNORT": "Wohnort",
+					"TAETIG_ALS": "Tätigkeit"
+				},
+				"projekt": {
+					"PNAME": "Projektname",
+					"PNR": "Projekt-ID",
+					"P_BESCHR": "Projektbeschreibung",
+					"P_LEITER": "Projektleiter (Mitarbeiter-ID)"
+				}
+			}
+		}
 }
 
 # {
@@ -227,6 +122,6 @@ content-type: application/json
         "database": "test",
         "schema": "public"
     },
-	"query": "SELECT employees.region, COUNT(employees.employee_id) FROM northwind.employees GROUP BY employees.region HAVING COUNT(employees.employee_id) > 1",
+	"query": "SELECT kunde.WOHNORT, COUNT(kunde.KDNR) FROM test.kunde GROUP BY kunde.WOHNORT HAVING COUNT(kunde.KDNR) > 1",
 	"languageCode": "de"
 }

@@ -1,0 +1,35 @@
+{
+    "tables": {
+        "ang_pro": "Mitarbeiter-Projekt-Zuordnungen",
+        "angest": "Mitarbeiter",
+        "kunde": "Kunden",
+        "projekt": "Projekte"
+    },
+    "columns": {
+        "ang_pro": {
+            "PROZ_ARB": "Arbeitsanteil in Prozent",
+            "PNR": "Projekt-ID",
+            "ANGNR": "Mitarbeiter-ID"
+        },
+        "angest": {
+            "ANGNR": "Mitarbeiter-ID",
+            "NAME": "Name",
+            "WOHNORT": "Wohnort",
+            "BERUF": "Berufsbezeichnung",
+            "GEHALT": "Gehalt",
+            "ABTNR": "Abteilungsnummer"
+        },
+        "kunde": {
+            "KDNR": "Kunden-ID",
+            "NAME": "Kundenname",
+            "WOHNORT": "Wohnort",
+            "TAETIG_ALS": "Tätigkeit"
+        },
+        "projekt": {
+            "PNAME": "Projektname",
+            "PNR": "Projekt-ID",
+            "P_BESCHR": "Projektbeschreibung",
+            "P_LEITER": "Projektleiter"
+        }
+    }
+}

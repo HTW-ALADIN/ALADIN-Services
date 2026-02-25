@@ -1,0 +1,35 @@
+{
+    "tables": {
+        "ang_pro": "Employee Project Assignments",
+        "angest": "Employees",
+        "kunde": "Customers",
+        "projekt": "Projects"
+    },
+    "columns": {
+        "ang_pro": {
+            "PROZ_ARB": "Work Percentage",
+            "PNR": "Project ID",
+            "ANGNR": "Employee ID"
+        },
+        "angest": {
+            "ANGNR": "Employee ID",
+            "NAME": "Employee Name",
+            "WOHNORT": "City of Residence",
+            "BERUF": "Job Title",
+            "GEHALT": "Salary",
+            "ABTNR": "Department ID"
+        },
+        "kunde": {
+            "KDNR": "Customer ID",
+            "NAME": "Customer Name",
+            "WOHNORT": "City",
+            "TAETIG_ALS": "Business Activity"
+        },
+        "projekt": {
+            "PNAME": "Project Name",
+            "PNR": "Project ID",
+            "P_BESCHR": "Project Description",
+            "P_LEITER": "Project Manager"
+        }
+    }
+}
