@@ -2,16 +2,23 @@ import { describe, it, beforeAll, beforeEach, afterAll } from 'vitest';
 import { IMemoryDb, IBackup } from 'pg-mem';
 import { DataSource } from 'typeorm';
 import { createTestDb } from '../helpers/pg-mem-factory';
+import { SQLQueryGradingService } from '../../src/grading/query-grading-service';
+import { ResultSetComparator } from '../../src/grading/result-set-comparator';
+import { ASTComparator } from '../../src/grading/comparators/ast-comparator';
+import { ExecutionPlanComparator } from '../../src/grading/comparators/execution-plan-comparator';
+import { ExecutionPlanParser } from '../../src/grading/execution-plan-parser';
+import { JoinComparator } from '../../src/grading/join-comparator';
+import { FeedbackAssembler } from '../../src/grading/feedback/feedback-assembler';
+import { GradeCalculator } from '../../src/grading/grading/grade-calculator';
 
-// Tests for src/grading/query-grading-service.ts
-//
-// The grading service runs live SQL queries (SELECT, EXPLAIN) against a real
-// DataSource. We replace that DataSource with the pg-mem in-memory instance so
-// no external Postgres server is required.
+// ---------------------------------------------------------------------------
+// Setup
+// ---------------------------------------------------------------------------
 
 let db: IMemoryDb;
 let backup: IBackup;
 let dataSource: DataSource;
+let service: SQLQueryGradingService;
 
 beforeAll(async () => {
     ({ db, backup, dataSource } = await createTestDb());
@@ -19,11 +26,23 @@ beforeAll(async () => {
 
 beforeEach(() => {
     backup.restore();
+    const joinComparator = new JoinComparator();
+    service = new SQLQueryGradingService(
+        new ResultSetComparator(),
+        new ASTComparator(joinComparator),
+        new ExecutionPlanComparator(new ExecutionPlanParser(), joinComparator),
+        new GradeCalculator(),
+        new FeedbackAssembler()
+    );
 });
 
 afterAll(async () => {
     await dataSource.destroy();
 });
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 describe('SQLQueryGradingService', () => {
     describe('gradeQuery', () => {

@@ -71,3 +71,45 @@ export interface QueryExecutionResult {
 	/** Number of rows returned. */
 	rowCount: number;
 }
+
+/**
+ * Shared request body for all grading comparison sub-endpoints.
+ * Flat (no nested gradingRequest) to keep individual comparison calls simple.
+ */
+export interface IRequestComparisonOptions {
+	connectionInfo: PostgresConnectionOptions;
+	referenceQuery: string;
+	studentQuery: string;
+	/** BCP 47 language code for error messages (e.g. "en", "de"). Defaults to "en". */
+	languageCode?: string;
+}
+
+/** Response from POST /api/grading/compare/result-set */
+export interface ResultSetComparisonResponse {
+	/** Whether both queries return identical result sets. */
+	match: boolean;
+	feedback: string[];
+}
+
+/** Response from POST /api/grading/compare/ast */
+export interface ASTComparisonResponse {
+	/** Whether the SELECT column lists match. */
+	columnsMatch: boolean;
+	/**
+	 * Whether the query uses a supported structure (no DISTINCT, no subqueries).
+	 * When false, only result-set equivalence is meaningful for grading.
+	 */
+	supported: boolean;
+	feedback: string[];
+	feedbackWithSolution: string[];
+}
+
+/** Response from POST /api/grading/compare/execution-plan */
+export interface ExecutionPlanComparisonResponse {
+	/** Whether all compared plan elements (WHERE, GROUP BY, ORDER BY, JOIN) match. */
+	plansMatch: boolean;
+	feedback: string[];
+	feedbackWithSolution: string[];
+	/** Number of grade points deducted based on plan differences. */
+	penaltyPoints: number;
+}

@@ -3,6 +3,13 @@ import { DatabaseAnalyzer } from './database/database-analyzer';
 import { DatabaseController } from './database/database-controller';
 import { SQLQueryGradingService } from './grading/query-grading-service';
 import { GradingController } from './grading/grading-controller';
+import { ResultSetComparator } from './grading/result-set-comparator';
+import { ASTComparator } from './grading/comparators/ast-comparator';
+import { ExecutionPlanComparator } from './grading/comparators/execution-plan-comparator';
+import { ExecutionPlanParser } from './grading/execution-plan-parser';
+import { JoinComparator } from './grading/join-comparator';
+import { FeedbackAssembler } from './grading/feedback/feedback-assembler';
+import { GradeCalculator } from './grading/grading/grade-calculator';
 import { SQLQueryGenerationService } from './generation/query/sql-query-generation-service';
 import { SelectQueryGenerationDirector } from './generation/query/select-query-generation-director';
 import { TemplateTaskDescriptionGenerationEngine } from './generation/description/template-task-description-generation-engine';
@@ -25,8 +32,30 @@ const taskDescriptionGenerationService = new TaskDescriptionGenerationService(
     templateTaskDescriptionGenerationEngine
 );
 const taskGenerationController = new TaskGenerationController(selectQueryGenerator, taskDescriptionGenerationService);
-const queryGradingService = new SQLQueryGradingService();
-const gradingController = new GradingController(queryGradingService, taskDescriptionGenerationService);
+
+// ── Grading dependencies ──────────────────────────────────────────────────
+const joinComparator          = new JoinComparator();
+const resultSetComparator     = new ResultSetComparator();
+const astComparator           = new ASTComparator(joinComparator);
+const executionPlanComparator = new ExecutionPlanComparator(new ExecutionPlanParser(), joinComparator);
+const gradeCalculator         = new GradeCalculator();
+const feedbackAssembler       = new FeedbackAssembler();
+
+const queryGradingService = new SQLQueryGradingService(
+    resultSetComparator,
+    astComparator,
+    executionPlanComparator,
+    gradeCalculator,
+    feedbackAssembler
+);
+const gradingController = new GradingController(
+    queryGradingService,
+    taskDescriptionGenerationService,
+    resultSetComparator,
+    astComparator,
+    executionPlanComparator
+);
+
 const descriptionController = new DescriptionController(taskDescriptionGenerationService);
 const queryExecutionService = new QueryExecutionService();
 const queryExecutionController = new QueryExecutionController(queryExecutionService);
