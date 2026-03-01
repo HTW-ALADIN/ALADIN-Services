@@ -9,7 +9,6 @@ RUN npm install
 
 COPY ./ ./
 
-# RUN npx ts-node src/index.ts
 EXPOSE 3333
 
 CMD ["npx", "ts-node", "src/index.ts"]

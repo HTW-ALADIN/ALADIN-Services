@@ -4,8 +4,9 @@
 
 | Service                                                               | Language   | Description                                                              |
 | --------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------ |
-| [graph-rewriting-service](services/graph-rewriting-service/README.md) | TypeScript | Graph Rewriting as a Service — SPO graph transformations backed by Neo4j |
-| [sql-assessment-service](services/sql-assessment-service/README.md)   | TypeScript | SQL Assessment — schema analysis, SQL task generation, and query grading |
+| [graph-rewriting-service](services/graph-rewriting-service/README.md)     | TypeScript | Graph Rewriting as a Service — SPO graph transformations backed by Neo4j |
+| [jsonpath-mapper-service](services/jsonpath-mapper-service/README.md)     | TypeScript | JSONPath Mapper — JSON-to-JSON transformation utility exposed as a Fastify HTTP API |
+| [sql-assessment-service](services/sql-assessment-service/README.md)       | TypeScript | SQL Assessment — schema analysis, SQL task generation, and query grading |
 
 ## For Developers:
 
