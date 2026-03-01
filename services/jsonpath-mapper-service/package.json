@@ -27,7 +27,7 @@
 		"start:api": "tsx src/api/index.ts",
 		"test": "mocha tests/json-mapper.tests.mjs",
 		"test:coverage": "nyc mocha tests/json-mapper.tests.mjs",
-		"lint": "eslint .",
+		"lint": "eslint ./src",
 		"generate:openapi": "tsx scripts/generate-openapi.ts"
 	},
 	"repository": {
