@@ -25,7 +25,7 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0
 
 # ── Port ───────────────────────────────────────────────────────────────────────
-# 3000 – Fastify HTTP API
+# Defaultport: 3000 – Fastify HTTP API
 EXPOSE 3000
 
 CMD ["node_modules/.bin/tsx", "src/api/index.ts"]

@@ -43,6 +43,8 @@ jobs:
           cache-dependency-path: services/jsonpath-mapper-service/package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: Build lib
+        run: npm ci
       - name: Run tests
         run: npm run test
 
