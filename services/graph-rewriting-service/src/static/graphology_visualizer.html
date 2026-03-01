@@ -1,6 +1,6 @@
 <html>
 	<body>
-		<div>
+		<div id="top-bar">
 			<p>
 				Select a "grammar":
 				<select name="grammars" id="grammars">
@@ -16,7 +16,10 @@
 			<button id="forward">Forward</button>
 			<button id="backward">Backward</button>
 		</div>
-		<div id="graph" style="width: 95vw; height: 90vh; overflow: hidden"></div>
+		<div id="main-container">
+			<div id="graph" style="overflow: hidden"></div>
+			<div id="grammarBuilder"></div>
+		</div>
 	</body>
 
 	<script src="//d3js.org/d3.v7.min.js"></script>
@@ -105,13 +108,12 @@
 		};
 
 		let graphs;
-
 		let dotGraphs;
 
-		const handleExecution = async () => {
+		const handleExecution = async (customGrammar = grammars[chosenGrammar]) => {
 			const response = await window.fetch('http://127.0.0.1:8080/transform', {
 				method: 'POST',
-				body: JSON.stringify(grammars[chosenGrammar]),
+				body: JSON.stringify(customGrammar),
 				headers: {
 					'Content-Type': 'application/json',
 				},
@@ -119,13 +121,12 @@
 			graphs = await response.json();
 			dotGraphs = graphologyArrayToDotArray(graphs.data);
 			i = 0;
-
 			draw();
 		};
 
 		document
 			.querySelector('#execute')
-			.addEventListener('click', handleExecution);
+			.addEventListener('click', () => handleExecution());
 
 		let i = 0;
 		const renderer = window.d3.select('#graph').graphviz();
@@ -148,9 +149,1335 @@
 		});
 
 		handleExecution();
+
+		// ─────────────────────────────────────────────────────────────────────────
+		// GRAMMAR BUILDER
+		// ─────────────────────────────────────────────────────────────────────────
+
+		// ── Builder State ────────────────────────────────────────────────────────
+		const builderState = {
+			hostgraph: {
+				options: { type: 'directed' },
+				nodes: [],
+				edges: [],
+			},
+			rules: [],
+			sequence: [],
+			options: { returnHistory: false },
+		};
+
+		// ── DOT generation ───────────────────────────────────────────────────────
+		/**
+		 * Escape a DOT label string (quotes etc.)
+		 */
+		const escapeDotLabel = (v) => String(v).replace(/"/g, '\\"');
+
+		/**
+		 * Convert a GraphSchema-like object to a DOT string.
+		 * @param {object} graphState  { options: {type}, nodes: [], edges: [] }
+		 * @param {string|null} selectedNodeKey  node to highlight
+		 * @param {string} graphId  unique id for the graphviz graph element
+		 */
+		const stateToDot = (graphState, selectedNodeKey = null, graphId = 'g') => {
+			const isDirected = graphState.options.type !== 'undirected';
+			const keyword = isDirected ? 'digraph' : 'graph';
+			const arrow = isDirected ? '->' : '--';
+
+			const nodeLines = (graphState.nodes || []).map((node) => {
+				const attrs = node.attributes || {};
+				const type = attrs.type;
+				const label = attrs.label;
+				const isSelected = node.key === selectedNodeKey;
+
+				let attrStr;
+				if (isSelected) {
+					attrStr = `shape="circle", color="royalblue", style="filled", penwidth="3", label="${escapeDotLabel(label ?? node.key)}"`;
+				} else if (type && dotAttributes[type]) {
+					attrStr = `label="${escapeDotLabel(label ?? type)}", ${dotAttributes[type]}`;
+				} else {
+					attrStr = `label="${escapeDotLabel(label ?? node.key)}", ${dotAttributes['default']}`;
+				}
+				return `  "${node.key}" [${attrStr}]`;
+			});
+
+			const edgeLines = (graphState.edges || []).map((edge) => {
+				const edgeLabel =
+					edge.attributes && edge.attributes.label
+						? ` [label="${escapeDotLabel(edge.attributes.label)}"]`
+						: '';
+				return `  "${edge.source}" ${arrow} "${edge.target}"${edgeLabel}`;
+			});
+
+			const allLines = [...nodeLines, ...edgeLines].join('\n');
+			return `${keyword} ${graphId} {\n  node [fontname="Helvetica"]\n${allLines}\n}`;
+		};
+
+		// ── Graph Editor Factory ──────────────────────────────────────────────────
+		/**
+		 * Creates a self-contained graph editor widget.
+		 *
+		 * @param {object} config
+		 *   container        {HTMLElement}  container div for the whole editor
+		 *   graphState       {object}       { options: {type}, nodes: [], edges: [] } — mutated in place
+		 *   allowComplexAttrs{boolean}      enable JSON textarea for complex attribute values
+		 *   onStateChange    {function}     called after every mutation
+		 *   editorId         {string}       unique id prefix for DOM elements
+		 */
+		let editorCount = 0;
+		const createGraphEditor = ({
+			container,
+			graphState,
+			allowComplexAttrs = false,
+			onStateChange,
+			editorId,
+		}) => {
+			editorId = editorId || `ge_${++editorCount}`;
+			let selectedNodeKey = null;
+			let pendingEdgeFrom = null;
+			let gvInstance = null;
+
+			// ── DOM scaffold ──────────────────────────────────────────────────────
+			container.innerHTML = '';
+			container.className = 'graph-editor';
+
+			// Graph type row
+			const typeRow = document.createElement('div');
+			typeRow.className = 'ge-type-row';
+			typeRow.innerHTML = `<label>Type: <select class="ge-type-select">
+				<option value="directed">directed</option>
+				<option value="undirected">undirected</option>
+			</select></label>`;
+			container.appendChild(typeRow);
+			const typeSelect = typeRow.querySelector('.ge-type-select');
+			typeSelect.value = graphState.options.type || 'directed';
+			typeSelect.addEventListener('change', () => {
+				graphState.options.type = typeSelect.value;
+				rerenderDot();
+				onStateChange();
+			});
+
+			// Canvas
+			const canvas = document.createElement('div');
+			canvas.className = 'ge-canvas';
+			canvas.id = `${editorId}_canvas`;
+			container.appendChild(canvas);
+
+			// Instruction hint
+			const hint = document.createElement('div');
+			hint.className = 'ge-hint';
+			hint.innerHTML = `<span id="${editorId}_hint">Click background to add node &bull; Click node to select &bull; Select two nodes to create edge</span>`;
+			container.appendChild(hint);
+			const hintSpan = hint.querySelector(`#${editorId}_hint`);
+
+			// Toolbar
+			const toolbar = document.createElement('div');
+			toolbar.className = 'ge-toolbar';
+			toolbar.innerHTML = `
+				<button class="gb-btn gb-btn-sm" id="${editorId}_addNode">+ Node</button>
+				<button class="gb-btn gb-btn-sm" id="${editorId}_addEdge">+ Edge</button>
+				<button class="gb-btn gb-btn-sm gb-btn-danger" id="${editorId}_clearSel">Clear Selection</button>
+			`;
+			container.appendChild(toolbar);
+
+			// Attribute editor panel
+			const attrPanel = document.createElement('div');
+			attrPanel.className = 'ge-attr-panel';
+			container.appendChild(attrPanel);
+
+			// ── Rendering ─────────────────────────────────────────────────────────
+			const rerenderDot = () => {
+				const dot = stateToDot(graphState, selectedNodeKey, editorId);
+				if (!gvInstance) {
+					gvInstance = window.d3.select(`#${editorId}_canvas`).graphviz({
+						useWorker: false,
+						fit: true,
+					});
+				}
+				try {
+					gvInstance
+						.transition(() => window.d3.transition().duration(80))
+						.renderDot(dot)
+						.on('end', attachSvgHandlers);
+				} catch (e) {
+					console.warn('DOT render error:', e);
+				}
+			};
+
+			// ── SVG interaction ───────────────────────────────────────────────────
+			const attachSvgHandlers = () => {
+				const svg = canvas.querySelector('svg');
+				if (!svg) return;
+
+				// Click on background → add node
+				svg.addEventListener(
+					'click',
+					(e) => {
+						if (
+							e.target === svg ||
+							(e.target.tagName === 'polygon' && e.target.closest('.graph'))
+						) {
+							const key = prompt('New node key:');
+							if (!key || !key.trim()) return;
+							if (graphState.nodes.find((n) => n.key === key.trim())) {
+								alert(`Node "${key.trim()}" already exists.`);
+								return;
+							}
+							graphState.nodes.push({ key: key.trim(), attributes: {} });
+							selectedNodeKey = null;
+							pendingEdgeFrom = null;
+							rerenderDot();
+							renderAttrPanel();
+							onStateChange();
+						}
+					},
+					{ capture: false }
+				);
+
+				// Click on nodes
+				svg.querySelectorAll('.node').forEach((nodeSvgEl) => {
+					nodeSvgEl.style.cursor = 'pointer';
+					nodeSvgEl.addEventListener('click', (e) => {
+						e.stopPropagation();
+						// The graphviz node title element contains the node key
+						const titleEl = nodeSvgEl.querySelector('title');
+						if (!titleEl) return;
+						const clickedKey = titleEl.textContent.trim();
+
+						if (pendingEdgeFrom) {
+							// Second click → create edge
+							if (pendingEdgeFrom !== clickedKey) {
+								const edgeKey = prompt(
+									`Edge key (${pendingEdgeFrom} → ${clickedKey}):`,
+									`${pendingEdgeFrom}_to_${clickedKey}`
+								);
+								if (!edgeKey || !edgeKey.trim()) {
+									pendingEdgeFrom = null;
+									selectedNodeKey = null;
+									hintSpan.textContent =
+										'Click background to add node • Click node to select • Select two nodes to create edge';
+									rerenderDot();
+									return;
+								}
+								if (graphState.edges.find((ed) => ed.key === edgeKey.trim())) {
+									alert(`Edge "${edgeKey.trim()}" already exists.`);
+									return;
+								}
+								graphState.edges.push({
+									key: edgeKey.trim(),
+									source: pendingEdgeFrom,
+									target: clickedKey,
+									attributes: {},
+								});
+							}
+							pendingEdgeFrom = null;
+							selectedNodeKey = null;
+							hintSpan.textContent =
+								'Click background to add node • Click node to select • Select two nodes to create edge';
+							rerenderDot();
+							renderAttrPanel();
+							onStateChange();
+						} else {
+							// First click → select
+							selectedNodeKey = clickedKey;
+							pendingEdgeFrom = clickedKey;
+							hintSpan.textContent = `"${clickedKey}" selected — click another node to create edge, or click background to deselect`;
+							rerenderDot();
+							renderAttrPanel();
+						}
+					});
+				});
+			};
+
+			// ── Toolbar handlers ──────────────────────────────────────────────────
+			toolbar
+				.querySelector(`#${editorId}_addNode`)
+				.addEventListener('click', () => {
+					const key = prompt('New node key:');
+					if (!key || !key.trim()) return;
+					if (graphState.nodes.find((n) => n.key === key.trim())) {
+						alert(`Node "${key.trim()}" already exists.`);
+						return;
+					}
+					graphState.nodes.push({ key: key.trim(), attributes: {} });
+					rerenderDot();
+					renderAttrPanel();
+					onStateChange();
+				});
+
+			toolbar
+				.querySelector(`#${editorId}_addEdge`)
+				.addEventListener('click', () => {
+					if (graphState.nodes.length < 2) {
+						alert('Add at least 2 nodes first.');
+						return;
+					}
+					const nodeKeys = graphState.nodes.map((n) => n.key);
+					const src = prompt(`Source node (${nodeKeys.join(', ')}):`);
+					if (!src || !graphState.nodes.find((n) => n.key === src.trim())) {
+						alert('Invalid source node.');
+						return;
+					}
+					const tgt = prompt(`Target node (${nodeKeys.join(', ')}):`);
+					if (!tgt || !graphState.nodes.find((n) => n.key === tgt.trim())) {
+						alert('Invalid target node.');
+						return;
+					}
+					const edgeKey = prompt('Edge key:', `${src.trim()}_to_${tgt.trim()}`);
+					if (!edgeKey || !edgeKey.trim()) return;
+					if (graphState.edges.find((ed) => ed.key === edgeKey.trim())) {
+						alert(`Edge "${edgeKey.trim()}" already exists.`);
+						return;
+					}
+					graphState.edges.push({
+						key: edgeKey.trim(),
+						source: src.trim(),
+						target: tgt.trim(),
+						attributes: {},
+					});
+					rerenderDot();
+					renderAttrPanel();
+					onStateChange();
+				});
+
+			toolbar
+				.querySelector(`#${editorId}_clearSel`)
+				.addEventListener('click', () => {
+					selectedNodeKey = null;
+					pendingEdgeFrom = null;
+					hintSpan.textContent =
+						'Click background to add node • Click node to select • Select two nodes to create edge';
+					rerenderDot();
+				});
+
+			// ── Attribute Panel ───────────────────────────────────────────────────
+			const renderAttrPanel = () => {
+				attrPanel.innerHTML = '';
+
+				// ─ Nodes table ─
+				if (graphState.nodes.length > 0) {
+					const nodeSection = document.createElement('div');
+					nodeSection.className = 'ge-attr-section';
+					nodeSection.innerHTML = '<h5>Nodes</h5>';
+
+					graphState.nodes.forEach((node) => {
+						const card = document.createElement('div');
+						card.className =
+							'ge-item-card' +
+							(node.key === selectedNodeKey ? ' ge-item-selected' : '');
+
+						const header = document.createElement('div');
+						header.className = 'ge-item-header';
+						header.innerHTML = `<strong>${node.key}</strong>`;
+
+						const delBtn = document.createElement('button');
+						delBtn.className = 'gb-btn gb-btn-xs gb-btn-danger';
+						delBtn.textContent = '✕ Delete';
+						delBtn.addEventListener('click', () => {
+							// Also remove connected edges
+							graphState.edges = graphState.edges.filter(
+								(e) => e.source !== node.key && e.target !== node.key
+							);
+							graphState.nodes = graphState.nodes.filter(
+								(n) => n.key !== node.key
+							);
+							if (selectedNodeKey === node.key) selectedNodeKey = null;
+							if (pendingEdgeFrom === node.key) pendingEdgeFrom = null;
+							rerenderDot();
+							renderAttrPanel();
+							onStateChange();
+						});
+						header.appendChild(delBtn);
+						card.appendChild(header);
+
+						// Extra options for replacement nodes
+						if (allowComplexAttrs) {
+							const rwRow = document.createElement('div');
+							rwRow.className = 'ge-rw-row';
+							const curMode =
+								(node.rewriteOptions &&
+									node.rewriteOptions.attributeReplacementMode) ||
+								'modify';
+							rwRow.innerHTML = `<label>Rewrite mode:
+								<select class="ge-rw-select">
+									<option value="modify">modify</option>
+									<option value="replace">replace</option>
+									<option value="delete">delete</option>
+								</select>
+							</label>`;
+							const rwSelect = rwRow.querySelector('.ge-rw-select');
+							rwSelect.value = curMode;
+							rwSelect.addEventListener('change', () => {
+								node.rewriteOptions = node.rewriteOptions || {};
+								node.rewriteOptions.attributeReplacementMode = rwSelect.value;
+								onStateChange();
+							});
+							card.appendChild(rwRow);
+						}
+
+						card.appendChild(
+							buildAttributeTable(
+								node.attributes,
+								allowComplexAttrs,
+								onStateChange
+							)
+						);
+
+						nodeSection.appendChild(card);
+					});
+
+					attrPanel.appendChild(nodeSection);
+				}
+
+				// ─ Edges table ─
+				if (graphState.edges.length > 0) {
+					const edgeSection = document.createElement('div');
+					edgeSection.className = 'ge-attr-section';
+					edgeSection.innerHTML = '<h5>Edges</h5>';
+
+					graphState.edges.forEach((edge) => {
+						const card = document.createElement('div');
+						card.className = 'ge-item-card';
+
+						const header = document.createElement('div');
+						header.className = 'ge-item-header';
+						header.innerHTML = `<strong>${edge.key}</strong> <span class="ge-edge-info">${edge.source} → ${edge.target}</span>`;
+
+						const delBtn = document.createElement('button');
+						delBtn.className = 'gb-btn gb-btn-xs gb-btn-danger';
+						delBtn.textContent = '✕ Delete';
+						delBtn.addEventListener('click', () => {
+							graphState.edges = graphState.edges.filter(
+								(e) => e.key !== edge.key
+							);
+							rerenderDot();
+							renderAttrPanel();
+							onStateChange();
+						});
+						header.appendChild(delBtn);
+						card.appendChild(header);
+
+						// Source / Target editing
+						const connRow = document.createElement('div');
+						connRow.className = 'ge-conn-row';
+						connRow.innerHTML = `
+							<label>Source: <input type="text" class="ge-src-input gb-input-sm" value="${edge.source}"></label>
+							<label>Target: <input type="text" class="ge-tgt-input gb-input-sm" value="${edge.target}"></label>
+						`;
+						const srcInput = connRow.querySelector('.ge-src-input');
+						const tgtInput = connRow.querySelector('.ge-tgt-input');
+						srcInput.addEventListener('change', () => {
+							edge.source = srcInput.value.trim();
+							rerenderDot();
+							onStateChange();
+						});
+						tgtInput.addEventListener('change', () => {
+							edge.target = tgtInput.value.trim();
+							rerenderDot();
+							onStateChange();
+						});
+						card.appendChild(connRow);
+
+						// Extra options for replacement edges
+						if (allowComplexAttrs) {
+							const rwRow = document.createElement('div');
+							rwRow.className = 'ge-rw-row';
+							const curMode =
+								(edge.rewriteOptions &&
+									edge.rewriteOptions.attributeReplacementMode) ||
+								'modify';
+							rwRow.innerHTML = `<label>Rewrite mode:
+								<select class="ge-rw-select">
+									<option value="modify">modify</option>
+									<option value="replace">replace</option>
+									<option value="delete">delete</option>
+								</select>
+							</label>`;
+							const rwSelect = rwRow.querySelector('.ge-rw-select');
+							rwSelect.value = curMode;
+							rwSelect.addEventListener('change', () => {
+								edge.rewriteOptions = edge.rewriteOptions || {};
+								edge.rewriteOptions.attributeReplacementMode = rwSelect.value;
+								onStateChange();
+							});
+							card.appendChild(rwRow);
+						}
+
+						card.appendChild(
+							buildAttributeTable(
+								edge.attributes,
+								allowComplexAttrs,
+								onStateChange
+							)
+						);
+
+						edgeSection.appendChild(card);
+					});
+
+					attrPanel.appendChild(edgeSection);
+				}
+			};
+
+			// Initial render
+			rerenderDot();
+			renderAttrPanel();
+
+			return { rerenderDot, renderAttrPanel };
+		};
+
+		// ── Attribute Table Builder ───────────────────────────────────────────────
+		/**
+		 * Builds a key-value attribute table for a node or edge.
+		 * @param {object} attrsObj  the attributes object (mutated in place)
+		 * @param {boolean} allowComplex  show JSON toggle for complex values
+		 * @param {function} onChange  called after every change
+		 */
+		const buildAttributeTable = (attrsObj, allowComplex, onChange) => {
+			const wrapper = document.createElement('div');
+			wrapper.className = 'ge-attr-table-wrap';
+
+			const table = document.createElement('table');
+			table.className = 'ge-attr-table';
+			table.innerHTML = `<thead><tr><th>Key</th><th>Value</th><th></th></tr></thead>`;
+			const tbody = document.createElement('tbody');
+			table.appendChild(tbody);
+			wrapper.appendChild(table);
+
+			const addBtn = document.createElement('button');
+			addBtn.className = 'gb-btn gb-btn-xs';
+			addBtn.textContent = '+ Attribute';
+			wrapper.appendChild(addBtn);
+
+			const renderRows = () => {
+				tbody.innerHTML = '';
+				Object.keys(attrsObj).forEach((k) => {
+					const tr = document.createElement('tr');
+					const val = attrsObj[k];
+					const isComplex =
+						allowComplex && typeof val === 'object' && val !== null;
+
+					const keyTd = document.createElement('td');
+					const keyInput = document.createElement('input');
+					keyInput.type = 'text';
+					keyInput.value = k;
+					keyInput.className = 'gb-input-sm';
+					keyInput.addEventListener('change', () => {
+						const newKey = keyInput.value.trim();
+						if (!newKey || newKey === k) return;
+						const entries = Object.entries(attrsObj);
+						const idx = entries.findIndex(([ek]) => ek === k);
+						if (idx === -1) return;
+						entries[idx][0] = newKey;
+						// Rebuild attrsObj in place
+						const keys = Object.keys(attrsObj);
+						keys.forEach((ek) => delete attrsObj[ek]);
+						entries.forEach(([ek, ev]) => {
+							attrsObj[ek] = ev;
+						});
+						renderRows();
+						onChange();
+					});
+					keyTd.appendChild(keyInput);
+					tr.appendChild(keyTd);
+
+					const valTd = document.createElement('td');
+					if (isComplex) {
+						const textarea = document.createElement('textarea');
+						textarea.className = 'ge-json-textarea';
+						textarea.value = JSON.stringify(val, null, 2);
+						textarea.rows = 3;
+						textarea.addEventListener('change', () => {
+							try {
+								attrsObj[k] = JSON.parse(textarea.value);
+								textarea.classList.remove('ge-json-error');
+								onChange();
+							} catch {
+								textarea.classList.add('ge-json-error');
+							}
+						});
+						valTd.appendChild(textarea);
+					} else {
+						const valInput = document.createElement('input');
+						valInput.type = 'text';
+						valInput.value = isComplex ? JSON.stringify(val) : (val ?? '');
+						valInput.className = 'gb-input-sm';
+						valInput.placeholder = 'string / number / bool / JSON';
+						valInput.addEventListener('change', () => {
+							attrsObj[k] = parseAttrValue(valInput.value);
+							// If it became complex object, re-render to show textarea
+							if (
+								allowComplex &&
+								typeof attrsObj[k] === 'object' &&
+								attrsObj[k] !== null
+							) {
+								renderRows();
+							}
+							onChange();
+						});
+						valTd.appendChild(valInput);
+					}
+					tr.appendChild(valTd);
+
+					const delTd = document.createElement('td');
+					const delBtn = document.createElement('button');
+					delBtn.className = 'gb-btn gb-btn-xs gb-btn-danger';
+					delBtn.textContent = '✕';
+					delBtn.addEventListener('click', () => {
+						delete attrsObj[k];
+						renderRows();
+						onChange();
+					});
+					delTd.appendChild(delBtn);
+					tr.appendChild(delTd);
+
+					tbody.appendChild(tr);
+				});
+			};
+
+			addBtn.addEventListener('click', () => {
+				const key = prompt('Attribute key:');
+				if (!key || !key.trim()) return;
+				attrsObj[key.trim()] = '';
+				renderRows();
+				onChange();
+			});
+
+			renderRows();
+			return wrapper;
+		};
+
+		/**
+		 * Parse a string value into the most appropriate JS type.
+		 * Tries JSON first (handles objects, arrays, booleans, numbers),
+		 * then falls back to raw string.
+		 */
+		const parseAttrValue = (str) => {
+			const trimmed = str.trim();
+			if (trimmed === 'true') return true;
+			if (trimmed === 'false') return false;
+			if (trimmed === 'null') return null;
+			if (!isNaN(trimmed) && trimmed !== '') return Number(trimmed);
+			try {
+				return JSON.parse(trimmed);
+			} catch {
+				return str;
+			}
+		};
+
+		// ── NAC Editor ────────────────────────────────────────────────────────────
+		/**
+		 * Builds a NAC (Negative Application Condition) list editor.
+		 * @param {array}    nacsArray  the nacs array on a patternGraph (mutated in place)
+		 * @param {function} onChange
+		 */
+		const buildNacEditor = (nacsArray, onChange) => {
+			const wrapper = document.createElement('div');
+			wrapper.className = 'gb-nac-editor';
+
+			const header = document.createElement('div');
+			header.className = 'gb-nac-header';
+			header.innerHTML =
+				'<strong>NACs (Negative Application Conditions)</strong>';
+			const addNacBtn = document.createElement('button');
+			addNacBtn.className = 'gb-btn gb-btn-xs';
+			addNacBtn.textContent = '+ Add NAC';
+			header.appendChild(addNacBtn);
+			wrapper.appendChild(header);
+
+			const nacList = document.createElement('div');
+			nacList.className = 'gb-nac-list';
+			wrapper.appendChild(nacList);
+
+			const renderNacList = () => {
+				nacList.innerHTML = '';
+				nacsArray.forEach((nac, idx) => {
+					const card = document.createElement('div');
+					card.className = 'gb-nac-card';
+
+					const nacHeader = document.createElement('div');
+					nacHeader.className = 'gb-nac-card-header';
+					nacHeader.innerHTML = `<strong>NAC ${idx + 1}</strong>`;
+					const delBtn = document.createElement('button');
+					delBtn.className = 'gb-btn gb-btn-xs gb-btn-danger';
+					delBtn.textContent = '✕ Remove';
+					delBtn.addEventListener('click', () => {
+						nacsArray.splice(idx, 1);
+						renderNacList();
+						onChange();
+					});
+					nacHeader.appendChild(delBtn);
+					card.appendChild(nacHeader);
+
+					// Type option
+					const typeRow = document.createElement('div');
+					typeRow.className = 'gb-nac-type-row';
+					const nacType = (nac.options && nac.options.type) || 'directed';
+					typeRow.innerHTML = `<label>Type: <select class="gb-nac-type-sel">
+						<option value="directed">directed</option>
+						<option value="undirected">undirected</option>
+					</select></label>`;
+					const nacTypeSel = typeRow.querySelector('.gb-nac-type-sel');
+					nacTypeSel.value = nacType;
+					nacTypeSel.addEventListener('change', () => {
+						nac.options = nac.options || {};
+						nac.options.type = nacTypeSel.value;
+						onChange();
+					});
+					card.appendChild(typeRow);
+
+					// Nodes
+					const nodesSection = document.createElement('div');
+					nodesSection.className = 'gb-nac-nodes';
+					nodesSection.innerHTML = '<em>Nodes:</em>';
+					const renderNacNodes = () => {
+						// Remove old rows keeping the label
+						nodesSection
+							.querySelectorAll('.gb-nac-node-row')
+							.forEach((r) => r.remove());
+						(nac.nodes || []).forEach((n, ni) => {
+							const row = document.createElement('div');
+							row.className = 'gb-nac-node-row gb-form-row';
+							row.innerHTML = `
+								<input type="text" class="gb-input-sm" placeholder="key" value="${n.key}">
+								<button class="gb-btn gb-btn-xs gb-btn-danger">✕</button>
+							`;
+							const keyIn = row.querySelector('input');
+							keyIn.addEventListener('change', () => {
+								n.key = keyIn.value.trim();
+								onChange();
+							});
+							row.querySelector('button').addEventListener('click', () => {
+								nac.nodes.splice(ni, 1);
+								renderNacNodes();
+								onChange();
+							});
+							nodesSection.appendChild(row);
+						});
+					};
+					renderNacNodes();
+					const addNacNodeBtn = document.createElement('button');
+					addNacNodeBtn.className = 'gb-btn gb-btn-xs';
+					addNacNodeBtn.textContent = '+ Node';
+					addNacNodeBtn.addEventListener('click', () => {
+						nac.nodes.push({ key: '', attributes: {} });
+						renderNacNodes();
+						onChange();
+					});
+					nodesSection.appendChild(addNacNodeBtn);
+					card.appendChild(nodesSection);
+
+					// Edges
+					const edgesSection = document.createElement('div');
+					edgesSection.className = 'gb-nac-edges';
+					edgesSection.innerHTML = '<em>Edges:</em>';
+					const renderNacEdges = () => {
+						edgesSection
+							.querySelectorAll('.gb-nac-edge-row')
+							.forEach((r) => r.remove());
+						(nac.edges || []).forEach((e, ei) => {
+							const row = document.createElement('div');
+							row.className = 'gb-nac-edge-row gb-form-row';
+							row.innerHTML = `
+								<input type="text" class="gb-input-sm" placeholder="key" value="${e.key}">
+								<input type="text" class="gb-input-sm" placeholder="source" value="${e.source}">
+								<input type="text" class="gb-input-sm" placeholder="target" value="${e.target}">
+								<button class="gb-btn gb-btn-xs gb-btn-danger">✕</button>
+							`;
+							const [keyIn, srcIn, tgtIn] = row.querySelectorAll('input');
+							keyIn.addEventListener('change', () => {
+								e.key = keyIn.value.trim();
+								onChange();
+							});
+							srcIn.addEventListener('change', () => {
+								e.source = srcIn.value.trim();
+								onChange();
+							});
+							tgtIn.addEventListener('change', () => {
+								e.target = tgtIn.value.trim();
+								onChange();
+							});
+							row.querySelector('button').addEventListener('click', () => {
+								nac.edges.splice(ei, 1);
+								renderNacEdges();
+								onChange();
+							});
+							edgesSection.appendChild(row);
+						});
+					};
+					renderNacEdges();
+					const addNacEdgeBtn = document.createElement('button');
+					addNacEdgeBtn.className = 'gb-btn gb-btn-xs';
+					addNacEdgeBtn.textContent = '+ Edge';
+					addNacEdgeBtn.addEventListener('click', () => {
+						nac.edges.push({ key: '', source: '', target: '', attributes: {} });
+						renderNacEdges();
+						onChange();
+					});
+					edgesSection.appendChild(addNacEdgeBtn);
+					card.appendChild(edgesSection);
+
+					nacList.appendChild(card);
+				});
+			};
+
+			addNacBtn.addEventListener('click', () => {
+				nacsArray.push({ options: { type: 'directed' }, nodes: [], edges: [] });
+				renderNacList();
+				onChange();
+			});
+
+			renderNacList();
+			return wrapper;
+		};
+
+		// ── JSON Preview update ───────────────────────────────────────────────────
+		const updatePreview = () => {
+			const preEl = document.getElementById('gb-json-output');
+			if (preEl) {
+				preEl.textContent = JSON.stringify(cleanBuilderState(), null, 2);
+			}
+			// Keep sequence rule options updated
+			updateSequenceRuleOptions();
+		};
+
+		/**
+		 * Return a clean copy of builderState with empty optional arrays omitted.
+		 */
+		const cleanBuilderState = () => {
+			const s = JSON.parse(JSON.stringify(builderState));
+			// Strip internal helper fields from rules (not part of the schema)
+			if (s.rules) {
+				s.rules.forEach((rule) => {
+					delete rule._inlineReplacement;
+					delete rule._externalReplacement;
+					// Strip empty NACs array
+					if (
+						rule.patternGraph &&
+						rule.patternGraph.nacs &&
+						rule.patternGraph.nacs.length === 0
+					) {
+						delete rule.patternGraph.nacs;
+					}
+					// Strip empty options
+					if (rule.options && Object.keys(rule.options).length === 0) {
+						delete rule.options;
+					}
+				});
+			}
+			if (!s.rules || s.rules.length === 0) delete s.rules;
+			if (!s.sequence || s.sequence.length === 0) delete s.sequence;
+			if (s.options && !s.options.returnHistory) delete s.options;
+			return s;
+		};
+
+		// ── Builder UI Construction ───────────────────────────────────────────────
+		const gbRoot = document.getElementById('grammarBuilder');
+
+		// Helper to create a collapsible section
+		const createSection = (title, id) => {
+			const section = document.createElement('div');
+			section.className = 'gb-section';
+			section.id = id;
+
+			const sectionHeader = document.createElement('div');
+			sectionHeader.className = 'gb-section-header';
+			sectionHeader.innerHTML = `<span class="gb-section-toggle">▼</span> <span>${title}</span>`;
+			section.appendChild(sectionHeader);
+
+			const body = document.createElement('div');
+			body.className = 'gb-section-body';
+			section.appendChild(body);
+
+			sectionHeader.addEventListener('click', () => {
+				const isOpen = body.style.display !== 'none';
+				body.style.display = isOpen ? 'none' : '';
+				sectionHeader.querySelector('.gb-section-toggle').textContent = isOpen
+					? '►'
+					: '▼';
+			});
+
+			gbRoot.appendChild(section);
+			return body;
+		};
+
+		// ── § Options ─────────────────────────────────────────────────────────────
+		const optionsBody = createSection('Options', 'gb-options');
+		optionsBody.innerHTML = `
+			<div class="gb-form-row">
+				<label>
+					<input type="checkbox" id="gb-returnHistory">
+					returnHistory — include result after each rewriting step
+				</label>
+			</div>
+		`;
+		document
+			.getElementById('gb-returnHistory')
+			.addEventListener('change', (e) => {
+				builderState.options.returnHistory = e.target.checked;
+				updatePreview();
+			});
+
+		// ── § Hostgraph ───────────────────────────────────────────────────────────
+		const hostgraphBody = createSection('Hostgraph', 'gb-hostgraph');
+		const hostgraphEditorDiv = document.createElement('div');
+		hostgraphBody.appendChild(hostgraphEditorDiv);
+		createGraphEditor({
+			container: hostgraphEditorDiv,
+			graphState: builderState.hostgraph,
+			allowComplexAttrs: false,
+			onStateChange: updatePreview,
+			editorId: 'hg',
+		});
+
+		// ── § Rules ───────────────────────────────────────────────────────────────
+		const rulesBody = createSection('Rules', 'gb-rules');
+
+		const rulesListEl = document.createElement('div');
+		rulesListEl.id = 'gb-rules-list';
+		rulesBody.appendChild(rulesListEl);
+
+		const addRuleBtn = document.createElement('button');
+		addRuleBtn.className = 'gb-btn';
+		addRuleBtn.textContent = '+ Add Rule';
+		rulesBody.appendChild(addRuleBtn);
+
+		let ruleEditorCount = 0;
+
+		const renderRulesList = () => {
+			rulesListEl.innerHTML = '';
+			builderState.rules.forEach((rule, ruleIdx) => {
+				const card = document.createElement('div');
+				card.className = 'gb-rule-card';
+
+				// ── Rule header ──
+				const ruleHeader = document.createElement('div');
+				ruleHeader.className = 'gb-rule-header';
+
+				const keyLabel = document.createElement('label');
+				keyLabel.className = 'gb-rule-key-label';
+				keyLabel.innerHTML = `Rule key: <input type="text" class="gb-input gb-rule-key-input" value="${rule.key}" placeholder="rule key">`;
+				const keyInput = keyLabel.querySelector('input');
+				keyInput.addEventListener('change', () => {
+					rule.key = keyInput.value.trim();
+					updatePreview();
+				});
+				ruleHeader.appendChild(keyLabel);
+
+				const homoLabel = document.createElement('label');
+				homoLabel.className = 'gb-rule-homo-label';
+				const homoCheck = document.createElement('input');
+				homoCheck.type = 'checkbox';
+				homoCheck.checked = !!(rule.options && rule.options.homomorphic);
+				homoCheck.addEventListener('change', () => {
+					rule.options = rule.options || {};
+					rule.options.homomorphic = homoCheck.checked;
+					updatePreview();
+				});
+				homoLabel.appendChild(homoCheck);
+				homoLabel.appendChild(document.createTextNode(' homomorphic'));
+				ruleHeader.appendChild(homoLabel);
+
+				const delRuleBtn = document.createElement('button');
+				delRuleBtn.className = 'gb-btn gb-btn-danger';
+				delRuleBtn.textContent = '✕ Delete Rule';
+				delRuleBtn.addEventListener('click', () => {
+					builderState.rules.splice(ruleIdx, 1);
+					renderRulesList();
+					updatePreview();
+				});
+				ruleHeader.appendChild(delRuleBtn);
+				card.appendChild(ruleHeader);
+
+				// ── Pattern Graph ──
+				const patternSection = document.createElement('div');
+				patternSection.className = 'gb-rule-subsection';
+				patternSection.innerHTML = '<h4>Pattern Graph</h4>';
+
+				const patternEditorDiv = document.createElement('div');
+				patternSection.appendChild(patternEditorDiv);
+				createGraphEditor({
+					container: patternEditorDiv,
+					graphState: rule.patternGraph,
+					allowComplexAttrs: false,
+					onStateChange: updatePreview,
+					editorId: `pg_${ruleIdx}_${++ruleEditorCount}`,
+				});
+
+				// NACs
+				patternSection.appendChild(
+					buildNacEditor(
+						rule.patternGraph.nacs || (rule.patternGraph.nacs = []),
+						updatePreview
+					)
+				);
+				card.appendChild(patternSection);
+
+				// ── Replacement Graph ──
+				const replacementSection = document.createElement('div');
+				replacementSection.className = 'gb-rule-subsection';
+				replacementSection.innerHTML = '<h4>Replacement Graph</h4>';
+
+				// Toggle inline / externalApi
+				const replTypeRow = document.createElement('div');
+				replTypeRow.className = 'gb-form-row';
+				const isExternal =
+					rule.replacementGraph && rule.replacementGraph.type === 'externalApi';
+				replTypeRow.innerHTML = `<label>Replacement type:
+					<select class="gb-repl-type-sel">
+						<option value="inline">inline</option>
+						<option value="externalApi">externalApi</option>
+					</select>
+				</label>`;
+				const replTypeSel = replTypeRow.querySelector('.gb-repl-type-sel');
+				replTypeSel.value = isExternal ? 'externalApi' : 'inline';
+				replacementSection.appendChild(replTypeRow);
+
+				const inlineContainer = document.createElement('div');
+				inlineContainer.className = 'gb-repl-inline';
+				inlineContainer.style.display = isExternal ? 'none' : '';
+
+				const externalContainer = document.createElement('div');
+				externalContainer.className = 'gb-repl-external';
+				externalContainer.style.display = isExternal ? '' : 'none';
+
+				// Ensure replacementGraph is an inline object if currently external
+				if (
+					!rule.replacementGraph ||
+					rule.replacementGraph.type === 'externalApi'
+				) {
+					// Keep external config separately, provide empty inline graph
+					rule._inlineReplacement = rule._inlineReplacement || {
+						options: { type: 'directed' },
+						nodes: [],
+						edges: [],
+					};
+					rule._externalReplacement =
+						rule.replacementGraph &&
+						rule.replacementGraph.type === 'externalApi'
+							? rule.replacementGraph
+							: {
+									type: 'externalApi',
+									args: { endpoint: '', additionalRequestBodyParameters: {} },
+								};
+				} else {
+					rule._inlineReplacement =
+						rule._inlineReplacement || rule.replacementGraph;
+					rule._externalReplacement = rule._externalReplacement || {
+						type: 'externalApi',
+						args: { endpoint: '', additionalRequestBodyParameters: {} },
+					};
+				}
+
+				// Make sure replacementGraph points to the right one
+				if (!isExternal) {
+					rule.replacementGraph = rule._inlineReplacement;
+				}
+
+				// Inline editor
+				createGraphEditor({
+					container: inlineContainer,
+					graphState: rule._inlineReplacement,
+					allowComplexAttrs: true,
+					onStateChange: updatePreview,
+					editorId: `rg_${ruleIdx}_${++ruleEditorCount}`,
+				});
+				replacementSection.appendChild(inlineContainer);
+
+				// External editor
+				const extEndpointLabel = document.createElement('label');
+				extEndpointLabel.className = 'gb-form-row';
+				extEndpointLabel.innerHTML = `Endpoint URL: <input type="text" class="gb-input gb-ext-endpoint" placeholder="https://..." value="${(rule._externalReplacement.args && rule._externalReplacement.args.endpoint) || ''}">`;
+				const extEndpointInput = extEndpointLabel.querySelector('input');
+				extEndpointInput.addEventListener('change', () => {
+					rule._externalReplacement.args = rule._externalReplacement.args || {};
+					rule._externalReplacement.args.endpoint =
+						extEndpointInput.value.trim();
+					updatePreview();
+				});
+				externalContainer.appendChild(extEndpointLabel);
+
+				const extParamsLabel = document.createElement('label');
+				extParamsLabel.className = 'gb-form-row';
+				const extParamsStr =
+					rule._externalReplacement.args &&
+					rule._externalReplacement.args.additionalRequestBodyParameters
+						? JSON.stringify(
+								rule._externalReplacement.args.additionalRequestBodyParameters,
+								null,
+								2
+							)
+						: '{}';
+				extParamsLabel.innerHTML = `Additional request body parameters (JSON):`;
+				const extParamsTextarea = document.createElement('textarea');
+				extParamsTextarea.className = 'ge-json-textarea';
+				extParamsTextarea.rows = 4;
+				extParamsTextarea.value = extParamsStr;
+				extParamsTextarea.addEventListener('change', () => {
+					try {
+						rule._externalReplacement.args =
+							rule._externalReplacement.args || {};
+						rule._externalReplacement.args.additionalRequestBodyParameters =
+							JSON.parse(extParamsTextarea.value);
+						extParamsTextarea.classList.remove('ge-json-error');
+						updatePreview();
+					} catch {
+						extParamsTextarea.classList.add('ge-json-error');
+					}
+				});
+				extParamsLabel.appendChild(extParamsTextarea);
+				externalContainer.appendChild(extParamsLabel);
+
+				replacementSection.appendChild(externalContainer);
+
+				replTypeSel.addEventListener('change', () => {
+					const ext = replTypeSel.value === 'externalApi';
+					inlineContainer.style.display = ext ? 'none' : '';
+					externalContainer.style.display = ext ? '' : 'none';
+					rule.replacementGraph = ext
+						? rule._externalReplacement
+						: rule._inlineReplacement;
+					updatePreview();
+				});
+
+				card.appendChild(replacementSection);
+				rulesListEl.appendChild(card);
+			});
+		};
+
+		addRuleBtn.addEventListener('click', () => {
+			builderState.rules.push({
+				key: `rule_${builderState.rules.length + 1}`,
+				patternGraph: {
+					options: { type: 'directed' },
+					nodes: [],
+					edges: [],
+					nacs: [],
+				},
+				replacementGraph: {
+					options: { type: 'directed' },
+					nodes: [],
+					edges: [],
+				},
+				options: { homomorphic: false },
+				_inlineReplacement: {
+					options: { type: 'directed' },
+					nodes: [],
+					edges: [],
+				},
+				_externalReplacement: {
+					type: 'externalApi',
+					args: { endpoint: '', additionalRequestBodyParameters: {} },
+				},
+			});
+			renderRulesList();
+			updatePreview();
+		});
+
+		renderRulesList();
+
+		// ── § Sequence ────────────────────────────────────────────────────────────
+		const sequenceBody = createSection('Sequence', 'gb-sequence');
+
+		const sequenceListEl = document.createElement('div');
+		sequenceListEl.id = 'gb-sequence-list';
+		sequenceBody.appendChild(sequenceListEl);
+
+		const addStepBtn = document.createElement('button');
+		addStepBtn.className = 'gb-btn';
+		addStepBtn.textContent = '+ Add Step';
+		sequenceBody.appendChild(addStepBtn);
+
+		const updateSequenceRuleOptions = () => {
+			// Update all rule selects in the sequence section
+			document.querySelectorAll('.gb-seq-rule-sel').forEach((sel) => {
+				const currentVal = sel.value;
+				sel.innerHTML = builderState.rules
+					.map(
+						(r) =>
+							`<option value="${r.key}"${r.key === currentVal ? ' selected' : ''}>${r.key || '(unnamed)'}</option>`
+					)
+					.join('');
+				if (builderState.rules.length === 0) {
+					sel.innerHTML = '<option value="">(no rules defined)</option>';
+				}
+			});
+		};
+
+		const renderSequenceList = () => {
+			sequenceListEl.innerHTML = '';
+			builderState.sequence.forEach((step, idx) => {
+				const row = document.createElement('div');
+				row.className = 'gb-sequence-step';
+
+				const ruleOpts =
+					builderState.rules.length > 0
+						? builderState.rules
+								.map(
+									(r) =>
+										`<option value="${r.key}"${r.key === step.rule ? ' selected' : ''}>${r.key || '(unnamed)'}</option>`
+								)
+								.join('')
+						: '<option value="">(no rules defined)</option>';
+
+				row.innerHTML = `
+					<div class="gb-form-row">
+						<label>Rule: <select class="gb-seq-rule-sel">${ruleOpts}</select></label>
+						<label>Mode:
+							<select class="gb-seq-mode-sel">
+								<option value="all"${step.options.mode === 'all' ? ' selected' : ''}>all</option>
+								<option value="first"${step.options.mode === 'first' ? ' selected' : ''}>first</option>
+								<option value="interval"${step.options.mode === 'interval' ? ' selected' : ''}>interval</option>
+							</select>
+						</label>
+						<label>Repeat: <input type="text" class="gb-input-sm gb-seq-repeat" placeholder="e.g. 3 or [1,5]" value="${step.options.repeat !== undefined ? JSON.stringify(step.options.repeat) : ''}"></label>
+						<button class="gb-btn gb-btn-xs gb-btn-danger gb-seq-del">✕</button>
+					</div>
+					<div class="gb-seq-interval-row gb-form-row" style="display: ${step.options.mode === 'interval' ? '' : 'none'}">
+						<label>Interval min: <input type="number" class="gb-input-sm gb-seq-int-min" value="${(step.options.interval && step.options.interval.min) || 0}"></label>
+						<label>Interval max: <input type="number" class="gb-input-sm gb-seq-int-max" value="${(step.options.interval && step.options.interval.max) || 0}"></label>
+					</div>
+				`;
+
+				const ruleSel = row.querySelector('.gb-seq-rule-sel');
+				const modeSel = row.querySelector('.gb-seq-mode-sel');
+				const repeatInput = row.querySelector('.gb-seq-repeat');
+				const intervalRow = row.querySelector('.gb-seq-interval-row');
+				const minInput = row.querySelector('.gb-seq-int-min');
+				const maxInput = row.querySelector('.gb-seq-int-max');
+				const delBtn = row.querySelector('.gb-seq-del');
+
+				ruleSel.addEventListener('change', () => {
+					step.rule = ruleSel.value;
+					updatePreview();
+				});
+				modeSel.addEventListener('change', () => {
+					step.options.mode = modeSel.value;
+					intervalRow.style.display =
+						modeSel.value === 'interval' ? '' : 'none';
+					updatePreview();
+				});
+				repeatInput.addEventListener('change', () => {
+					const v = repeatInput.value.trim();
+					if (!v) {
+						delete step.options.repeat;
+					} else {
+						step.options.repeat = parseAttrValue(v);
+					}
+					updatePreview();
+				});
+				minInput.addEventListener('change', () => {
+					step.options.interval = step.options.interval || { min: 0, max: 0 };
+					step.options.interval.min = Number(minInput.value);
+					updatePreview();
+				});
+				maxInput.addEventListener('change', () => {
+					step.options.interval = step.options.interval || { min: 0, max: 0 };
+					step.options.interval.max = Number(maxInput.value);
+					updatePreview();
+				});
+				delBtn.addEventListener('click', () => {
+					builderState.sequence.splice(idx, 1);
+					renderSequenceList();
+					updatePreview();
+				});
+
+				sequenceListEl.appendChild(row);
+			});
+		};
+
+		addStepBtn.addEventListener('click', () => {
+			builderState.sequence.push({
+				rule: builderState.rules.length > 0 ? builderState.rules[0].key : '',
+				options: { mode: 'all' },
+			});
+			renderSequenceList();
+			updatePreview();
+		});
+
+		renderSequenceList();
+
+		// ── § JSON Preview ────────────────────────────────────────────────────────
+		const previewBody = createSection('JSON Preview', 'gb-preview');
+		previewBody.innerHTML = `
+			<div class="gb-preview-actions">
+				<button class="gb-btn" id="gb-copy-json">Copy JSON</button>
+				<button class="gb-btn gb-btn-primary" id="gb-submit">Submit to /transform</button>
+				<span id="gb-submit-status"></span>
+			</div>
+			<pre id="gb-json-output" class="gb-json-pre"></pre>
+		`;
+
+		document.getElementById('gb-copy-json').addEventListener('click', () => {
+			const text = document.getElementById('gb-json-output').textContent;
+			navigator.clipboard.writeText(text).then(() => {
+				const status = document.getElementById('gb-submit-status');
+				status.textContent = 'Copied!';
+				setTimeout(() => {
+					status.textContent = '';
+				}, 2000);
+			});
+		});
+
+		document.getElementById('gb-submit').addEventListener('click', async () => {
+			const status = document.getElementById('gb-submit-status');
+			status.textContent = 'Submitting…';
+			try {
+				await handleExecution(cleanBuilderState());
+				status.textContent = 'Done! See graph viewer.';
+				setTimeout(() => {
+					status.textContent = '';
+				}, 3000);
+			} catch (e) {
+				status.textContent = `Error: ${e.message}`;
+			}
+		});
+
+		// Initial preview render
+		updatePreview();
 	</script>
 
 	<style>
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			font-family: Helvetica, Arial, sans-serif;
+			font-size: 13px;
+			display: flex;
+			flex-direction: column;
+			height: 100vh;
+			overflow: hidden;
+		}
+
+		#top-bar {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 6px 12px;
+			background: #f0f0f0;
+			border-bottom: 1px solid #ccc;
+			flex-shrink: 0;
+		}
+
+		#top-bar p {
+			margin: 0;
+		}
+
+		#main-container {
+			display: flex;
+			flex: 1;
+			overflow: hidden;
+		}
+
+		#graph {
+			width: 50%;
+			height: 100%;
+			overflow: hidden;
+			border-right: 2px solid #ccc;
+			flex-shrink: 0;
+		}
+
 		#graph > svg {
 			display: flex;
 			justify-items: center;
@@ -159,12 +1486,376 @@
 			height: 100%;
 		}
 
-		.graph {
+		#grammarBuilder {
+			width: 50%;
+			height: 100%;
+			overflow-y: auto;
+			background: #fafafa;
+			padding: 0;
+		}
+
+		/* ── Sections ─────────────────────────────────────── */
+		.gb-section {
+			border-bottom: 1px solid #ddd;
+		}
+
+		.gb-section-header {
 			display: flex;
-			justify-content: center;
 			align-items: center;
+			gap: 8px;
+			padding: 8px 12px;
+			background: #e8e8e8;
+			cursor: pointer;
+			user-select: none;
+			font-weight: bold;
+			font-size: 13px;
+			border-bottom: 1px solid #ccc;
+		}
+
+		.gb-section-header:hover {
+			background: #dde;
+		}
+
+		.gb-section-toggle {
+			font-size: 10px;
+			color: #555;
+			width: 12px;
+		}
+
+		.gb-section-body {
+			padding: 10px 12px;
+		}
+
+		/* ── Buttons ─────────────────────────────────────── */
+		.gb-btn {
+			padding: 4px 10px;
+			border: 1px solid #aaa;
+			border-radius: 3px;
+			background: #fff;
+			cursor: pointer;
+			font-size: 12px;
+		}
+
+		.gb-btn:hover {
+			background: #eee;
+		}
+
+		.gb-btn-primary {
+			background: #3a7bd5;
+			color: white;
+			border-color: #2a5ba5;
+		}
+
+		.gb-btn-primary:hover {
+			background: #2a5ba5;
+		}
+
+		.gb-btn-danger {
+			background: #fff;
+			color: #c0392b;
+			border-color: #c0392b;
+		}
+
+		.gb-btn-danger:hover {
+			background: #fde;
+		}
+
+		.gb-btn-sm {
+			padding: 2px 7px;
+			font-size: 11px;
+		}
+
+		.gb-btn-xs {
+			padding: 1px 5px;
+			font-size: 11px;
+		}
+
+		/* ── Inputs ──────────────────────────────────────── */
+		.gb-input {
+			padding: 3px 6px;
+			border: 1px solid #bbb;
+			border-radius: 3px;
+			font-size: 12px;
+		}
+
+		.gb-input-sm {
+			padding: 2px 5px;
+			border: 1px solid #bbb;
+			border-radius: 3px;
+			font-size: 12px;
+			width: 90px;
+		}
+
+		.gb-form-row {
+			display: flex;
+			align-items: center;
+			flex-wrap: wrap;
+			gap: 8px;
+			margin-bottom: 6px;
+		}
+
+		/* ── Graph Editor ────────────────────────────────── */
+		.graph-editor {
+			margin-bottom: 8px;
+		}
+
+		.ge-type-row {
+			margin-bottom: 6px;
+		}
+
+		.ge-canvas {
+			width: 100%;
+			height: 200px;
+			border: 1px solid #ccc;
+			border-radius: 4px;
+			background: #fff;
+			overflow: hidden;
+			position: relative;
+		}
+
+		.ge-canvas svg {
 			width: 100%;
 			height: 100%;
+		}
+
+		.ge-hint {
+			font-size: 11px;
+			color: #777;
+			margin: 3px 0;
+			font-style: italic;
+		}
+
+		.ge-toolbar {
+			display: flex;
+			gap: 6px;
+			margin-bottom: 8px;
+			flex-wrap: wrap;
+		}
+
+		.ge-attr-panel {
+			margin-top: 6px;
+		}
+
+		.ge-attr-section {
+			margin-bottom: 8px;
+		}
+
+		.ge-attr-section h5 {
+			margin: 4px 0;
+			font-size: 12px;
+			color: #444;
+			border-bottom: 1px solid #e0e0e0;
+			padding-bottom: 2px;
+		}
+
+		.ge-item-card {
+			background: #fff;
+			border: 1px solid #ddd;
+			border-radius: 4px;
+			padding: 6px 8px;
+			margin-bottom: 6px;
+		}
+
+		.ge-item-selected {
+			border-color: royalblue;
+			box-shadow: 0 0 0 2px rgba(65, 105, 225, 0.2);
+		}
+
+		.ge-item-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 4px;
+		}
+
+		.ge-edge-info {
+			font-size: 11px;
+			color: #666;
+			margin-left: 6px;
+		}
+
+		.ge-conn-row {
+			display: flex;
+			gap: 8px;
+			margin-bottom: 4px;
+			flex-wrap: wrap;
+		}
+
+		.ge-rw-row {
+			margin-bottom: 4px;
+		}
+
+		.ge-attr-table-wrap {
+			margin-top: 4px;
+		}
+
+		.ge-attr-table {
+			width: 100%;
+			border-collapse: collapse;
+			font-size: 12px;
+			margin-bottom: 4px;
+		}
+
+		.ge-attr-table th {
+			background: #f0f0f0;
+			text-align: left;
+			padding: 2px 4px;
+			font-weight: 600;
+			font-size: 11px;
+			border: 1px solid #ddd;
+		}
+
+		.ge-attr-table td {
+			padding: 2px 4px;
+			border: 1px solid #eee;
+			vertical-align: top;
+		}
+
+		.ge-json-textarea {
+			width: 100%;
+			font-family: monospace;
+			font-size: 11px;
+			border: 1px solid #ccc;
+			border-radius: 3px;
+			padding: 3px;
+			resize: vertical;
+		}
+
+		.ge-json-error {
+			border-color: #e74c3c !important;
+			background: #fdf;
+		}
+
+		/* ── Rule Cards ──────────────────────────────────── */
+		.gb-rule-card {
+			background: #fff;
+			border: 1px solid #ccc;
+			border-left: 4px solid #3a7bd5;
+			border-radius: 4px;
+			padding: 10px;
+			margin-bottom: 12px;
+		}
+
+		.gb-rule-header {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			margin-bottom: 10px;
+			flex-wrap: wrap;
+		}
+
+		.gb-rule-key-label {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			font-weight: 600;
+		}
+
+		.gb-rule-key-input {
+			font-weight: normal;
+			width: 140px;
+		}
+
+		.gb-rule-homo-label {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+		}
+
+		.gb-rule-subsection {
+			border: 1px solid #e8e8e8;
+			border-radius: 4px;
+			padding: 8px;
+			margin-bottom: 8px;
+			background: #fafafa;
+		}
+
+		.gb-rule-subsection h4 {
+			margin: 0 0 6px 0;
+			font-size: 12px;
+			color: #333;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+		}
+
+		/* ── NAC Editor ──────────────────────────────────── */
+		.gb-nac-editor {
+			margin-top: 8px;
+			border-top: 1px dashed #ccc;
+			padding-top: 6px;
+		}
+
+		.gb-nac-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 6px;
+		}
+
+		.gb-nac-card {
+			background: #fffef0;
+			border: 1px solid #e0d080;
+			border-radius: 3px;
+			padding: 6px 8px;
+			margin-bottom: 6px;
+		}
+
+		.gb-nac-card-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 4px;
+		}
+
+		.gb-nac-type-row {
+			margin-bottom: 4px;
+		}
+
+		.gb-nac-nodes,
+		.gb-nac-edges {
+			margin-bottom: 4px;
+		}
+
+		.gb-nac-node-row,
+		.gb-nac-edge-row {
+			margin-top: 3px;
+		}
+
+		/* ── Sequence ────────────────────────────────────── */
+		.gb-sequence-step {
+			background: #fff;
+			border: 1px solid #ddd;
+			border-left: 4px solid #2ecc71;
+			border-radius: 4px;
+			padding: 8px;
+			margin-bottom: 8px;
+		}
+
+		/* ── JSON Preview ────────────────────────────────── */
+		.gb-preview-actions {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			margin-bottom: 8px;
+			flex-wrap: wrap;
+		}
+
+		#gb-submit-status {
+			font-size: 12px;
+			color: #2ecc71;
+		}
+
+		.gb-json-pre {
+			background: #1e1e1e;
+			color: #d4d4d4;
+			font-family: monospace;
+			font-size: 11px;
+			padding: 10px;
+			border-radius: 4px;
+			overflow: auto;
+			max-height: 400px;
+			white-space: pre;
+			margin: 0;
 		}
 	</style>
 </html>
