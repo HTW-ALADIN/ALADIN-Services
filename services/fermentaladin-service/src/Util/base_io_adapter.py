@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import TypeVar
- 
+
 unknown = TypeVar("unknown")
+
 
 class IOAdapter(ABC):
     def __init__(self):

@@ -1,4 +1,4 @@
-from typing import TypeVar, Generic, Dict
+from typing import Dict, Generic, TypeVar
 
 T = TypeVar("T")
 

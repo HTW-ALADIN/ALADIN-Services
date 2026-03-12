@@ -1,0 +1,9 @@
+### FermentALADIN — Models endpoint
+# Returns the full organism model database (4 models: S. cerevisiae, E. coli, E. coli Biomass, C. necator).
+
+@baseUrl = http://localhost:8000
+
+###
+# @name get_all_models
+GET {{baseUrl}}/models
+Accept: application/json

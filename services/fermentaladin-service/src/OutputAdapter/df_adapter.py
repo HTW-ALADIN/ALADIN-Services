@@ -1,6 +1,8 @@
-from .base_output_adapter import OutputAdapter
 from typing import ClassVar
+
 import pandas as pd
+
+from .base_output_adapter import OutputAdapter
 
 
 class DFAdapter(OutputAdapter):

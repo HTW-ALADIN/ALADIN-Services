@@ -1,15 +1,16 @@
+import logging
+import os
 import sys
+from typing import Tuple
+
 import pandas as pd
 
 from calc.calc_bioreactor import calculate
-from Util.multiplot_ferm import multiplot_ferm
+from InputAdapter.input_adapter_strategy import input_adapter_strategy
 from OutputAdapter.base_output_adapter import OutputAdapter
 from OutputAdapter.output_adapter_strategy import output_adapter_strategy
-from InputAdapter.input_adapter_strategy import input_adapter_strategy
-from typing import Tuple
 from Util.arg_parser import parser
-import logging
-import os
+from Util.multiplot_ferm import multiplot_ferm
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL") or logging.INFO)
 
@@ -34,5 +35,5 @@ if __name__ == "__main__":
     output_adapter.write(serialized_output, file_path)
 
     # TODO: flag for toggling?
-    multiplot_ferm(result_df)
+    # multiplot_ferm(result_df)
     sys.exit(0)

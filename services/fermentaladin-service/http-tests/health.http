@@ -1,0 +1,9 @@
+### FermentALADIN — Health endpoint
+# Liveness probe. Expects: {"status": "ok"}
+
+@baseUrl = http://localhost:8000
+
+###
+# @name health_check
+GET {{baseUrl}}/health
+Accept: application/json

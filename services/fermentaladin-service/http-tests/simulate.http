@@ -1,0 +1,336 @@
+### FermentALADIN — Simulation endpoints
+# POST /simulate/df   — returns raw time-series data (column-keyed JSON)
+# POST /simulate/chart — returns Chart.js chart descriptors (Chart_1 … Chart_4)
+#
+# Phase 1 requires: Model, DO, c_x0
+# Phases 2–N inherit DO and c_x0 from the previous phase end state.
+#
+# Available Model IDs:
+#   "1" — S. cerevisiae  (Glucose → Ethanol)
+#   "2" — E. coli        (Glucose, unvalidated)
+#   "3" — E. coli Biomass (pure biomass, no product)
+#   "4" — Cupriavidus necator (Fructose → PHB)
+
+@baseUrl = http://localhost:8000
+
+# ---------------------------------------------------------------------------
+# /simulate/df
+# ---------------------------------------------------------------------------
+
+###
+# @name simulate_df_single_phase
+# Minimal single-phase run with Model 1 (S. cerevisiae).
+POST {{baseUrl}}/simulate/df
+Content-Type: application/json
+
+[
+  {
+    "Model": "1",
+    "Phase": 1,
+    "Q_Air": 80.0,
+    "Bolus_C": 100.0,
+    "Feed_C": 0.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 500.0,
+    "Druck": 0.0,
+    "Dauer": 10.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 6.5,
+    "DO": 100.0,
+    "c_x0": 0.1
+  }
+]
+
+###
+# @name simulate_df_four_phases
+# Full 4-phase fed-batch run taken from the canonical test fixture.
+# Escalating aeration (Q_Air), stirrer speed (Drehzahl) and feed rate (Feed_C)
+# across phases 2–4 while adding pressure in phases 3 & 4.
+POST {{baseUrl}}/simulate/df
+Content-Type: application/json
+
+[
+  {
+    "Model": "1",
+    "Phase": 1,
+    "Q_Air": 80.0,
+    "Bolus_C": 100.0,
+    "Feed_C": 0.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 500.0,
+    "Druck": 0.0,
+    "Dauer": 10.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 6.5,
+    "DO": 100.0,
+    "c_x0": 0.1
+  },
+  {
+    "Phase": 2,
+    "Q_Air": 100.0,
+    "Bolus_C": 0.0,
+    "Feed_C": 1.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 1000.0,
+    "Druck": 0.0,
+    "Dauer": 10.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 6.5
+  },
+  {
+    "Phase": 3,
+    "Q_Air": 120.0,
+    "Bolus_C": 0.0,
+    "Feed_C": 2.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 1200.0,
+    "Druck": 0.2,
+    "Dauer": 10.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 6.5
+  },
+  {
+    "Phase": 4,
+    "Q_Air": 140.0,
+    "Bolus_C": 0.0,
+    "Feed_C": 4.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 1200.0,
+    "Druck": 0.4,
+    "Dauer": 10.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 6.5
+  }
+]
+
+###
+# @name simulate_df_model2_ecoli
+# Single-phase run using Model 2 (E. coli, theoretical parameters).
+POST {{baseUrl}}/simulate/df
+Content-Type: application/json
+
+[
+  {
+    "Model": "2",
+    "Phase": 1,
+    "Q_Air": 100.0,
+    "Bolus_C": 50.0,
+    "Feed_C": 0.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 800.0,
+    "Druck": 0.0,
+    "Dauer": 8.0,
+    "V_L": 100.0,
+    "T": 37.0,
+    "pH": 7.0,
+    "DO": 100.0,
+    "c_x0": 0.05
+  }
+]
+
+###
+# @name simulate_df_model4_phb
+# Single-phase run using Model 4 (Cupriavidus necator, Fructose → PHB).
+POST {{baseUrl}}/simulate/df
+Content-Type: application/json
+
+[
+  {
+    "Model": "4",
+    "Phase": 1,
+    "Q_Air": 60.0,
+    "Bolus_C": 80.0,
+    "Feed_C": 0.0,
+    "Bolus_N": 3.0,
+    "Drehzahl": 400.0,
+    "Druck": 0.0,
+    "Dauer": 24.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 7.0,
+    "DO": 100.0,
+    "c_x0": 0.2
+  }
+]
+
+# ---------------------------------------------------------------------------
+# /simulate/chart
+# ---------------------------------------------------------------------------
+
+###
+# @name simulate_chart_single_phase
+# Single-phase run — Chart.js output (Chart_1 … Chart_4).
+POST {{baseUrl}}/simulate/chart
+Content-Type: application/json
+
+[
+  {
+    "Model": "1",
+    "Phase": 1,
+    "Q_Air": 80.0,
+    "Bolus_C": 100.0,
+    "Feed_C": 0.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 500.0,
+    "Druck": 0.0,
+    "Dauer": 10.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 6.5,
+    "DO": 100.0,
+    "c_x0": 0.1
+  }
+]
+
+###
+# @name simulate_chart_four_phases
+# Full 4-phase fed-batch run — Chart.js output.
+POST {{baseUrl}}/simulate/chart
+Content-Type: application/json
+
+[
+  {
+    "Model": "1",
+    "Phase": 1,
+    "Q_Air": 80.0,
+    "Bolus_C": 100.0,
+    "Feed_C": 0.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 500.0,
+    "Druck": 0.0,
+    "Dauer": 10.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 6.5,
+    "DO": 100.0,
+    "c_x0": 0.1
+  },
+  {
+    "Phase": 2,
+    "Q_Air": 100.0,
+    "Bolus_C": 0.0,
+    "Feed_C": 1.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 1000.0,
+    "Druck": 0.0,
+    "Dauer": 10.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 6.5
+  },
+  {
+    "Phase": 3,
+    "Q_Air": 120.0,
+    "Bolus_C": 0.0,
+    "Feed_C": 2.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 1200.0,
+    "Druck": 0.2,
+    "Dauer": 10.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 6.5
+  },
+  {
+    "Phase": 4,
+    "Q_Air": 140.0,
+    "Bolus_C": 0.0,
+    "Feed_C": 4.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 1200.0,
+    "Druck": 0.4,
+    "Dauer": 10.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 6.5
+  }
+]
+
+# ---------------------------------------------------------------------------
+# Error cases
+# ---------------------------------------------------------------------------
+
+###
+# @name error_missing_model_in_phase1
+# Expects HTTP 422: "Model" is required for phase 1.
+POST {{baseUrl}}/simulate/df
+Content-Type: application/json
+
+[
+  {
+    "Phase": 1,
+    "Q_Air": 80.0,
+    "Bolus_C": 100.0,
+    "Feed_C": 0.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 500.0,
+    "Druck": 0.0,
+    "Dauer": 10.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 6.5,
+    "DO": 100.0,
+    "c_x0": 0.1
+  }
+]
+
+###
+# @name error_missing_DO_in_phase1
+# Expects HTTP 422: "DO" is required for phase 1.
+POST {{baseUrl}}/simulate/df
+Content-Type: application/json
+
+[
+  {
+    "Model": "1",
+    "Phase": 1,
+    "Q_Air": 80.0,
+    "Bolus_C": 100.0,
+    "Feed_C": 0.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 500.0,
+    "Druck": 0.0,
+    "Dauer": 10.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 6.5,
+    "c_x0": 0.1
+  }
+]
+
+###
+# @name error_missing_c_x0_in_phase1
+# Expects HTTP 422: "c_x0" is required for phase 1.
+POST {{baseUrl}}/simulate/df
+Content-Type: application/json
+
+[
+  {
+    "Model": "1",
+    "Phase": 1,
+    "Q_Air": 80.0,
+    "Bolus_C": 100.0,
+    "Feed_C": 0.0,
+    "Bolus_N": 5.0,
+    "Drehzahl": 500.0,
+    "Druck": 0.0,
+    "Dauer": 10.0,
+    "V_L": 100.0,
+    "T": 30.0,
+    "pH": 6.5,
+    "DO": 100.0
+  }
+]
+
+###
+# @name error_empty_phases_array
+# Expects HTTP 422: at least one phase is required.
+POST {{baseUrl}}/simulate/df
+Content-Type: application/json
+
+[]

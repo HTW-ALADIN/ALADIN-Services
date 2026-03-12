@@ -1,9 +1,11 @@
-from .base_input_adapter import InputAdapter
-from typing import ClassVar
-import sys
-import pandas as pd
 import json
 import logging
+import sys
+from typing import ClassVar
+
+import pandas as pd
+
+from .base_input_adapter import InputAdapter
 
 
 class STDINAdapter(InputAdapter):

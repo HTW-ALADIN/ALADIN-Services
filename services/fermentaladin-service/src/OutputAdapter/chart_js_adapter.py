@@ -1,8 +1,9 @@
-from .base_output_adapter import OutputAdapter
-import pandas as pd
 import json
+from typing import ClassVar, Dict, Generic, TypeVar
 
-from typing import Generic, TypeVar, ClassVar, Dict
+import pandas as pd
+
+from .base_output_adapter import OutputAdapter
 
 # Type variables representing the generic TS parameters
 TType = TypeVar("TType")  # corresponds to ChartType
@@ -66,8 +67,8 @@ class ChartJSAdapter(OutputAdapter):
                         "fill": False,
                         "lineTension": 0.2,
                         "pointRadius": 0,
-                        "backgroundColor": "petrol",
-                        "borderColor": "petrol",
+                        "backgroundColor": petrol,
+                        "borderColor": petrol,
                         "data": df["c_S2"].to_list(),
                     },
                 ],
@@ -98,7 +99,6 @@ class ChartJSAdapter(OutputAdapter):
                     },
                     "yR": {
                         "position": "right",
-                        "type": "linear",
                         "display": True,
                         "grid": {"drawOnChartArea": False},
                         "type": "linear",
@@ -203,7 +203,6 @@ class ChartJSAdapter(OutputAdapter):
                     },
                     "yR": {
                         "position": "right",
-                        "type": "linear",
                         "display": True,
                         "grid": {"drawOnChartArea": False},
                         "type": "linear",
@@ -291,7 +290,6 @@ class ChartJSAdapter(OutputAdapter):
                     },
                     "yR": {
                         "position": "right",
-                        "type": "linear",
                         "display": True,
                         "grid": {"drawOnChartArea": False},
                         "type": "linear",
@@ -376,7 +374,6 @@ class ChartJSAdapter(OutputAdapter):
                     },
                     "yR": {
                         "position": "right",
-                        "type": "linear",
                         "display": True,
                         "grid": {"drawOnChartArea": False},
                         "type": "linear",

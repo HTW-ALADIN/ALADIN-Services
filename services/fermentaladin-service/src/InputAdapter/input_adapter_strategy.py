@@ -1,8 +1,8 @@
-from Util.strategy_pattern import Strategy
 from InputAdapter.base_input_adapter import InputAdapter
+from InputAdapter.excel_adapter import ExcelAdapter
 from InputAdapter.file_input_adapter import FileInputAdapter
 from InputAdapter.std_in_adapter import STDINAdapter
-from InputAdapter.excel_adapter import ExcelAdapter
+from Util.strategy_pattern import Strategy
 
 
 class InputAdapterStrategy(Strategy[InputAdapter]):

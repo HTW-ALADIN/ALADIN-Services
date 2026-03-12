@@ -1,8 +1,10 @@
-from .base_input_adapter import InputAdapter
-from typing import ClassVar
-import pandas as pd
 import json
 import logging
+from typing import ClassVar
+
+import pandas as pd
+
+from .base_input_adapter import InputAdapter
 
 
 class FileInputAdapter(InputAdapter):

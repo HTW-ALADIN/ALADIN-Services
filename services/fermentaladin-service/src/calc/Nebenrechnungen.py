@@ -5,6 +5,7 @@ def Nebenrechnungen(Mpars_in, df_Fpar_in):
     # Mpars is of datatype series
     # df_Fpar_in is of datatype dataframe
     import math
+
     import numpy as np
 
     #############################################################
@@ -31,9 +32,7 @@ def Nebenrechnungen(Mpars_in, df_Fpar_in):
         # avoid division by Zero by setting parameter to a very small number
 
     ##globale Variablen zuweisen
-    V_L_0 = df_Fpar_in["V_L"][
-        0
-    ]  # Startvolumen in L TODO- erötern: maximales Arbeitsvolumen oder Startvolumen
+    V_L_0 = df_Fpar_in["V_L"][0]  # Startvolumen in L TODO- erötern: maximales Arbeitsvolumen oder Startvolumen
     #############################################################
     # Berechnung der Sauerstofflöslichkeit zu Beginn jeder Phase
     #############################################################
@@ -82,6 +81,6 @@ def Nebenrechnungen(Mpars_in, df_Fpar_in):
     V_L_m3 = V_L_0 / 1000  # Medienvolumen in m³
     kLa = 0.026 * (Pg / V_L_m3) ** 0.4 * v_g**0.5 * 3600  # calc kLa in 1/h
     df_Fpar_out["kLa"] = kLa
-    logging.debug(f"kLa: {df_Fpar_out["kLa"]}")
+    logging.debug(f"kLa: {df_Fpar_out['kLa']}")
 
     return [Mpars_out, df_Fpar_out]

@@ -1,8 +1,10 @@
-from Util.base_io_adapter import IOAdapter, unknown
-from abc import abstractmethod
-import pandas as pd
-import sys
 import logging
+import sys
+from abc import abstractmethod
+
+import pandas as pd
+
+from Util.base_io_adapter import IOAdapter, unknown
 
 
 class OutputAdapter(IOAdapter):

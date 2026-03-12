@@ -1,16 +1,16 @@
-from .base_input_adapter import InputAdapter
-from typing import ClassVar
-import pandas as pd
 import json
 import logging
+from typing import ClassVar
+
+import pandas as pd
+
+from .base_input_adapter import InputAdapter
 
 
 class ExcelAdapter(InputAdapter):
     __qualname__: ClassVar[str] = "excel"
 
-    def transform_data(
-        self, file_path: str, sheet_name: str = "Input_Array"
-    ) -> pd.DataFrame:
+    def transform_data(self, file_path: str, sheet_name: str = "Input_Array") -> pd.DataFrame:
         input_df = None
         try:
             input_df = pd.read_excel(

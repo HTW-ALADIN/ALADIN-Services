@@ -1,7 +1,8 @@
 FROM python:3.12-slim-trixie
 
 # The installer requires curl (and certificates) to download the release archive
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Download the latest installer
 ADD https://astral.sh/uv/install.sh /uv-installer.sh
@@ -16,9 +17,10 @@ ENV PATH="/root/.local/bin/:$PATH"
 COPY . /app
 
 # Sync the project into a new environment, asserting the lockfile is up to date
+# --no-dev: exclude dev dependencies (pytest, ruff) from the production image
 WORKDIR /app
-RUN uv sync --locked
+RUN uv sync --locked --no-dev
 
-RUN chmod +x calc_fermentation.sh
+EXPOSE 8000
 
-CMD ["tail", "-f","/dev/null"]
+CMD ["uv", "run", "uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
