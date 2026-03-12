@@ -10,7 +10,8 @@ from InputAdapter.input_adapter_strategy import input_adapter_strategy
 from OutputAdapter.base_output_adapter import OutputAdapter
 from OutputAdapter.output_adapter_strategy import output_adapter_strategy
 from Util.arg_parser import parser
-from Util.multiplot_ferm import multiplot_ferm
+
+# from Util.multiplot_ferm import multiplot_ferm
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL") or logging.INFO)
 

@@ -190,14 +190,7 @@ class ChartJSAdapter(OutputAdapter):
                         "min": 0,
                         "title": {
                             "display": True,
-                            "text": "p [barg], Q_Air [NL"
-                            + cdot
-                            + "L"
-                            + hochminus1
-                            + cdot
-                            + "min"
-                            + hochminus1
-                            + "]",
+                            "text": "p [barg], Q_Air [NL" + cdot + "L" + hochminus1 + cdot + "min" + hochminus1 + "]",
                             "font": {"size": labelfontsize},
                         },
                     },
@@ -361,14 +354,7 @@ class ChartJSAdapter(OutputAdapter):
                         "min": 0,
                         "title": {
                             "display": True,
-                            "text": "OUR [mmol"
-                            + cdot
-                            + "L"
-                            + hochminus1
-                            + cdot
-                            + "h"
-                            + hochminus1
-                            + "]",
+                            "text": "OUR [mmol" + cdot + "L" + hochminus1 + cdot + "h" + hochminus1 + "]",
                             "font": {"size": labelfontsize},
                         },
                     },
