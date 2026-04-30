@@ -1,0 +1,20 @@
+# TODO: Versionen pinnen, wenn die Implementierung steht
+# TODO: requirements-dev.txt anlegen
+# TODO: requirements-docker.txt anlegen
+
+# DEV
+pytest
+
+
+# DOCKER
+fastapi
+
+# Uvicorn ist der empfohlene ASGI-Server für FastAPI.
+# "standard" installiert zusätzlich einige nützliche Pakete wie "watchgod" für automatisches Neuladen bei Codeänderungen.
+uvicorn[standard]
+
+# Pydantic ist die Datenvalidierungsbibliothek, die FastAPI verwendet.
+pydantic
+
+
+# CODE

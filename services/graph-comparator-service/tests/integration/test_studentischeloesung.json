@@ -1,0 +1,292 @@
+{
+  "schema": "erd.v1",
+  "nodes": [
+    {
+      "id": "autovermieter",
+      "type": "entity",
+      "label": "Autovermieter"
+    },
+    {
+      "id": "filiale",
+      "type": "entity",
+      "label": "Filiale"
+    },
+    {
+      "id": "auto",
+      "type": "entity",
+      "label": "Auto"
+    },
+    {
+      "id": "kunde",
+      "type": "entity",
+      "label": "Kunde"
+    },
+    {
+      "id": "kombi",
+      "type": "entity",
+      "label": "Kombi"
+    },
+    {
+      "id": "kompaktwagen",
+      "type": "entity",
+      "label": "Kompaktwagen"
+    },
+    {
+      "id": "betreibt",
+      "type": "relationship",
+      "label": "betreibt"
+    },
+    {
+      "id": "verwaltet",
+      "type": "relationship",
+      "label": "verwaltet"
+    },
+    {
+      "id": "nutzt",
+      "type": "relationship",
+      "label": "nutzt"
+    },
+    {
+      "id": "mietet",
+      "type": "relationship",
+      "label": "mietet"
+    },
+    {
+      "id": "isa_auto_typ",
+      "type": "isa",
+      "label": "IS A"
+    },
+    {
+      "id": "autovermieter_name",
+      "type": "attribute",
+      "label": "name",
+      "key": "PK"
+    },
+    {
+      "id": "filiale_id",
+      "type": "attribute",
+      "label": "id",
+      "key": "PK"
+    },
+    {
+      "id": "filiale_ort",
+      "type": "attribute",
+      "label": "standort",
+      "key": "NONE"
+    },
+    {
+      "id": "filiale_leiter_attr",
+      "type": "attribute",
+      "label": "leiter",
+      "key": "NONE"
+    },
+    {
+      "id": "auto_fin",
+      "type": "attribute",
+      "label": "fin",
+      "key": "PK"
+    },
+    {
+      "id": "auto_marke",
+      "type": "attribute",
+      "label": "marke",
+      "key": "NONE"
+    },
+    {
+      "id": "auto_modell",
+      "type": "attribute",
+      "label": "modell",
+      "key": "NONE"
+    },
+    {
+      "id": "kunde_id",
+      "type": "attribute",
+      "label": "id",
+      "key": "PK"
+    },
+    {
+      "id": "kunde_email",
+      "type": "attribute",
+      "label": "email",
+      "key": "NONE"
+    },
+    {
+      "id": "kunde_telefon",
+      "type": "attribute",
+      "label": "telefon",
+      "key": "NONE"
+    },
+    {
+      "id": "mietet_vorgnr",
+      "type": "attribute",
+      "label": "vorgangs-nummer",
+      "key": "PK"
+    },
+    {
+      "id": "mietet_datbeginn",
+      "type": "attribute",
+      "label": "mietbeginn",
+      "key": "NONE"
+    },
+    {
+      "id": "mietet_datrueckgabe",
+      "type": "attribute",
+      "label": "rückgabe",
+      "key": "NONE"
+    }
+  ],
+  "edges": [
+    {
+      "from": "autovermieter",
+      "to": "autovermieter_name",
+      "kind": "hasAttribute"
+    },
+    {
+      "from": "filiale",
+      "to": "filiale_id",
+      "kind": "hasAttribute"
+    },
+    {
+      "from": "filiale",
+      "to": "filiale_ort",
+      "kind": "hasAttribute"
+    },
+    {
+      "from": "filiale",
+      "to": "filiale_leiter_attr",
+      "kind": "hasAttribute"
+    },
+    {
+      "from": "auto",
+      "to": "auto_fin",
+      "kind": "hasAttribute"
+    },
+    {
+      "from": "auto",
+      "to": "auto_marke",
+      "kind": "hasAttribute"
+    },
+    {
+      "from": "auto",
+      "to": "auto_modell",
+      "kind": "hasAttribute"
+    },
+    {
+      "from": "kunde",
+      "to": "kunde_id",
+      "kind": "hasAttribute"
+    },
+    {
+      "from": "kunde",
+      "to": "kunde_email",
+      "kind": "hasAttribute"
+    },
+    {
+      "from": "kunde",
+      "to": "kunde_telefon",
+      "kind": "hasAttribute"
+    },
+    {
+      "from": "mietet",
+      "to": "mietet_vorgnr",
+      "kind": "hasAttribute"
+    },
+    {
+      "from": "mietet",
+      "to": "mietet_datbeginn",
+      "kind": "hasAttribute"
+    },
+    {
+      "from": "mietet",
+      "to": "mietet_datrueckgabe",
+      "kind": "hasAttribute"
+    },
+    {
+      "from": "autovermieter",
+      "to": "betreibt",
+      "kind": "participates",
+      "cardinality": [
+        "1",
+        ""
+      ]
+    },
+    {
+      "from": "filiale",
+      "to": "betreibt",
+      "kind": "participates",
+      "cardinality": [
+        "n",
+        ""
+      ]
+    },
+    {
+      "from": "filiale",
+      "to": "verwaltet",
+      "kind": "participates",
+      "cardinality": [
+        "1",
+        ""
+      ]
+    },
+    {
+      "from": "auto",
+      "to": "verwaltet",
+      "kind": "participates",
+      "cardinality": [
+        "1",
+        ""
+      ]
+    },
+    {
+      "from": "filiale",
+      "to": "nutzt",
+      "kind": "participates",
+      "cardinality": [
+        "n",
+        ""
+      ]
+    },
+    {
+      "from": "kunde",
+      "to": "nutzt",
+      "kind": "participates",
+      "cardinality": [
+        "m",
+        ""
+      ]
+    },
+    {
+      "from": "kunde",
+      "to": "mietet",
+      "kind": "participates",
+      "cardinality": [
+        "n",
+        ""
+      ]
+    },
+    {
+      "from": "auto",
+      "to": "mietet",
+      "kind": "participates",
+      "cardinality": [
+        "m",
+        ""
+      ]
+    },
+    {
+      "from": "auto",
+      "to": "isa_auto_typ",
+      "kind": "isaSuper"
+    },
+    {
+      "from": "isa_auto_typ",
+      "to": "kombi",
+      "kind": "isaSub"
+    },
+    {
+      "from": "isa_auto_typ",
+      "to": "kompaktwagen",
+      "kind": "isaSub"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+services:
+  vergleicher:
+    # Dockerfile im aktuellen Ordner benutzen:
+    build: .
+    ports:
+      - "8000:8000"
+
+    # Volume-Mount für Live-Reload während der Entwicklung:
+    # Änderungen in ./app werden sofort im Container sichtbar.
+    volumes:
+      - ./src:/app/src
+    #   ^^^^^  ^^^^^^^^
+    #   Host   Container
+
+
+    # Befehl der beim Start ausgefuehrt wird (ueberschreibt CMD aus dem Dockerfile).
+    # Uvicorn, starte einen Server auf Port 8000,
+    # der bei jedem Request das Objekt namens app aus der Datei app/main.py befragt:
+
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
