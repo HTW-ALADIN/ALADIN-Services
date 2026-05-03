@@ -10,14 +10,34 @@ import {
 	MapResponseSchema,
 	ErrorResponseSchema,
 } from './schemas/map.schema.js';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-// Read version from package.json — tsx supports JSON imports
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pkg = require('../../package.json') as {
-	version: string;
-	description: string;
-};
+// Version and description are injected at build time by esbuild's define option.
+// For development (tsx), fall back to reading from package.json.
+declare const __PKG_VERSION__: string;
+declare const __PKG_DESCRIPTION__: string;
+
+let PKG_VERSION = '0.0.0';
+let PKG_DESCRIPTION = '';
+
+// Try to use injected constants (production build), fall back to package.json (development)
+try {
+	PKG_VERSION = __PKG_VERSION__;
+	PKG_DESCRIPTION = __PKG_DESCRIPTION__;
+} catch {
+	// Development mode: read from package.json
+	try {
+		const __dirname = dirname(fileURLToPath(import.meta.url));
+		const pkgPath = join(__dirname, '../../../package.json');
+		const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+		PKG_VERSION = pkg.version ?? '0.0.0';
+		PKG_DESCRIPTION = pkg.description ?? '';
+	} catch {
+		// Fallback defaults already set above
+	}
+}
 
 /**
  * Creates and configures the Fastify server instance.
@@ -41,14 +61,14 @@ export async function buildServer() {
 			info: {
 				title: 'jsonpath-mapper API',
 				description:
-					pkg.description +
+					PKG_DESCRIPTION +
 					'\n\n' +
 					'This REST API wraps the `jsonpath-mapper` library, exposing its ' +
 					'JSON-to-JSON transformation capabilities over HTTP.\n\n' +
 					'**Limitations:** Template values that require JavaScript functions ' +
 					'(`$formatting`, `$return`, `$disable`) cannot be expressed in a ' +
 					'JSON request body. Use the npm library directly for those cases.',
-				version: pkg.version,
+				version: PKG_VERSION,
 				contact: {
 					url: 'https://github.com/neilflatley/jsonpath-mapper',
 				},

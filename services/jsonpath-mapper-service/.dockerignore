@@ -1,0 +1,12 @@
+# Ignore everything by default, then allow only build inputs.
+**
+
+# Build metadata
+!package.json
+!package-lock.json
+!tsconfig.json
+!import-meta-url.js
+
+# Source and build scripts
+!src/**
+!scripts/**

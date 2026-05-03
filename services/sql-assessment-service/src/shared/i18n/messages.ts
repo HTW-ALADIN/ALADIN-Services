@@ -23,6 +23,7 @@ export type MessageKey =
 	// ── database controller ──────────────────────────────────────────────────
 	| 'DATABASE_ANALYSIS_SUCCESS'
 	| 'DATABASE_SCHEMA_EXTRACTION_FAILED'
+	| 'INIT_SQL_READ_ERROR'
 	// ── query execution ──────────────────────────────────────────────────────
 	| 'MISSING_OR_EMPTY_QUERY'
 	| 'QUERY_EMPTY'
@@ -36,6 +37,7 @@ export type MessageKey =
 	| 'GRADING_CONNECTION_READ_ERROR'
 	| 'GRADING_FAILED'
 	| 'GRADING_FAILED_WITH_ERROR'
+	| 'GRADING_PGLITE_NOT_SUPPORTED'
 	// ── grading feedback — result set ─────────────────────────────────────────
 	| 'FEEDBACK_RESULT_SET_MATCH'
 	| 'FEEDBACK_RESULT_SET_MISMATCH'
@@ -132,6 +134,8 @@ export const MESSAGES: MessageCatalogue = {
 		// database controller
 		DATABASE_ANALYSIS_SUCCESS: 'Connection successful.',
 		DATABASE_SCHEMA_EXTRACTION_FAILED: 'Unable to extract database schema.',
+		INIT_SQL_READ_ERROR: 'Failed to read the database initialization script.',
+
 		// query execution
 		MISSING_OR_EMPTY_QUERY: 'Missing or empty query string.',
 		QUERY_EMPTY: 'Query must not be empty.',
@@ -147,6 +151,8 @@ export const MESSAGES: MessageCatalogue = {
 		GRADING_CONNECTION_READ_ERROR: 'Error reading connection information.',
 		GRADING_FAILED: 'Unable to grade query.',
 		GRADING_FAILED_WITH_ERROR: 'Unable to grade query. Error: {{value}}',
+		GRADING_PGLITE_NOT_SUPPORTED:
+			'Grading endpoints require a PostgreSQL connection; PGlite is not supported here.',
 		// grading feedback — result set
 		FEEDBACK_RESULT_SET_MATCH: 'Same result set of both queries.',
 		FEEDBACK_RESULT_SET_MISMATCH: 'Result sets differ.',
@@ -268,6 +274,9 @@ export const MESSAGES: MessageCatalogue = {
 		DATABASE_ANALYSIS_SUCCESS: 'Verbindung erfolgreich.',
 		DATABASE_SCHEMA_EXTRACTION_FAILED:
 			'Das Datenbankschema konnte nicht extrahiert werden.',
+		INIT_SQL_READ_ERROR:
+			'Das Initialisierungsskript der Datenbank konnte nicht gelesen werden.',
+
 		// query execution
 		MISSING_OR_EMPTY_QUERY: 'Abfragezeichenkette fehlt oder ist leer.',
 		QUERY_EMPTY: 'Die Abfrage darf nicht leer sein.',
@@ -286,6 +295,8 @@ export const MESSAGES: MessageCatalogue = {
 		GRADING_FAILED: 'Die Abfrage konnte nicht bewertet werden.',
 		GRADING_FAILED_WITH_ERROR:
 			'Die Abfrage konnte nicht bewertet werden. Fehler: {{value}}',
+		GRADING_PGLITE_NOT_SUPPORTED:
+			'Bewertungsendpunkte erfordern eine PostgreSQL-Verbindung; PGlite wird hier nicht unterstützt.',
 		// grading feedback — result set
 		FEEDBACK_RESULT_SET_MATCH: 'Beide Abfragen liefern dasselbe Ergebnis.',
 		FEEDBACK_RESULT_SET_MISMATCH: 'Die Ergebnismengen stimmen nicht überein.',

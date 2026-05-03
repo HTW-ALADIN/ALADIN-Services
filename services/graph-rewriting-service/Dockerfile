@@ -1,5 +1,5 @@
 # ── Stage 1: builder ─────────────────────────────────────────────────────────
-# Compiles TypeScript to JavaScript and installs production-only dependencies.
+# Bundles TypeScript to JavaScript via esbuild.
 FROM node:22-slim AS builder
 
 WORKDIR /build
@@ -8,52 +8,47 @@ WORKDIR /build
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Copy source and compile
+# Copy source and build
 COPY tsconfig.json ./
+COPY scripts/ ./scripts/
 COPY src/ ./src/
 RUN npm run build
 
-# Prune to production deps only
-RUN npm ci --omit=dev
-
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
-# Uses the official Neo4j image as base so Neo4j is available out of the box.
-# Node 22 is installed via NodeSource.
-FROM neo4j:5.25.1
+# @grafeo-db/js ships a native Rust addon compiled against glibc (gnu).
+# Using node:22-slim (Debian/glibc) keeps the same libc as the builder so the
+# native binding works.  node:22-alpine (musl) would require the -musl variant.
+FROM node:22-slim
 
-# Install Node.js 22 (NodeSource) and supervisord
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates supervisor && \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Copy compiled app and production node_modules from builder
 WORKDIR /app
+
+# Copy bundled app output from builder
 COPY --from=builder /build/dist ./dist
-COPY --from=builder /build/node_modules ./node_modules
 
-# Copy process manager config and entrypoint
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY scripts/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-# Create log directory for supervisord
-RUN mkdir -p /var/log/supervisor
+# @grafeo-db/js ships a native Rust addon (.node file) that cannot be bundled
+# by esbuild and is therefore externalized.  Copy the packages so both the
+# in-memory and neo4j backends are available at runtime.
+COPY --from=builder /build/node_modules/@grafeo-db ./node_modules/@grafeo-db
 
 # ── Environment defaults ───────────────────────────────────────────────────────
-# NEO4J_AUTH is constructed in entrypoint.sh from USERNAME + PASSWORD.
-# NEO4J_PASSWORD has a default, but should be supplied at runtime.
+# DB_BACKEND defaults to "memory" (no external DB needed).
+# Set DB_BACKEND=neo4j to use Neo4j and supply all three NEO4J_* vars;
+# NEO4J_PASSWORD has no default and must be provided explicitly.
 ENV APP_ENV=production \
-    NEO4J_URI=bolt://localhost:7687 \
-    NEO4J_USERNAME=neo4j \
-    NEO4J_PASSWORD=graph_rewriting
+    NODE_ENV=production \
+    NEO4J_URI=bolt://neo4j:7687 \
+    NEO4J_USERNAME=neo4j
 
-
-# ── Ports ──────────────────────────────────────────────────────────────────────
+# ── Port ────────────────────────────────────────────────────────────────────────
 # 8080  – Fastify HTTP API
-# 7474  – Neo4j Browser UI
-# 7687  – Neo4j Bolt
-EXPOSE 8080 7474 7687
+EXPOSE 8080
 
-ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
+# Health check (optional)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:8080/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+
+# CLI is also available inside the container:
+#   docker run --rm -e NEO4J_URI=... graph-rewriting-service node dist/cli.js transform /data/request.json
+
+# Start API server by default
+CMD ["node", "dist/index.js"]

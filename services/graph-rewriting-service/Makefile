@@ -1,4 +1,4 @@
-.PHONY: build test lint start clean compile-schemas generate-openapi docker-build
+.PHONY: build test lint start clean compile-schemas generate-openapi docker-build smoke-test
 
 prep:
 	npm i
@@ -28,3 +28,6 @@ generate-openapi:
 
 docker-build:
 	docker build -t graph-rewriting-service .
+
+smoke-test:
+	./scripts/smoke-test.sh

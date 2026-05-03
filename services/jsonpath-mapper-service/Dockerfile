@@ -1,23 +1,23 @@
-# ── Stage 1: deps ────────────────────────────────────────────────────────────
-# Installs all dependencies (dev deps needed to run tsx at runtime).
-FROM node:22-slim AS deps
+# ── Stage 1: build ───────────────────────────────────────────────────────────
+# Install all deps (incl. devDeps for esbuild) and bundle the API.
+FROM node:22-slim AS build
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci
 
+COPY . .
+
+RUN node scripts/build-api.mjs
+
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
-# The API is served directly from TypeScript source via tsx (no separate
-# compile step), which is the canonical start:api script in package.json.
-FROM node:22-slim
+# Alpine base + single bundled file — no node_modules needed.
+FROM node:22-alpine
 
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY package.json ./
-COPY tsconfig.json ./
-COPY src/ ./src/
+COPY --from=build /app/dist/ ./
 
 # ── Environment defaults ───────────────────────────────────────────────────────
 ENV NODE_ENV=production \
@@ -28,4 +28,4 @@ ENV NODE_ENV=production \
 # Defaultport: 3000 – Fastify HTTP API
 EXPOSE 3000
 
-CMD ["node_modules/.bin/tsx", "src/api/index.ts"]
+CMD ["node", "api.cjs"]

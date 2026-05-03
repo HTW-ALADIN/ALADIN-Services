@@ -22,121 +22,314 @@ export class DatabaseAnalyzer {
 	): Promise<boolean> {
 		try {
 			const queryRunner = dataSource.createQueryRunner();
-
 			const tables: Table[] = await queryRunner.getTables();
-
 			await queryRunner.release();
 
 			const filteredTables = tables.filter((table) => table.schema === schema);
-
-			if (filteredTables.length == 0) return false;
-
-			// ----------------------------------------------------------------
-			// First pass: build base IParsedTable entries (columns + join paths)
-			// ----------------------------------------------------------------
-			const parsedTables: IParsedTable[] = [];
-			const selfJoinTable: IParsedTable[] = [];
-
-			filteredTables.forEach((table) => {
-				const tableName = this.getTableName(table.name);
-
-				// --- Collect PK column names for this table ---
-				const pkColumnNames = new Set<string>(
-					table.primaryColumns.map((pc) => pc.name),
-				);
-
-				// --- Collect FK column names for this table ---
-				const fkColumnNames = new Set<string>(
-					table.foreignKeys.flatMap((fk) => fk.columnNames),
-				);
-
-				// --- Collect unique-indexed column names (used for 1:1 detection) ---
-				const uniqueColumnNames = new Set<string>(
-					table.uniques.flatMap((u) => u.columnNames),
-				);
-
-				// --- Build parsed columns ---
-				const parsedColumns: IParsedColumn[] = table.columns.map((column) => ({
-					name: column.name,
-					tableName: tableName,
-					type: column.type,
-					isNullable: column.isNullable,
-					isPrimaryKey: pkColumnNames.has(column.name),
-					isForeignKey: fkColumnNames.has(column.name),
-					alternativeName: aliasMap?.columns?.[tableName]?.[column.name],
-				}));
-
-				// --- Build FK relationships ---
-				const relationships = this.buildRelationships(
-					table,
-					tableName,
-					pkColumnNames,
-					uniqueColumnNames,
-				);
-
-				// --- Build join paths ---
-				const joinPaths = this.findJoinPaths(
-					tableName,
-					[],
-					0,
-					new Set(),
-					filteredTables,
-					schema,
-					false,
-				);
-
-				const [selfJoinPaths, otherPaths] =
-					this.separateSelfAndNonSelfJoinPaths(joinPaths);
-
-				const baseEntry: Omit<
-					IParsedTable,
-					| 'entityType'
-					| 'relationships'
-					| 'supertableOf'
-					| 'subtableOf'
-					| 'alternativeName'
-				> = {
-					name: tableName,
-					joinPaths: [], // filled below
-					columns: parsedColumns,
-				};
-
-				parsedTables.push({
-					...baseEntry,
-					joinPaths: this.filterJoinPaths(tableName, otherPaths),
-					// Placeholder values — overwritten in second pass
-					entityType: EntityType.Strong,
-					relationships,
-					alternativeName: aliasMap?.tables?.[tableName],
-				});
-
-				selfJoinTable.push({
-					...baseEntry,
-					joinPaths: this.filterJoinPaths(tableName, selfJoinPaths),
-					entityType: EntityType.Strong,
-					relationships,
-					alternativeName: aliasMap?.tables?.[tableName],
-				});
-			});
-
-			// ----------------------------------------------------------------
-			// Second pass: classify entity types and wire supertype/subtype
-			// ----------------------------------------------------------------
-			this.classifyEntities(parsedTables, filteredTables, schema);
-			this.classifyEntities(selfJoinTable, filteredTables, schema);
-
-			// Propagate N:M cardinality onto the two tables bridged by each
-			// associative table.
-			this.propagateManyToMany(parsedTables);
-			this.propagateManyToMany(selfJoinTable);
-
-			databaseMetadata.set(databaseKey, parsedTables);
-			selfJoinDatabaseMetadata.set(databaseKey, selfJoinTable);
-			return true;
+			return this.buildAndStoreParsedTables(
+				filteredTables,
+				schema,
+				databaseKey,
+				aliasMap,
+			);
 		} catch (error: any) {
 			console.log('Unable to parse database schema', error);
 			return false;
 		}
+	}
+
+	/**
+	 * Analyzes the schema of an in-process PGlite database using
+	 * `information_schema` SQL queries and stores the result in the same
+	 * in-memory registry used by the PostgreSQL path.
+	 *
+	 * @param db  - A live PGlite instance that has already been initialised
+	 *             with the desired DDL.
+	 * @param key - The registry key under which metadata is stored (use
+	 *              `generatePGliteKey(databaseId)`).
+	 * @param aliasMap - Optional human-readable alias map.
+	 */
+	public async extractSchemaFromPGlite(
+		db: any,
+		key: string,
+		aliasMap?: IAliasMap,
+	): Promise<boolean> {
+		try {
+			const schema = 'public';
+
+			// --- Discover tables in the public schema ---
+			const tablesRes = await db.query(
+				`SELECT table_name FROM information_schema.tables
+				 WHERE table_schema = $1 AND table_type = 'BASE TABLE'
+				 ORDER BY table_name`,
+				[schema],
+			);
+			const tableNames: string[] = tablesRes.rows.map((r: any) => r.table_name);
+
+			if (tableNames.length === 0) return false;
+
+			// --- Build a synthetic Table-like array from information_schema ---
+			const syntheticTables: Table[] = [];
+
+			for (const tableName of tableNames) {
+				const colRes = await db.query(
+					`SELECT column_name, data_type, is_nullable
+					 FROM information_schema.columns
+					 WHERE table_schema = $1 AND table_name = $2
+					 ORDER BY ordinal_position`,
+					[schema, tableName],
+				);
+
+				const pkRes = await db.query(
+					`SELECT kcu.column_name
+					 FROM information_schema.table_constraints tc
+					 JOIN information_schema.key_column_usage kcu
+					   ON tc.constraint_name = kcu.constraint_name
+					   AND tc.table_schema = kcu.table_schema
+					 WHERE tc.constraint_type = 'PRIMARY KEY'
+					   AND tc.table_schema = $1 AND tc.table_name = $2
+					 ORDER BY kcu.ordinal_position`,
+					[schema, tableName],
+				);
+
+				const fkRes = await db.query(
+					`SELECT kcu.column_name, ccu.table_name AS referenced_table,
+					        ccu.column_name AS referenced_column
+					 FROM information_schema.table_constraints tc
+					 JOIN information_schema.key_column_usage kcu
+					   ON tc.constraint_name = kcu.constraint_name
+					   AND tc.table_schema = kcu.table_schema
+					 JOIN information_schema.constraint_column_usage ccu
+					   ON ccu.constraint_name = tc.constraint_name
+					   AND ccu.constraint_schema = tc.constraint_schema
+					 WHERE tc.constraint_type = 'FOREIGN KEY'
+					   AND tc.table_schema = $1 AND tc.table_name = $2
+					 ORDER BY kcu.ordinal_position`,
+					[schema, tableName],
+				);
+
+				const uqRes = await db.query(
+					`SELECT tc.constraint_name, kcu.column_name
+					 FROM information_schema.table_constraints tc
+					 JOIN information_schema.key_column_usage kcu
+					   ON tc.constraint_name = kcu.constraint_name
+					   AND tc.table_schema = kcu.table_schema
+					 WHERE tc.constraint_type = 'UNIQUE'
+					   AND tc.table_schema = $1 AND tc.table_name = $2
+					 ORDER BY tc.constraint_name, kcu.ordinal_position`,
+					[schema, tableName],
+				);
+
+				// Group columns by constraint name so that composite UNIQUE constraints
+				// are represented as a single entry with multiple columnNames, matching
+				// the shape TypeORM returns for the real-DB path.
+				const uqGroups = new Map<string, string[]>();
+				for (const r of uqRes.rows as Array<{
+					constraint_name: string;
+					column_name: string;
+				}>) {
+					const cols = uqGroups.get(r.constraint_name) ?? [];
+					cols.push(r.column_name);
+					uqGroups.set(r.constraint_name, cols);
+				}
+
+				// Query unique indices from pg_catalog so that explicit
+				// CREATE UNIQUE INDEX statements are also captured.  Primary-key
+				// indices are excluded because they are handled via primaryColumns.
+				// Results are ordered by attnum so that composite index column order
+				// is preserved.
+				const idxRes = await db.query(
+					`SELECT i.relname AS index_name, a.attname AS column_name
+					 FROM pg_class t
+					 JOIN pg_namespace n ON n.oid = t.relnamespace
+					 JOIN pg_index ix ON t.oid = ix.indrelid
+					 JOIN pg_class i ON i.oid = ix.indexrelid
+					 JOIN pg_attribute a
+					   ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+					 WHERE n.nspname = $1 AND t.relname = $2
+					   AND ix.indisunique = true AND NOT ix.indisprimary
+					 ORDER BY i.relname, a.attnum`,
+					[schema, tableName],
+				);
+
+				// Group per index name (composite indices → multiple columns).
+				const idxGroups = new Map<string, string[]>();
+				for (const r of idxRes.rows as Array<{
+					index_name: string;
+					column_name: string;
+				}>) {
+					const cols = idxGroups.get(r.index_name) ?? [];
+					cols.push(r.column_name);
+					idxGroups.set(r.index_name, cols);
+				}
+
+				// Cast as unknown as Table so the existing private helpers
+				// (which type-check against TypeORM's Table) can be reused.
+				// At runtime only the properties accessed by those helpers need
+				// to be present, and they are all provided below.
+				syntheticTables.push({
+					name: `${schema}.${tableName}`,
+					schema,
+					columns: colRes.rows.map((r: any) => ({
+						name: r.column_name,
+						type: r.data_type,
+						isNullable: r.is_nullable === 'YES',
+					})),
+					primaryColumns: pkRes.rows.map((r: any) => ({ name: r.column_name })),
+					foreignKeys: fkRes.rows.map((r: any) => ({
+						columnNames: [r.column_name],
+						referencedTableName: r.referenced_table,
+						referencedColumnNames: [r.referenced_column],
+					})),
+					uniques: [...uqGroups.values()].map((columnNames) => ({
+						columnNames,
+					})),
+					indices: [...idxGroups.entries()].map(([name, columnNames]) => ({
+						name,
+						columnNames,
+						isUnique: true,
+					})),
+				} as unknown as Table);
+			}
+
+			return this.buildAndStoreParsedTables(
+				syntheticTables,
+				schema,
+				key,
+				aliasMap,
+			);
+		} catch (error: any) {
+			console.log('Unable to parse PGlite database schema', error);
+			return false;
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Shared schema processing
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Builds `IParsedTable[]` from an already-filtered array of raw Table
+	 * objects (either real TypeORM Tables or synthetic objects from PGlite),
+	 * runs entity-type classification and N:M propagation, then stores the
+	 * results in the in-memory registry.
+	 */
+	private buildAndStoreParsedTables(
+		filteredTables: Table[],
+		schema: string,
+		key: string,
+		aliasMap?: IAliasMap,
+	): boolean {
+		if (filteredTables.length === 0) return false;
+
+		// ----------------------------------------------------------------
+		// First pass: build base IParsedTable entries (columns + join paths)
+		// ----------------------------------------------------------------
+		const parsedTables: IParsedTable[] = [];
+		const selfJoinTable: IParsedTable[] = [];
+
+		filteredTables.forEach((table) => {
+			const tableName = this.getTableName(table.name);
+
+			// --- Collect PK column names for this table ---
+			const pkColumnNames = new Set<string>(
+				table.primaryColumns.map((pc) => pc.name),
+			);
+
+			// --- Collect FK column names for this table ---
+			const fkColumnNames = new Set<string>(
+				table.foreignKeys.flatMap((fk) => fk.columnNames),
+			);
+
+			// --- Collect unique-indexed column names (used for 1:1 detection) ---
+			// Only single-column UNIQUE constraints make a column individually unique.
+			// A composite UNIQUE(col_a, col_b) must NOT mark col_a or col_b as unique
+			// on their own, otherwise buildRelationships() would misclassify 1:N FKs
+			// as 1:1.
+			const uniqueColumnNames = new Set<string>(
+				table.uniques
+					.filter((u) => u.columnNames.length === 1)
+					.map((u) => u.columnNames[0]),
+			);
+
+			// --- Build parsed columns ---
+			const parsedColumns: IParsedColumn[] = table.columns.map((column) => ({
+				name: column.name,
+				tableName: tableName,
+				type: column.type,
+				isNullable: column.isNullable,
+				isPrimaryKey: pkColumnNames.has(column.name),
+				isForeignKey: fkColumnNames.has(column.name),
+				alternativeName: aliasMap?.columns?.[tableName]?.[column.name],
+			}));
+
+			// --- Build FK relationships ---
+			const relationships = this.buildRelationships(
+				table,
+				tableName,
+				pkColumnNames,
+				uniqueColumnNames,
+			);
+
+			// --- Build join paths ---
+			const joinPaths = this.findJoinPaths(
+				tableName,
+				[],
+				0,
+				new Set(),
+				filteredTables,
+				schema,
+				false,
+			);
+
+			const [selfJoinPaths, otherPaths] =
+				this.separateSelfAndNonSelfJoinPaths(joinPaths);
+
+			const baseEntry: Omit<
+				IParsedTable,
+				| 'entityType'
+				| 'relationships'
+				| 'supertableOf'
+				| 'subtableOf'
+				| 'alternativeName'
+			> = {
+				name: tableName,
+				joinPaths: [], // filled below
+				columns: parsedColumns,
+			};
+
+			parsedTables.push({
+				...baseEntry,
+				joinPaths: this.filterJoinPaths(tableName, otherPaths),
+				// Placeholder values — overwritten in second pass
+				entityType: EntityType.Strong,
+				relationships,
+				alternativeName: aliasMap?.tables?.[tableName],
+			});
+
+			selfJoinTable.push({
+				...baseEntry,
+				joinPaths: this.filterJoinPaths(tableName, selfJoinPaths),
+				entityType: EntityType.Strong,
+				relationships,
+				alternativeName: aliasMap?.tables?.[tableName],
+			});
+		});
+
+		// ----------------------------------------------------------------
+		// Second pass: classify entity types and wire supertype/subtype
+		// ----------------------------------------------------------------
+		this.classifyEntities(parsedTables, filteredTables, schema);
+		this.classifyEntities(selfJoinTable, filteredTables, schema);
+
+		// Propagate N:M cardinality onto the two tables bridged by each
+		// associative table.
+		this.propagateManyToMany(parsedTables);
+		this.propagateManyToMany(selfJoinTable);
+
+		databaseMetadata.set(key, parsedTables);
+		selfJoinDatabaseMetadata.set(key, selfJoinTable);
+		return true;
 	}
 
 	// -------------------------------------------------------------------------
@@ -289,11 +482,16 @@ export class DatabaseAnalyzer {
 				? Participation.Optional
 				: Participation.Mandatory;
 
-			// 1:1 if the FK column has a unique constraint or unique index
+			// 1:1 if the FK column has a unique constraint or unique index that covers
+			// exactly that one column. Composite unique constraints / indices must not
+			// qualify, because UNIQUE(a, b) does not mean column a is individually unique.
 			const hasUniqueConstraint =
 				uniqueColumnNames.has(fkCol) ||
 				table.indices.some(
-					(idx) => idx.isUnique && idx.columnNames.includes(fkCol),
+					(idx) =>
+						idx.isUnique &&
+						idx.columnNames.length === 1 &&
+						idx.columnNames[0] === fkCol,
 				);
 
 			// N:M is assigned later by propagateManyToMany; default to 1:N here

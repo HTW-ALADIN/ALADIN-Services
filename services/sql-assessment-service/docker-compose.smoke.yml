@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: sql-smoke-postgres
+    environment:
+      POSTGRES_USER: smokeuser
+      POSTGRES_PASSWORD: smokepass
+      POSTGRES_DB: smokedb
+    ports:
+      - "5499:5432"
+    volumes:
+      - ./backup.sql:/docker-entrypoint-initdb.d/backup.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smokeuser -d smokedb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  app:
+    image: sql-assessment-service:smoke
+    container_name: sql-smoke-app
+    ports:
+      - "3099:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy

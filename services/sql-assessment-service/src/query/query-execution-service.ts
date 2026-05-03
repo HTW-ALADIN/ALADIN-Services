@@ -60,6 +60,43 @@ export class QueryExecutionService {
 		}
 	}
 
+	/**
+	 * Executes the given SQL SELECT query against an in-process PGlite
+	 * database.  Enforces the same SELECT-only constraint as `executeQuery`.
+	 *
+	 * @param query - Raw SQL string to execute.
+	 * @param db    - Live PGlite instance.
+	 * @param lang  - Language for error messages (defaults to 'en').
+	 *
+	 * @throws {QueryExecutionError} on empty input, non-SELECT statements, or
+	 *   database-level failures.
+	 */
+	public async executeQueryOnPGlite(
+		query: string,
+		db: any,
+		lang: SupportedLanguage = 'en',
+	): Promise<QueryExecutionResult> {
+		const trimmed = query.trim();
+
+		if (!trimmed) {
+			throw new QueryExecutionError(t('QUERY_EMPTY', lang), 'EMPTY_QUERY');
+		}
+
+		this.assertSelectOnly(trimmed, lang);
+
+		try {
+			const result = await db.query(trimmed);
+			const rows = result.rows as Record<string, unknown>[];
+			return { rows, rowCount: rows.length };
+		} catch (err) {
+			const detail = err instanceof Error ? err.message : String(err);
+			throw new QueryExecutionError(
+				t('QUERY_EXECUTION_FAILED', lang, detail),
+				'EXECUTION_FAILED',
+			);
+		}
+	}
+
 	// -------------------------------------------------------------------------
 	// Private helpers
 	// -------------------------------------------------------------------------

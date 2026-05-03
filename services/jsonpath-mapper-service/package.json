@@ -20,12 +20,19 @@
 		}
 	},
 	"docs": "https://github.com/dchester/jsonpath/blob/master/README.md",
+	"bin": {
+		"jsonpath-mapper": "./dist/cli.mjs"
+	},
 	"scripts": {
 		"build": "rimraf ./dist && rollup -c",
+		"build:api": "node scripts/build-api.mjs",
 		"prestart": "npm run build",
 		"start": "npm run test",
 		"start:api": "tsx src/api/index.ts",
+		"cli": "tsx src/cli.ts",
 		"test": "mocha tests/json-mapper.tests.mjs",
+		"test:cli": "mocha tests/cli.tests.mjs --timeout 10000",
+		"test:all": "mocha tests/json-mapper.tests.mjs tests/cli.tests.mjs --timeout 10000",
 		"test:coverage": "nyc mocha tests/json-mapper.tests.mjs",
 		"lint": "eslint ./src",
 		"generate:openapi": "tsx scripts/generate-openapi.ts"
@@ -73,6 +80,7 @@
 	"devDependencies": {
 		"@eslint/js": "^9.15.0",
 		"@rollup/plugin-typescript": "^12.1.1",
+		"@types/node": "^25.5.2",
 		"chai": "^5.1.2",
 		"eslint": "^9.15.0",
 		"eslint-plugin-mocha": "^10.5.0",
@@ -83,6 +91,7 @@
 		"rollup": "^4.27.4",
 		"rollup-plugin-dts": "^6.1.1",
 		"rollup-plugin-node-resolve": "^5.2.0",
+		"esbuild": "^0.25.0",
 		"tslib": "^2.8.1",
 		"tsx": "^4.21.0",
 		"typescript": "^5.7.2",

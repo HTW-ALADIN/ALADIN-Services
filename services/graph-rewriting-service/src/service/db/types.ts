@@ -102,7 +102,9 @@ export interface IGraphDB {
 	getEdge(
 		internalId: DBGraphEdgeInternalId
 	): Promise<DBGraphEdgeResult | undefined>;
-	deleteEdge(internalId: DBGraphEdgeInternalId): Promise<DBGraphEdgeResult>;
+	deleteEdge(
+		internalId: DBGraphEdgeInternalId
+	): Promise<DBGraphEdgeResult | undefined>;
 	deleteEdges(
 		internalIds: DBGraphEdgeInternalId[]
 	): Promise<DBGraphEdgeResult[]>;

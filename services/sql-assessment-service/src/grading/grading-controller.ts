@@ -28,6 +28,7 @@ import {
 	ProximityHeuristic,
 	QueryProximityService,
 } from './query-proximity-service';
+import { DatabaseService } from '../database/database-service';
 
 // ---------------------------------------------------------------------------
 // Internal helper types
@@ -217,6 +218,7 @@ export class GradingController {
 		private readonly astComparator: ASTComparator,
 		private readonly executionPlanComparator: ExecutionPlanComparator,
 		private readonly queryProximityService: QueryProximityService = new QueryProximityService(),
+		private readonly databaseService?: DatabaseService,
 	) {
 		this.router = Router();
 		this.initializeRoutes();
@@ -279,6 +281,29 @@ export class GradingController {
 			res.status(400).json({ message: t('GRADING_READ_ERROR', lang) });
 			return null;
 		}
+
+		// ---- auto-analyze ---------------------------------------------------
+		if (this.databaseService) {
+			const analyzed = await this.databaseService.ensureAnalyzed(
+				body.connectionInfo,
+				undefined,
+				lang,
+			);
+			if (!analyzed.ok) {
+				res.status(analyzed.status).json({ message: analyzed.message });
+				return null;
+			}
+		}
+		// ---------------------------------------------------------------------
+
+		// ---- PGlite branch --------------------------------------------------
+		if ((body.connectionInfo as any)?.type === 'pglite') {
+			res
+				.status(400)
+				.json({ message: t('GRADING_PGLITE_NOT_SUPPORTED', lang) });
+			return null;
+		}
+		// ---------------------------------------------------------------------
 
 		const validationError = validateConnectionInfo(body.connectionInfo, lang);
 		if (validationError) {
@@ -375,6 +400,27 @@ export class GradingController {
 				.status(400)
 				.json({ message: t('GRADING_CONNECTION_READ_ERROR', lang) });
 		}
+
+		// ---- auto-analyze ---------------------------------------------------
+		if (this.databaseService) {
+			const analyzed = await this.databaseService.ensureAnalyzed(
+				connectionInfo,
+				undefined,
+				lang,
+			);
+			if (!analyzed.ok) {
+				return res.status(analyzed.status).json({ message: analyzed.message });
+			}
+		}
+		// ---------------------------------------------------------------------
+
+		// ---- PGlite branch --------------------------------------------------
+		if ((connectionInfo as any)?.type === 'pglite') {
+			return res
+				.status(400)
+				.json({ message: t('GRADING_PGLITE_NOT_SUPPORTED', lang) });
+		}
+		// ---------------------------------------------------------------------
 
 		const validationError = validateConnectionInfo(connectionInfo, lang);
 		if (validationError) {

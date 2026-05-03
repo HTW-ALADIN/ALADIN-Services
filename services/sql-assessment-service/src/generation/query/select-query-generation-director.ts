@@ -1,4 +1,3 @@
-import { DataSource } from 'typeorm';
 import {
 	aggregateColumnType,
 	joinType,
@@ -16,7 +15,7 @@ import { QueryGenerationDirector } from './query-generation-director';
 import { SelectASTBuilder } from './select-ast-builder';
 import { PredicateGenerationService } from './predicate-generation-service';
 import { AST, ColumnRefItem, Parser, Select } from 'node-sql-parser';
-import { createQueryRunner } from '../../shared/utils/database-utils';
+import { RowQueryFn } from '../../shared/utils/database-utils';
 import { isValidForAggregation } from '../../shared/utils/validation';
 import { random, randomBoolean, shuffle } from '../../shared/utils/random';
 
@@ -34,7 +33,7 @@ export class SelectQueryGenerationDirector implements QueryGenerationDirector {
 		context: ITaskConfiguration,
 		metadata: IParsedTable[],
 		filteredTables: IParsedTable[],
-		datasource: DataSource,
+		runQuery: RowQueryFn,
 		schema: string,
 		shuffleCounter: number,
 	): Promise<[string, AST]> {
@@ -81,7 +80,7 @@ export class SelectQueryGenerationDirector implements QueryGenerationDirector {
 				context,
 				metadata,
 				filteredTables,
-				datasource,
+				runQuery,
 				schema,
 				shuffleCounter + 1,
 			);
@@ -99,7 +98,7 @@ export class SelectQueryGenerationDirector implements QueryGenerationDirector {
 					context,
 					metadata,
 					filteredTables,
-					datasource,
+					runQuery,
 					schema,
 					shuffleCounter + 1,
 				);
@@ -132,7 +131,7 @@ export class SelectQueryGenerationDirector implements QueryGenerationDirector {
 					context,
 					metadata,
 					filteredTables,
-					datasource,
+					runQuery,
 					schema,
 					shuffleCounter + 1,
 				);
@@ -142,7 +141,7 @@ export class SelectQueryGenerationDirector implements QueryGenerationDirector {
 				const constraints = await this.predicateService.generatePredicates(
 					mergedColumns,
 					context.predicateCount,
-					datasource,
+					runQuery,
 					schema,
 					context.operationTypes,
 				);
@@ -153,7 +152,7 @@ export class SelectQueryGenerationDirector implements QueryGenerationDirector {
 					context,
 					metadata,
 					filteredTables,
-					datasource,
+					runQuery,
 					schema,
 					shuffleCounter + 1,
 				);
@@ -165,7 +164,7 @@ export class SelectQueryGenerationDirector implements QueryGenerationDirector {
 				groupByColumn = context.having
 					? await this.predicateService.generateHavingClauseAndReturnGroupByColumn(
 							mergedColumns,
-							datasource,
+							runQuery,
 							schema,
 						)
 					: this.predicateService.generateGroupByClauseAndReturnColumn(
@@ -177,7 +176,7 @@ export class SelectQueryGenerationDirector implements QueryGenerationDirector {
 					context,
 					metadata,
 					filteredTables,
-					datasource,
+					runQuery,
 					schema,
 					shuffleCounter + 1,
 				);
@@ -225,19 +224,8 @@ export class SelectQueryGenerationDirector implements QueryGenerationDirector {
 		const ast: Select = this.astBuilder.getGeneratedAST();
 		const query = parser.sqlify(ast, { database: 'postgresql' });
 
-		const queryRunner = createQueryRunner(datasource);
-		if (!queryRunner) {
-			console.log(
-				'No database connection, please establish a database connection',
-			);
-			throw new Error(
-				'No database connection, please establish a database connection',
-			);
-		}
-
 		try {
-			const result = await queryRunner.query(query);
-			queryRunner.release();
+			const result = await runQuery(query);
 			console.log('Successful execution of generated query');
 
 			if (result.length <= 0) {
@@ -247,14 +235,13 @@ export class SelectQueryGenerationDirector implements QueryGenerationDirector {
 					context,
 					metadata,
 					filteredTables,
-					datasource,
+					runQuery,
 					schema,
 					shuffleCounter + 1,
 				);
 			}
 		} catch (error) {
 			console.log('Unable to execute generated query.');
-			queryRunner.release();
 			throw error;
 		}
 
