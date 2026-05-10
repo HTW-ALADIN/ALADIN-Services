@@ -112,7 +112,7 @@ def run_comparison_pipeline(reference: Any, candidate: Any) -> ComparisonResult:
         return ComparisonResult(
             match=False,
             feedback=["Die Eingabe entspricht nicht dem erwarteten Format.", str(exc)],
-            limitations=["Wegen ungültiger Eingabedaten kein Vergleich durchgeführt."]
+            warnings=["Wegen ungültiger Eingabedaten kein Vergleich durchgeführt."]
         )
     except Exception as e:
         log.error(f"Unerwarteter Fehler: {e}")

@@ -74,8 +74,7 @@ class ComparisonResult(BaseModel):
     # Wie sicher ist sich das System beim Vergleich? (Standard 1.0 = volle Sicherheit, 0.0 = keine Aussage möglich)
     confidence: float = 1.0
 
-    # Beschränkungen des Vergleichs / ERROR
-    limitations: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
     # ggf. Version der Vergleichspipeline, damit Feedback auf bekannte Fehler oder Einschränkungen bezogen werden kann
     pipeline_version: str | None = None

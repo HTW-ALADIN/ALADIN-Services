@@ -29,7 +29,7 @@ class DefaultComparator:
                 "candidate": candidate_stats,
             },
             confidence=1.0,
-            limitations=[
+            warnings=[
                 "Aktuell werden nur die Anzahlen von Knotentypen und Kantenarten verglichen."
             ],
             pipeline_version="counts.v1",
