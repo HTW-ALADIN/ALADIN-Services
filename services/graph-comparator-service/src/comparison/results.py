@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-DiffOp = Literal[
+DiffOpType = Literal[
     "node_missing",   # in reference aber nicht in candidate
     "node_extra",     # in candidate aber nicht in reference
     "node_modified",  # beide vorhanden, Eigenschaften abweichend
@@ -28,7 +28,7 @@ class DiffOperation(BaseModel):
     """
     model_config = ConfigDict(extra="forbid")
 
-    op: DiffOp
+    op: DiffOpType
     target: str
     severity: Severity = "error"
     description: str = ""

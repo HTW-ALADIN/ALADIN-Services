@@ -1,5 +1,5 @@
 services:
-  vergleicher:
+  graph-comparator:
     # Dockerfile im aktuellen Ordner benutzen:
     build: .
     ports:

@@ -7,7 +7,7 @@ from src.comparison.results import ComparisonResult
 from src.diagrams.erd.models import Graph
 
 
-class JsonComparator(ABC):
+class GraphComparator(ABC):
 
     @abstractmethod
     def compare(

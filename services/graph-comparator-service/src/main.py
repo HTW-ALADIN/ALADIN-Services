@@ -4,12 +4,12 @@ from typing import Any
 from fastapi import FastAPI
 from pydantic import BaseModel, ValidationError
 
-from src.comparison.base import JsonComparator                      # Interface
+from src.comparison.base import GraphComparator                     # Interface
 # from src.comparison.comparator_dummy import DummyComparator       # Platzhalter-Implementierung
-from src.comparison.comparator_default import DefaultComparator     # Echte Implementierung
+from src.comparison.default_comparator import DefaultComparator     # Echte Implementierung
 from src.comparison.results import ComparisonResult                 # Pydantic-Modell für die Vergleichsergebnisse
 
-from src.feedback.feedback_builder_default import DefaultFeedbackBuilder   
+from src.feedback.default_feedback_builder import DefaultFeedbackBuilder
 
 from src.diagrams.erd.models import Graph
 
@@ -23,7 +23,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
 )
-log = logging.getLogger("vergleicher")
+log = logging.getLogger("graph-comparator")
 
 
 
@@ -42,11 +42,11 @@ class CompareRequest(BaseModel):
 # Strategy Pattern, hier die Implementierung des Vergleichers wechseln
 # ---------------------------------------------------------------------------
 
-def get_comparator() -> JsonComparator:
+def create_comparator() -> GraphComparator:
     # return DummyComparator()
     return DefaultComparator()
 
-def get_feedback_builder() -> DefaultFeedbackBuilder:
+def create_feedback_builder() -> DefaultFeedbackBuilder:
     return DefaultFeedbackBuilder()
 
 
@@ -80,12 +80,12 @@ def normalize_graphs(reference: Any, candidate: Any) -> tuple[Any, Any]:
 def compare_graphs(reference: Any, candidate: Any) -> ComparisonResult:
     """Holt den aktiven Comparator und führt den Vergleich aus."""
     log.info("Vergleiche")
-    return get_comparator().compare(reference, candidate)
+    return create_comparator().compare(reference, candidate)
 
 
-def build_final_feedback(result: ComparisonResult) -> ComparisonResult:
+def build_feedback(result: ComparisonResult) -> ComparisonResult:
     log.info("Erstelle Feedback")
-    result.feedback = get_feedback_builder().build(result)
+    result.feedback = create_feedback_builder().build(result)
     return result
 
 
@@ -105,7 +105,7 @@ def run_comparison_pipeline(reference: Any, candidate: Any) -> ComparisonResult:
         comparison_result = compare_graphs(ref_norm, cand_norm)
             
         # Feedback-Anreicherung
-        final_result = build_final_feedback(comparison_result)
+        final_result = build_feedback(comparison_result)
             
     except ValidationError as exc:
         log.warning("Validierungsfehler in der Pipeline")
@@ -127,7 +127,7 @@ def run_comparison_pipeline(reference: Any, candidate: Any) -> ComparisonResult:
 # FastAPI App
 # TODO: Decorations besser verstehen.
 # ---------------------------------------------------------------------------
-app = FastAPI(title="JSON-Vergleicher", version="0.0.0")
+app = FastAPI(title="Graph Comparator", version="0.0.0")
 
 
 @app.get("/health")
