@@ -4,11 +4,11 @@ from typing import Any
 from fastapi import FastAPI
 from pydantic import BaseModel, ValidationError
 
-from src.comparison.base import GraphComparator                     # Interface
-# from src.comparison.comparator_dummy import DummyComparator       # Platzhalter-Implementierung
-from src.comparison.default_comparator import DefaultComparator     # Echte Implementierung
-from src.comparison.results import ComparisonResult                 # Pydantic-Modell für die Vergleichsergebnisse
+from src.comparison.base import GraphComparator
+from src.comparison.default_comparator import DefaultComparator
+from src.comparison.results import ComparisonResult
 
+from src.feedback.base import FeedbackBuilder
 from src.feedback.default_feedback_builder import DefaultFeedbackBuilder
 
 from src.diagrams.erd.models import Graph
@@ -46,7 +46,7 @@ def create_comparator() -> GraphComparator:
     # return DummyComparator()
     return DefaultComparator()
 
-def create_feedback_builder() -> DefaultFeedbackBuilder:
+def create_feedback_builder() -> FeedbackBuilder:
     return DefaultFeedbackBuilder()
 
 
@@ -71,13 +71,13 @@ def validate_input(reference: Any, candidate: Any) -> tuple[Graph, Graph]:
 
 
 
-def normalize_graphs(reference: Any, candidate: Any) -> tuple[Any, Any]:
+def normalize_graphs(reference: Graph, candidate: Graph) -> tuple[Graph, Graph]:
     """Normalisierung"""
     log.info("Normalisiere")
     return reference, candidate
 
 
-def compare_graphs(reference: Any, candidate: Any) -> ComparisonResult:
+def compare_graphs(reference: Graph, candidate: Graph) -> ComparisonResult:
     """Holt den aktiven Comparator und führt den Vergleich aus."""
     log.info("Vergleiche")
     return create_comparator().compare(reference, candidate)
