@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "erd-diff.v1.schema.json",
+  "title": "ERD Diff (erd-diff.v1)",
+  "description": "Format für Korrekturen/Unterschiede zwischen zwei ER-Diagrammen im erd.v1-Format. Beschreibt Operationen, die auf eine Studierenden-Lösung angewendet werden müssen, um die Musterlösung zu erhalten.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operations"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "erd-diff.v1"
+    },
+    "source": {
+      "type": "string",
+      "description": "Referenz/ID der Studierenden-Lösung (Quell-Diagramm)."
+    },
+    "target": {
+      "type": "string",
+      "description": "Referenz/ID der Musterlösung (Ziel-Diagramm)."
+    },
+    "operations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/operation" },
+      "description": "Geordnete Liste der Operationen. Reihenfolge: erst remove, dann modify, dann add."
+    }
+  },
+
+  "$defs": {
+
+    "operation": {
+      "type": "object",
+      "required": ["op", "target"],
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": ["add_node", "remove_node", "modify_node", "add_edge", "remove_edge", "modify_edge"],
+          "description": "Art der Operation."
+        },
+        "target": {
+          "type": "string",
+          "description": "ID des betroffenen Knotens oder Kanten-Bezeichner (z.B. 'student' oder 'student->besucht')."
+        },
+        "description": {
+          "type": "string",
+          "description": "Menschenlesbare Beschreibung der Korrektur."
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warning", "info"],
+          "default": "error",
+          "description": "Schwere des Fehlers: error = strukturell falsch, warning = suboptimal, info = stilistisch."
+        },
+        "node_data": {
+          "$ref": "#/$defs/node_data",
+          "description": "Vollständige Knoten-Daten (bei add_node)."
+        },
+        "edge_data": {
+          "$ref": "#/$defs/edge_data",
+          "description": "Vollständige Kanten-Daten (bei add_edge)."
+        },
+        "changes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/property_change" },
+          "description": "Liste der Eigenschaftsänderungen (bei modify_node / modify_edge)."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "op": { "const": "add_node" } } },
+          "then": { "required": ["op", "target", "node_data"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "add_edge" } } },
+          "then": { "required": ["op", "target", "edge_data"] }
+        },
+        {
+          "if": { "properties": { "op": { "enum": ["modify_node", "modify_edge"] } } },
+          "then": { "required": ["op", "target", "changes"] }
+        }
+      ]
+    },
+
+    "property_change": {
+      "type": "object",
+      "required": ["property", "from", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "property": {
+          "type": "string",
+          "description": "Name der geänderten Eigenschaft (z.B. 'type', 'label', 'key', 'kind', 'cardinality')."
+        },
+        "from": {
+          "description": "Alter Wert (im Studierenden-Diagramm). null wenn vorher nicht vorhanden."
+        },
+        "to": {
+          "description": "Neuer Wert (in der Musterlösung). null wenn entfernt."
+        }
+      }
+    },
+
+    "node_data": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id":    { "type": "string" },
+        "type":  { "type": "string", "enum": ["entity", "relationship", "attribute", "isa"] },
+        "label": { "type": "string" },
+        "flags": { "type": "array", "items": { "type": "string" } },
+        "key":   { "type": "string", "enum": ["NONE", "PK", "PARTIAL"] }
+      }
+    },
+
+    "edge_data": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from":        { "type": "string" },
+        "to":          { "type": "string" },
+        "kind":        { "type": "string", "enum": ["participates", "hasAttribute", "isaSuper", "isaSub"] },
+        "cardinality": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } }
+      }
+    }
+  }
+}

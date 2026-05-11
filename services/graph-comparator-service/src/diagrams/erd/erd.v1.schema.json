@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "erd.v1.schema.json",
+  "title": "ERD JSON (erd.v1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["nodes", "edges"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "erd.v1",
+      "description": "Optionaler Schema-Name/Version"
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    }
+  },
+  "$defs": {
+    "idString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_\\-:.]+$",
+      "description": "Einfache ID (ohne Leerzeichen)."
+    },
+    "nodeType": {
+      "type": "string",
+      "enum": ["entity", "relationship", "attribute", "isa"]
+    },
+    "attributeKey": {
+      "type": "string",
+      "enum": ["NONE", "PK", "PARTIAL"],
+      "description": "Key-Typ für Attribute (PK etc.)."
+    },
+    "cardValue": {
+      "type": "string",
+      "enum": ["", "0..1", "1", "n", "m", "*", "0..n", "1..n"],
+      "description": "Erlaubte Kardinalitäts-Strings."
+    },
+    "cardTuple": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "$ref": "#/$defs/cardValue" },
+        { "$ref": "#/$defs/cardValue" }
+      ],
+      "items": false,
+      "description": "Tupel: [fromCard, toCard]"
+    },
+    "edgeKind": {
+      "type": "string",
+      "enum": ["participates", "hasAttribute", "isaSuper", "isaSub"]
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "$ref": "#/$defs/idString" },
+        "type": { "$ref": "#/$defs/nodeType" },
+        "label": { "type": "string" },
+        "flags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "key": { "$ref": "#/$defs/attributeKey" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "attribute" } },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "key": { "$ref": "#/$defs/attributeKey" }
+            }
+          },
+          "else": {
+            "properties": {
+              "key": false
+            }
+          }
+        }
+      ]
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/idString" },
+        "to": { "$ref": "#/$defs/idString" },
+        "kind": { "$ref": "#/$defs/edgeKind" },
+        "cardinality": { "$ref": "#/$defs/cardTuple" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "const": "participates" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "required": ["cardinality"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": { "enum": ["hasAttribute", "isaSuper", "isaSub"] }
+            },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": { "cardinality": false }
+          }
+        }
+      ]
+    }
+  }
+}
