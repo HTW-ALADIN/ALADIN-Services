@@ -1,0 +1,40 @@
+[project]
+name = "openai-wrapper-service"
+version = "0.1.0"
+description = "FastAPI and CLI wrapper around the official OpenAI API"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "openai>=1.99.0,<3.0.0",
+    "pydantic>=2.10.0",
+    "uvicorn[standard]>=0.34.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27.0",
+    "pytest>=9.0.0",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.9.0",
+]
+
+[project.scripts]
+openai-wrapper = "openai_wrapper_service.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openai_wrapper_service"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
