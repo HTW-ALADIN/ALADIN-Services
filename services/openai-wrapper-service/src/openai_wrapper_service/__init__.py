@@ -1,1 +1,0 @@
-"""OpenAI wrapper service package."""
