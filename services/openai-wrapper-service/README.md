@@ -8,6 +8,18 @@ The service uses the OpenAI Python SDK through the adapter in `src/openai_wrappe
 - A CLI that mirrors the REST behavior
 - A generated OpenAPI specification
 
+## Code Layout
+
+```text
+src/openai_wrapper_service/api.py      # FastAPI app and routes
+src/openai_wrapper_service/client.py   # OpenAI SDK adapter
+src/openai_wrapper_service/cli.py      # Command line interface
+src/openai_wrapper_service/schemas.py  # Request and response models
+scripts/generate_openapi.py            # OpenAPI export utility
+```
+
+The service directory uses the repository's kebab-case convention (`openai-wrapper-service`). The Python package uses snake_case (`openai_wrapper_service`) because Python imports cannot contain hyphens.
+
 ## Configuration
 
 Set an OpenAI API key before using the API or CLI:

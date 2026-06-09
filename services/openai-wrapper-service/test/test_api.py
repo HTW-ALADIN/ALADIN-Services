@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from api import app, get_service
+from openai_wrapper_service.api import app, get_service
 from openai_wrapper_service.schemas import (
     GenerateRequest,
     GenerateResponse,

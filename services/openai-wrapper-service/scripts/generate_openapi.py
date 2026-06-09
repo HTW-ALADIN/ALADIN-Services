@@ -4,13 +4,13 @@ from __future__ import annotations
 import json
 import pathlib
 
-from api import app
+from openai_wrapper_service.api import app
 
-_src_dir = pathlib.Path(__file__).parent
+_script_dir = pathlib.Path(__file__).parent
 
 
 def main() -> pathlib.Path:
-    service_root = _src_dir.parent
+    service_root = _script_dir.parent
     output_path = service_root / "openai-wrapper-service.openapi.json"
 
     output_path.write_text(json.dumps(app.openapi(), indent=2, ensure_ascii=False))

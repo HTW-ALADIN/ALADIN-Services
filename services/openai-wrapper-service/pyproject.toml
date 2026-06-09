@@ -30,7 +30,7 @@ build-backend = "hatchling.build"
 packages = ["src/openai_wrapper_service"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "scripts"]
 
 [tool.ruff]
 target-version = "py312"

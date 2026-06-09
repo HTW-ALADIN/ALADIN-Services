@@ -14,4 +14,4 @@ RUN uv sync --locked --no-dev
 
 EXPOSE 8002
 
-CMD ["uv", "run", "--no-sync", "uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8002", "--app-dir", "src"]
+CMD ["uv", "run", "--no-sync", "uvicorn", "openai_wrapper_service.api:app", "--host", "0.0.0.0", "--port", "8002", "--app-dir", "src"]
