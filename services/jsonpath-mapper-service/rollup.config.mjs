@@ -23,6 +23,18 @@ export default [
     plugins: [typescriptPlugin()],
   },
   {
+    input: 'src/cli.ts',
+    output: [
+      {
+        file: 'dist/cli.mjs',
+        format: 'es',
+        banner: '#!/usr/bin/env node',
+      },
+    ],
+    external: ['jsonpath-plus', 'node:fs', 'node:path'],
+    plugins: [typescriptPlugin()],
+  },
+  {
     input: 'src/index.ts',
     output: [{ file: 'dist/jsonpath-mapper.d.ts', format: 'es' }],
     plugins: [dtsPlugin()],

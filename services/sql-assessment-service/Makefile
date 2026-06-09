@@ -1,4 +1,4 @@
-.PHONY: prep build test lint start clean docker-build generate-openapi
+.PHONY: prep build test lint start clean docker-build generate-openapi cli
 
 prep:
 	npm ci
@@ -24,3 +24,7 @@ docker-build:
 
 generate-openapi:
 	npm run generate-openapi
+
+cli:
+	npm run build
+	@echo "CLI ready: node build/cli/index.js --help"

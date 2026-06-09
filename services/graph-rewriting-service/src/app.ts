@@ -17,6 +17,7 @@ import { CorsOptions } from './config/cors';
 import healthRoutes from './routes/health';
 
 import neo4jConnector from './plugins/neo4j/index';
+import memoryConnector from './plugins/memory/index';
 import grsPlugin from './plugins/grs/index';
 
 import { logger } from './utils/logger';
@@ -48,8 +49,13 @@ export function buildServer(): FastifyInstance {
 
 	server.register(healthRoutes);
 
-	// Use neo4j
-	server.register(neo4jConnector);
+	// Register database backend based on DB_BACKEND env var
+	if (appEnvConfig.DB_BACKEND === 'neo4j') {
+		server.register(neo4jConnector);
+	} else {
+		server.register(memoryConnector);
+	}
+
 	// Add grs plugin
 	server.register(grsPlugin);
 

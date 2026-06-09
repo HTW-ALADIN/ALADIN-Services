@@ -8,7 +8,6 @@ import { GradingController } from '../grading/grading-controller';
 import { DescriptionController } from '../generation/description/description-controller';
 import { QueryExecutionController } from '../query/query-execution-controller';
 import { getSwaggerSpec } from '../openapi';
-import dotenv from 'dotenv';
 const api = express();
 
 api.use(bodyParser.json());
@@ -34,8 +33,6 @@ export function registerControllers(
 }
 
 export function startRestApi() {
-	dotenv.config();
-
 	const PORT = process.env.PORT || 3000;
 	api.listen(PORT, () => {
 		console.log(`Server is running on port ${PORT}`);

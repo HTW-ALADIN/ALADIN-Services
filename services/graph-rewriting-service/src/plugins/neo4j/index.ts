@@ -13,6 +13,7 @@ import GraphSchema from '../../schemas/graph.schema.json';
 import GraphInstantiatedAttribute from '../../schemas/instantiated-attribute.schema.json';
 
 import { Neo4jGraphService } from '../../service/db/neo4j/graph.service';
+import { IGraphDB } from '../../service/db/types';
 
 declare module 'fastify' {
 	interface FastifyInstance {
@@ -20,7 +21,7 @@ declare module 'fastify' {
 	}
 
 	interface FastifyRequest {
-		dbGraphService: Neo4jGraphService | null;
+		dbGraphService: IGraphDB | null;
 	}
 }
 
@@ -62,7 +63,7 @@ const neo4jConnector: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 	if (driver) {
 		if (!fastify?.neo4j) {
 			fastify.decorate('neo4j', driver);
-			fastify.decorateRequest<Neo4jGraphService | null, 'dbGraphService'>(
+			fastify.decorateRequest<IGraphDB | null, 'dbGraphService'>(
 				'dbGraphService',
 				null
 			);

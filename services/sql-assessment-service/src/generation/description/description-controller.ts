@@ -13,6 +13,7 @@ import {
 import {
 	buildAliasMapFromTables,
 	generateDatabaseKey,
+	generatePGliteKey,
 } from '../../shared/utils/database-utils';
 import {
 	isDatabaseRegistered,
@@ -24,6 +25,7 @@ import {
 } from '../../database/internal-memory';
 import { TaskDescriptionGenerationService } from './task-description-generation-service';
 import { t, resolveLanguageCode, SupportedLanguage } from '../../shared/i18n';
+import { DatabaseService } from '../../database/database-service';
 
 const sqlParser = new Parser();
 
@@ -220,11 +222,14 @@ const sqlParser = new Parser();
 export class DescriptionController {
 	public router: Router;
 	private taskDescriptionGenerationService: TaskDescriptionGenerationService;
+	private readonly databaseService?: DatabaseService;
 
 	constructor(
 		taskDescriptionGenerationService: TaskDescriptionGenerationService,
+		databaseService?: DatabaseService,
 	) {
 		this.taskDescriptionGenerationService = taskDescriptionGenerationService;
+		this.databaseService = databaseService;
 		this.router = Router();
 		this.initializeRoutes();
 	}
@@ -251,16 +256,17 @@ export class DescriptionController {
 	// Shared request validation — returns null on success, a Response on failure
 	// ---------------------------------------------------------------------------
 
-	private validateRequest(
+	private async validateRequest(
 		req: Request,
 		res: Response,
-	): {
+	): Promise<{
 		options: IRequestDescriptionOptions;
 		databaseKey: string;
 		lang: SupportedLanguage;
 		tables: IParsedTable[];
 		schemaAliasMap: IAliasMap | undefined;
-	} | null {
+		schema: string;
+	} | null> {
 		let options: IRequestDescriptionOptions;
 
 		try {
@@ -287,17 +293,49 @@ export class DescriptionController {
 			return null;
 		}
 
-		const connectionError = validateConnectionInfo(
-			options.connectionInfo,
-			lang,
-		);
-		if (connectionError) {
-			res.status(400).json({ message: connectionError });
-			return null;
+		// ---- auto-analyze ---------------------------------------------------
+		if (this.databaseService) {
+			const analyzed = await this.databaseService.ensureAnalyzed(
+				options.connectionInfo,
+				undefined,
+				lang,
+			);
+			if (!analyzed.ok) {
+				res.status(analyzed.status).json({ message: analyzed.message });
+				return null;
+			}
 		}
+		// ---------------------------------------------------------------------
 
-		const { host, port, schema } = options.connectionInfo;
-		const databaseKey = generateDatabaseKey(host!, port!, schema!);
+		// ---- PGlite branch --------------------------------------------------
+		const connectionInfoAny = options.connectionInfo as any;
+		let databaseKey: string;
+		let schema: string;
+
+		if (connectionInfoAny?.type === 'pglite') {
+			const { databaseId } = connectionInfoAny;
+			if (!databaseId || typeof databaseId !== 'string') {
+				res.status(400).json({ message: t('INVALID_CONNECTION_INFO', lang) });
+				return null;
+			}
+			databaseKey = generatePGliteKey(databaseId);
+			schema = 'public';
+		} else {
+			// PostgreSQL path
+			const connectionError = validateConnectionInfo(
+				options.connectionInfo,
+				lang,
+			);
+			if (connectionError) {
+				res.status(400).json({ message: connectionError });
+				return null;
+			}
+
+			const { host, port, schema: pgSchema } = options.connectionInfo;
+			databaseKey = generateDatabaseKey(host!, port!, pgSchema!);
+			schema = pgSchema!;
+		}
+		// ---------------------------------------------------------------------
 
 		if (!isDatabaseRegistered(databaseKey)) {
 			res.status(400).json({ message: t('DATABASE_NOT_REGISTERED', lang) });
@@ -311,7 +349,7 @@ export class DescriptionController {
 		const tables = this.resolveStoredTables(databaseKey, isSelfJoin);
 		const schemaAliasMap = buildAliasMapFromTables(tables);
 
-		return { options, databaseKey, lang, tables, schemaAliasMap };
+		return { options, databaseKey, lang, tables, schemaAliasMap, schema };
 	}
 
 	/**
@@ -344,10 +382,11 @@ export class DescriptionController {
 		req: Request,
 		res: Response,
 	): Promise<Response> {
-		const validated = this.validateRequest(req, res);
+		const validated = await this.validateRequest(req, res);
 		if (!validated) return res;
 
-		const { options, databaseKey, lang, tables, schemaAliasMap } = validated;
+		const { options, databaseKey, lang, tables, schemaAliasMap, schema } =
+			validated;
 		const languageCode = options.languageCode ?? 'en';
 
 		let ast: any;
@@ -365,7 +404,7 @@ export class DescriptionController {
 					generationType: GenerationOptions.Template,
 					query: options.query,
 					queryAST: ast,
-					schema: options.connectionInfo.schema!,
+					schema: schema,
 					databaseKey,
 					isSelfJoin: options.isSelfJoin ?? false,
 					schemaAliasMap,
@@ -391,10 +430,11 @@ export class DescriptionController {
 		req: Request,
 		res: Response,
 	): Promise<Response> {
-		const validated = this.validateRequest(req, res);
+		const validated = await this.validateRequest(req, res);
 		if (!validated) return res;
 
-		const { options, databaseKey, lang, tables, schemaAliasMap } = validated;
+		const { options, databaseKey, lang, tables, schemaAliasMap, schema } =
+			validated;
 		const languageCode = options.languageCode ?? 'en';
 
 		try {
@@ -403,7 +443,7 @@ export class DescriptionController {
 					generationType: GenerationOptions.LLM,
 					query: options.query,
 					queryAST: null as any,
-					schema: options.connectionInfo.schema!,
+					schema: schema,
 					databaseKey,
 					isSelfJoin: options.isSelfJoin ?? false,
 					option: GptOptions.Default,
@@ -430,10 +470,11 @@ export class DescriptionController {
 		req: Request,
 		res: Response,
 	): Promise<Response> {
-		const validated = this.validateRequest(req, res);
+		const validated = await this.validateRequest(req, res);
 		if (!validated) return res;
 
-		const { options, databaseKey, lang, tables, schemaAliasMap } = validated;
+		const { options, databaseKey, lang, tables, schemaAliasMap, schema } =
+			validated;
 		const languageCode = options.languageCode ?? 'en';
 
 		try {
@@ -442,7 +483,7 @@ export class DescriptionController {
 					generationType: GenerationOptions.LLM,
 					query: options.query,
 					queryAST: null as any,
-					schema: options.connectionInfo.schema!,
+					schema: schema,
 					databaseKey,
 					isSelfJoin: options.isSelfJoin ?? false,
 					option: GptOptions.Creative,
@@ -469,10 +510,11 @@ export class DescriptionController {
 		req: Request,
 		res: Response,
 	): Promise<Response> {
-		const validated = this.validateRequest(req, res);
+		const validated = await this.validateRequest(req, res);
 		if (!validated) return res;
 
-		const { options, databaseKey, lang, tables, schemaAliasMap } = validated;
+		const { options, databaseKey, lang, tables, schemaAliasMap, schema } =
+			validated;
 		const languageCode = options.languageCode ?? 'en';
 
 		try {
@@ -481,7 +523,7 @@ export class DescriptionController {
 					generationType: GenerationOptions.LLM,
 					query: options.query,
 					queryAST: null as any,
-					schema: options.connectionInfo.schema!,
+					schema: schema,
 					databaseKey,
 					isSelfJoin: options.isSelfJoin ?? false,
 					option: GptOptions.MultiStep,
@@ -508,10 +550,11 @@ export class DescriptionController {
 		req: Request,
 		res: Response,
 	): Promise<Response> {
-		const validated = this.validateRequest(req, res);
+		const validated = await this.validateRequest(req, res);
 		if (!validated) return res;
 
-		const { options, databaseKey, lang, tables, schemaAliasMap } = validated;
+		const { options, databaseKey, lang, tables, schemaAliasMap, schema } =
+			validated;
 		const languageCode = options.languageCode ?? 'en';
 
 		let ast: any;
@@ -529,7 +572,7 @@ export class DescriptionController {
 					generationType: GenerationOptions.Hybrid,
 					query: options.query,
 					queryAST: ast,
-					schema: options.connectionInfo.schema!,
+					schema: schema,
 					databaseKey,
 					isSelfJoin: options.isSelfJoin ?? false,
 					option: undefined,

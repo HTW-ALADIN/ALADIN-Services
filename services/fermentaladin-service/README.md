@@ -52,6 +52,24 @@ uv run src/main.py -i excel -p ./test/Bioreactor_forPy.xlsx -o df -f ausgabe.jso
 
 This reads the model parameters from file ./test/Bioreactor_forPy.xlsx and creates a file ausgabe.json in a Dataframe format
 
+### Usage inside Docker
+
+The Docker image uses a multi-stage build and does not include `uv`. Instead, the virtual environment is already activated via `PATH`, so you run `python` directly instead of `uv run`:
+
+```sh
+# local
+uv run src/main.py -i excel -p input.xlsx -o df -f ausgabe.json
+
+# inside Docker
+python src/main.py -i excel -p input.xlsx -o df -f ausgabe.json
+```
+
+Example with `docker run`:
+
+```sh
+docker run --rm fermentaladin-service python src/main.py -i file -p ./test/test_data/user_input.json -o df -f ausgabe.json
+```
+
 ## Architecture
 
 ### Input

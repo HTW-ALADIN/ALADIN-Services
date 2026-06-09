@@ -6,22 +6,27 @@
 		"@types/swagger-ui-express": "^4.1.8",
 		"@types/uuid": "^10.0.0",
 		"@vitest/coverage-v8": "^4.0.18",
+		"esbuild": "^0.28.0",
 		"node-sql-parser": "^5.3.5",
 		"openai": "^4.52.0",
 		"pg-mem": "^3.0.13",
+		"ts-node": "^10.9.2",
 		"typescript": "^5.8.2",
 		"vitest": "^4.0.18"
 	},
 	"scripts": {
-		"build": "tsc -p tsconfig.json",
+		"build": "esbuild src/index.ts src/cli/index.ts --bundle --platform=node --target=node20 --format=cjs --outdir=build --sourcemap --inject:./import-meta-url.js --define:import.meta.url=import_meta_url --external:@electric-sql/pglite --external:swagger-ui-dist",
+		"build:tsc": "tsc -p tsconfig.json",
 		"dev": "npx ts-node src/index.ts",
 		"generate-openapi": "npx ts-node src/generate-openapi.ts",
 		"lint": "npx eslint ./src",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"test:coverage": "vitest run --coverage"
+		"test:coverage": "vitest run --coverage",
+		"cli": "node build/cli/index.js"
 	},
 	"dependencies": {
+		"@electric-sql/pglite": "^0.4.4",
 		"@eslint/js": "^10.0.1",
 		"@langchain/community": "^1.1.19",
 		"@langchain/core": "^1.1.28",

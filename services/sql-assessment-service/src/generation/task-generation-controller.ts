@@ -11,14 +11,18 @@ import {
 import {
 	connectToDatabase,
 	generateDatabaseKey,
+	generatePGliteKey,
+	makeRowQueryFn,
 } from '../shared/utils/database-utils';
 import {
 	isDatabaseRegistered,
 	validateConnectionInfo,
 } from '../shared/utils/validation';
+import { pgliteInstances } from '../database/internal-memory';
 import { SQLQueryGenerationService } from './query/sql-query-generation-service';
 import { TaskDescriptionGenerationService } from './description/task-description-generation-service';
-import { t, resolveLanguageCode } from '../shared/i18n';
+import { t, resolveLanguageCode, SupportedLanguage } from '../shared/i18n';
+import { DatabaseService } from '../database/database-service';
 
 /**
  * @openapi
@@ -66,13 +70,16 @@ export class TaskGenerationController {
 	public router: Router;
 	selectQueryGenerationService: SQLQueryGenerationService;
 	taskDescriptionGenerationService: TaskDescriptionGenerationService;
+	private readonly databaseService?: DatabaseService;
 
 	constructor(
 		selectQueryGenerationService: SQLQueryGenerationService,
 		taskDescriptionGenerationService: TaskDescriptionGenerationService,
+		databaseService?: DatabaseService,
 	) {
 		this.selectQueryGenerationService = selectQueryGenerationService;
 		this.taskDescriptionGenerationService = taskDescriptionGenerationService;
+		this.databaseService = databaseService;
 		this.router = Router();
 		this.initializeRoutes();
 	}
@@ -110,6 +117,61 @@ export class TaskGenerationController {
 				.json({ message: t('TASK_GENERATION_INVALID_CONNECTION', lang) });
 		}
 
+		// ---- auto-analyze ---------------------------------------------------
+		if (this.databaseService) {
+			const analyzed = await this.databaseService.ensureAnalyzed(
+				connectionInfo,
+				undefined,
+				lang,
+			);
+			if (!analyzed.ok) {
+				return res.status(analyzed.status).json({ message: analyzed.message });
+			}
+		}
+		// ---------------------------------------------------------------------
+
+		// ---- PGlite branch --------------------------------------------------
+		const connectionInfoAny = connectionInfo as any;
+		if (connectionInfoAny?.type === 'pglite') {
+			const { databaseId } = connectionInfoAny;
+			if (!databaseId || typeof databaseId !== 'string') {
+				return res
+					.status(400)
+					.json({ message: t('INVALID_CONNECTION_INFO', lang) });
+			}
+
+			const databaseKey = generatePGliteKey(databaseId);
+			if (!isDatabaseRegistered(databaseKey)) {
+				return res
+					.status(400)
+					.json({ message: t('DATABASE_NOT_REGISTERED', lang) });
+			}
+
+			const pgliteDb = pgliteInstances.get(databaseId);
+			if (!pgliteDb) {
+				return res
+					.status(400)
+					.json({ message: t('DATABASE_NOT_REGISTERED', lang) });
+			}
+
+			const runQuery = async (sql: string) => {
+				const result = await pgliteDb.query(sql);
+				return result.rows as any[];
+			};
+
+			return this.runGeneration(
+				res,
+				taskRequest.taskConfiguration,
+				databaseKey,
+				'public',
+				runQuery,
+				lang,
+				null,
+			);
+		}
+		// ---------------------------------------------------------------------
+
+		// ---- PostgreSQL branch ----------------------------------------------
 		const validationError = validateConnectionInfo(connectionInfo, lang);
 		if (validationError) {
 			return res.status(400).json({ message: validationError });
@@ -133,110 +195,133 @@ export class TaskGenerationController {
 		const isConnected = await connectToDatabase(dataSource);
 
 		if (isConnected) {
-			const configValidation =
-				this.selectQueryGenerationService.validateConfiguration(taskContext);
-			if (!configValidation[0]) {
-				return res.status(400).json({ message: configValidation[1] });
-			}
-
-			let query: string;
-			let ast: any;
-			try {
-				[query, ast] =
-					await this.selectQueryGenerationService.generateContextBasedQuery(
-						taskContext,
-						databaseKey,
-						dataSource,
-						connectionInfo.schema!,
-					);
-			} catch (error) {
-				console.log(error);
-				dataSource.destroy();
-				return res.status(500).json({
-					message: t('TASK_GENERATION_QUERY_ERROR', lang, String(error)),
-				});
-			}
-
-			let taskDescription: string | undefined;
-			let entityDescription: string | undefined;
-			let creativeDescription: string | undefined;
-			let schemaBasedDescription: string | undefined;
-			let semanticNGL: string | undefined;
-
-			try {
-				const isSelfJoin = taskContext.joinTypes.includes('SELF JOIN');
-				taskDescription =
-					await this.taskDescriptionGenerationService.generateTaskFromQuery({
-						generationType: GenerationOptions.Template,
-						query,
-						queryAST: ast,
-						schema: connectionInfo.schema!,
-						databaseKey,
-						isSelfJoin,
-						lang,
-					});
-				entityDescription =
-					await this.taskDescriptionGenerationService.generateTaskFromQuery({
-						generationType: GenerationOptions.LLM,
-						query,
-						queryAST: ast,
-						schema: connectionInfo.schema!,
-						databaseKey,
-						isSelfJoin,
-						option: GptOptions.MultiStep,
-						lang,
-					});
-				creativeDescription =
-					await this.taskDescriptionGenerationService.generateTaskFromQuery({
-						generationType: GenerationOptions.LLM,
-						query,
-						queryAST: ast,
-						schema: connectionInfo.schema!,
-						databaseKey,
-						isSelfJoin,
-						option: GptOptions.Creative,
-						lang,
-					});
-				schemaBasedDescription =
-					await this.taskDescriptionGenerationService.generateTaskFromQuery({
-						generationType: GenerationOptions.LLM,
-						query,
-						queryAST: ast,
-						schema: connectionInfo.schema!,
-						databaseKey,
-						isSelfJoin,
-						option: GptOptions.Default,
-						lang,
-					});
-				semanticNGL =
-					await this.taskDescriptionGenerationService.generateTaskFromQuery({
-						generationType: GenerationOptions.Hybrid,
-						query,
-						queryAST: ast,
-						schema: connectionInfo.schema!,
-						databaseKey,
-						isSelfJoin,
-						lang,
-					});
-			} catch (error) {
-				console.log('Error in task description generation', error);
-				return res
-					.status(500)
-					.json({ message: t('TASK_GENERATION_DESCRIPTION_ERROR', lang) });
-			}
-
-			const taskResponse: TaskResponse = {
-				query: query,
-				templateBasedDescription: taskDescription!,
-				gptEntityRelationshipDescription: entityDescription!,
-				gptSchemaBasedDescription: schemaBasedDescription!,
-				hybridDescription: semanticNGL!,
-				gptCreativeDescription: creativeDescription,
-			};
-			await dataSource.destroy();
-			return res.status(200).json(taskResponse);
+			return this.runGeneration(
+				res,
+				taskContext,
+				databaseKey,
+				connectionInfo.schema!,
+				makeRowQueryFn(dataSource),
+				lang,
+				dataSource,
+			);
 		}
 
+		await dataSource.destroy();
 		return res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
+	}
+
+	private async runGeneration(
+		res: Response,
+		taskContext: ITaskConfiguration,
+		databaseKey: string,
+		schema: string,
+		runQuery: (sql: string) => Promise<any[]>,
+		lang: SupportedLanguage,
+		dataSource: DataSource | null,
+	): Promise<Response> {
+		const configValidation =
+			this.selectQueryGenerationService.validateConfiguration(taskContext);
+		if (!configValidation[0]) {
+			if (dataSource) await dataSource.destroy();
+			return res.status(400).json({ message: configValidation[1] });
+		}
+
+		let query: string;
+		let ast: any;
+		try {
+			[query, ast] =
+				await this.selectQueryGenerationService.generateContextBasedQuery(
+					taskContext,
+					databaseKey,
+					runQuery,
+					schema,
+				);
+		} catch (error) {
+			console.log(error);
+			if (dataSource) await dataSource.destroy();
+			return res.status(500).json({
+				message: t('TASK_GENERATION_QUERY_ERROR', lang, String(error)),
+			});
+		}
+
+		let taskDescription: string | undefined;
+		let entityDescription: string | undefined;
+		let creativeDescription: string | undefined;
+		let schemaBasedDescription: string | undefined;
+		let semanticNGL: string | undefined;
+
+		try {
+			const isSelfJoin = taskContext.joinTypes.includes('SELF JOIN');
+			taskDescription =
+				await this.taskDescriptionGenerationService.generateTaskFromQuery({
+					generationType: GenerationOptions.Template,
+					query,
+					queryAST: ast,
+					schema,
+					databaseKey,
+					isSelfJoin,
+					lang,
+				});
+			entityDescription =
+				await this.taskDescriptionGenerationService.generateTaskFromQuery({
+					generationType: GenerationOptions.LLM,
+					query,
+					queryAST: ast,
+					schema,
+					databaseKey,
+					isSelfJoin,
+					option: GptOptions.MultiStep,
+					lang,
+				});
+			creativeDescription =
+				await this.taskDescriptionGenerationService.generateTaskFromQuery({
+					generationType: GenerationOptions.LLM,
+					query,
+					queryAST: ast,
+					schema,
+					databaseKey,
+					isSelfJoin,
+					option: GptOptions.Creative,
+					lang,
+				});
+			schemaBasedDescription =
+				await this.taskDescriptionGenerationService.generateTaskFromQuery({
+					generationType: GenerationOptions.LLM,
+					query,
+					queryAST: ast,
+					schema,
+					databaseKey,
+					isSelfJoin,
+					option: GptOptions.Default,
+					lang,
+				});
+			semanticNGL =
+				await this.taskDescriptionGenerationService.generateTaskFromQuery({
+					generationType: GenerationOptions.Hybrid,
+					query,
+					queryAST: ast,
+					schema,
+					databaseKey,
+					isSelfJoin,
+					lang,
+				});
+		} catch (error) {
+			console.log('Error in task description generation', error);
+			if (dataSource) await dataSource.destroy();
+			return res
+				.status(500)
+				.json({ message: t('TASK_GENERATION_DESCRIPTION_ERROR', lang) });
+		}
+
+		const taskResponse: TaskResponse = {
+			query: query,
+			templateBasedDescription: taskDescription!,
+			gptEntityRelationshipDescription: entityDescription!,
+			gptSchemaBasedDescription: schemaBasedDescription!,
+			hybridDescription: semanticNGL!,
+			gptCreativeDescription: creativeDescription,
+		};
+		if (dataSource) await dataSource.destroy();
+		return res.status(200).json(taskResponse);
 	}
 }

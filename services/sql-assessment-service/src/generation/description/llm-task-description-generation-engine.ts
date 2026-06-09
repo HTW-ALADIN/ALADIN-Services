@@ -1,4 +1,3 @@
-import dotenv from 'dotenv';
 import { ChatOpenAI } from '@langchain/openai';
 import { SystemMessagePromptTemplate } from '@langchain/core/prompts';
 import {
@@ -18,8 +17,6 @@ const LANGUAGE_DIRECTIVES: Record<SupportedLanguage, string> = {
 
 export class LLMTaskDescriptionGenerationEngine {
 	constructor() {
-		dotenv.config();
-
 		this.openai = new ChatOpenAI({
 			openAIApiKey: process.env.OPENAI_API_KEY,
 			modelName: 'gpt-4o-mini',
