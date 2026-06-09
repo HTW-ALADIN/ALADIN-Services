@@ -5,14 +5,10 @@ from typing import Protocol
 from openai import OpenAI
 
 from openai_wrapper_service.config import (
-    DEFAULT_EMBEDDING_MODEL,
     DEFAULT_RESPONSE_MODEL,
     DEFAULT_TIMEOUT_SECONDS,
 )
 from openai_wrapper_service.schemas import (
-    EmbeddingItem,
-    EmbeddingsRequest,
-    EmbeddingsResponse,
     GenerateRequest,
     GenerateResponse,
     TokenUsage,
@@ -21,8 +17,6 @@ from openai_wrapper_service.schemas import (
 
 class OpenAIWrapperProtocol(Protocol):
     def generate(self, request: GenerateRequest) -> GenerateResponse: ...
-
-    def embeddings(self, request: EmbeddingsRequest) -> EmbeddingsResponse: ...
 
 
 class OpenAIWrapper:
@@ -50,28 +44,6 @@ class OpenAIWrapper:
             id=getattr(response, "id", None),
             model=getattr(response, "model", model),
             output_text=getattr(response, "output_text", ""),
-            usage=_usage_from_response(response),
-        )
-
-    def embeddings(self, request: EmbeddingsRequest) -> EmbeddingsResponse:
-        model = request.model or DEFAULT_EMBEDDING_MODEL
-        payload = {
-            "model": model,
-            "input": request.input,
-        }
-        if request.dimensions is not None:
-            payload["dimensions"] = request.dimensions
-        if request.user is not None:
-            payload["user"] = request.user
-
-        response = self._get_client().embeddings.create(**payload)
-        data = [
-            EmbeddingItem(index=getattr(item, "index", index), embedding=list(getattr(item, "embedding")))
-            for index, item in enumerate(response.data)
-        ]
-        return EmbeddingsResponse(
-            model=getattr(response, "model", model),
-            data=data,
             usage=_usage_from_response(response),
         )
 

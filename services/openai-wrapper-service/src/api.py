@@ -5,8 +5,6 @@ from openai import OpenAIError
 
 from openai_wrapper_service.client import OpenAIWrapper, OpenAIWrapperProtocol
 from openai_wrapper_service.schemas import (
-    EmbeddingsRequest,
-    EmbeddingsResponse,
     ErrorResponse,
     GenerateRequest,
     GenerateResponse,
@@ -14,7 +12,7 @@ from openai_wrapper_service.schemas import (
 
 app = FastAPI(
     title="OpenAI Wrapper Service",
-    description=("REST and CLI wrapper around the official OpenAI API for text generation and embeddings."),
+    description=("REST and CLI wrapper around the official OpenAI Responses API."),
     version="0.1.0",
 )
 
@@ -40,19 +38,5 @@ def health() -> dict[str, str]:
 def generate(request: GenerateRequest, service: OpenAIWrapperProtocol = Depends(get_service)) -> GenerateResponse:
     try:
         return service.generate(request)
-    except OpenAIError as exc:
-        raise HTTPException(status_code=502, detail=f"OpenAI API request failed: {exc}") from exc
-
-
-@app.post(
-    "/embeddings",
-    response_model=EmbeddingsResponse,
-    responses={502: {"model": ErrorResponse}},
-    tags=["OpenAI"],
-    summary="Create embeddings with the OpenAI Embeddings API",
-)
-def embeddings(request: EmbeddingsRequest, service: OpenAIWrapperProtocol = Depends(get_service)) -> EmbeddingsResponse:
-    try:
-        return service.embeddings(request)
     except OpenAIError as exc:
         raise HTTPException(status_code=502, detail=f"OpenAI API request failed: {exc}") from exc

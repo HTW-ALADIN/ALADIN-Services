@@ -28,25 +28,5 @@ class GenerateResponse(BaseModel):
     usage: TokenUsage | None = None
 
 
-class EmbeddingsRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    input: str | list[str] = Field(..., description="Text or batch of texts to embed.")
-    model: str | None = Field(None, description="OpenAI embedding model id. Uses the service default when omitted.")
-    dimensions: int | None = Field(None, ge=1, le=3072)
-    user: str | None = Field(None, description="Optional end-user identifier forwarded to OpenAI.")
-
-
-class EmbeddingItem(BaseModel):
-    index: int
-    embedding: list[float]
-
-
-class EmbeddingsResponse(BaseModel):
-    model: str
-    data: list[EmbeddingItem]
-    usage: TokenUsage | None = None
-
-
 class ErrorResponse(BaseModel):
     detail: str

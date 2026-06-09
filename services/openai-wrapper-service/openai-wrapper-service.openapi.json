@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenAI Wrapper Service",
-    "description": "REST and CLI wrapper around the official OpenAI API for text generation and embeddings.",
+    "description": "REST and CLI wrapper around the official OpenAI Responses API.",
     "version": "0.1.0"
   },
   "paths": {
@@ -81,175 +81,10 @@
           }
         }
       }
-    },
-    "/embeddings": {
-      "post": {
-        "tags": [
-          "OpenAI"
-        ],
-        "summary": "Create embeddings with the OpenAI Embeddings API",
-        "operationId": "embeddings_embeddings_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EmbeddingsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmbeddingsResponse"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
     "schemas": {
-      "EmbeddingItem": {
-        "properties": {
-          "index": {
-            "type": "integer",
-            "title": "Index"
-          },
-          "embedding": {
-            "items": {
-              "type": "number"
-            },
-            "type": "array",
-            "title": "Embedding"
-          }
-        },
-        "type": "object",
-        "required": [
-          "index",
-          "embedding"
-        ],
-        "title": "EmbeddingItem"
-      },
-      "EmbeddingsRequest": {
-        "properties": {
-          "input": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              }
-            ],
-            "title": "Input",
-            "description": "Text or batch of texts to embed."
-          },
-          "model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model",
-            "description": "OpenAI embedding model id. Uses the service default when omitted."
-          },
-          "dimensions": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 3072.0,
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dimensions"
-          },
-          "user": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "User",
-            "description": "Optional end-user identifier forwarded to OpenAI."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "input"
-        ],
-        "title": "EmbeddingsRequest"
-      },
-      "EmbeddingsResponse": {
-        "properties": {
-          "model": {
-            "type": "string",
-            "title": "Model"
-          },
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/EmbeddingItem"
-            },
-            "type": "array",
-            "title": "Data"
-          },
-          "usage": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TokenUsage"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "model",
-          "data"
-        ],
-        "title": "EmbeddingsResponse"
-      },
       "ErrorResponse": {
         "properties": {
           "detail": {

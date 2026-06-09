@@ -1,11 +1,10 @@
 # OpenAI Wrapper Service
 
-HTTP and CLI wrapper around the official OpenAI API for services that need text generation or embeddings.
+HTTP and CLI wrapper around the official OpenAI Responses API.
 
 The service uses the OpenAI Python SDK through the adapter in `src/openai_wrapper_service/client.py`.
 
 - Text generation through the OpenAI Responses API
-- Embeddings through the OpenAI Embeddings API
 - A CLI that mirrors the REST behavior
 - A generated OpenAPI specification
 
@@ -22,7 +21,6 @@ Optional environment variables:
 | Variable | Default | Description |
 | --- | --- | --- |
 | `OPENAI_WRAPPER_DEFAULT_RESPONSE_MODEL` | `gpt-5.2` | Default model for `/generate` |
-| `OPENAI_WRAPPER_DEFAULT_EMBEDDING_MODEL` | `text-embedding-3-small` | Default model for `/embeddings` |
 | `OPENAI_WRAPPER_TIMEOUT_SECONDS` | `60` | OpenAI SDK request timeout |
 
 ## API
@@ -47,7 +45,6 @@ Endpoints:
 | --- | --- | --- |
 | `GET` | `/health` | Liveness probe |
 | `POST` | `/generate` | Generate text through the OpenAI Responses API |
-| `POST` | `/embeddings` | Create embeddings through the OpenAI Embeddings API |
 
 Example generation request:
 
@@ -59,15 +56,6 @@ Example generation request:
 }
 ```
 
-Example embeddings request:
-
-```json
-{
-  "input": ["fermentation simulation", "graph rewriting"],
-  "model": "text-embedding-3-small"
-}
-```
-
 ## CLI
 
 The CLI mirrors the API:
@@ -75,7 +63,6 @@ The CLI mirrors the API:
 ```sh
 uv run openai-wrapper generate "Write a short explanation of graph rewriting."
 uv run openai-wrapper generate "Write a short explanation of graph rewriting." --text-only
-uv run openai-wrapper embeddings "fermentation simulation" "graph rewriting"
 ```
 
 ## Docker
@@ -102,7 +89,7 @@ Minimal requirements for the wrapper itself:
 | Memory | 256 MB RAM |
 | Disk | < 200 MB image/runtime overhead, excluding Docker base layers |
 
-Generation and embedding latency, availability, and cost are governed by OpenAI API calls rather than local compute. Deployments should enforce request-size and rate limits appropriate for their API budget.
+Generation latency, availability, and cost are governed by OpenAI API calls rather than local compute. Deployments should enforce request-size and rate limits appropriate for their API budget.
 
 ## Development
 
