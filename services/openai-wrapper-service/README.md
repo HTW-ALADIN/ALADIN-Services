@@ -78,12 +78,6 @@ uv run openai-wrapper generate "Write a short explanation of graph rewriting." -
 uv run openai-wrapper embeddings "fermentation simulation" "graph rewriting"
 ```
 
-Use `-` to read generation input from stdin:
-
-```sh
-printf "Explain embeddings" | uv run openai-wrapper generate - --text-only
-```
-
 ## Docker
 
 Build:

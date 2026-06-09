@@ -8,12 +8,6 @@ from openai_wrapper_service.client import OpenAIWrapper, OpenAIWrapperProtocol
 from openai_wrapper_service.schemas import EmbeddingsRequest, GenerateRequest
 
 
-def _read_input(value: str) -> str:
-    if value == "-":
-        return sys.stdin.read()
-    return value
-
-
 def _write_output(payload: str, output: Path | None) -> None:
     if output is None:
         sys.stdout.write(payload)
@@ -31,7 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     generate_parser = subparsers.add_parser("generate", help="Generate text from an input prompt.")
-    generate_parser.add_argument("input", help="Input text. Use '-' to read from stdin.")
+    generate_parser.add_argument("input", help="Input text.")
     generate_parser.add_argument("--model")
     generate_parser.add_argument("--instructions")
     generate_parser.add_argument("--max-output-tokens", type=int)
@@ -41,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("-o", "--output", type=Path)
 
     embeddings_parser = subparsers.add_parser("embeddings", help="Create embeddings for one or more inputs.")
-    embeddings_parser.add_argument("input", nargs="+", help="Input text values. Use a single '-' to read stdin.")
+    embeddings_parser.add_argument("input", nargs="+", help="Input text values.")
     embeddings_parser.add_argument("--model")
     embeddings_parser.add_argument("--dimensions", type=int)
     embeddings_parser.add_argument("--user")
@@ -58,7 +52,7 @@ def main(argv: list[str] | None = None, service: OpenAIWrapperProtocol | None = 
     if args.command == "generate":
         response = client.generate(
             GenerateRequest(
-                input=_read_input(args.input),
+                input=args.input,
                 model=args.model,
                 instructions=args.instructions,
                 max_output_tokens=args.max_output_tokens,
@@ -73,7 +67,7 @@ def main(argv: list[str] | None = None, service: OpenAIWrapperProtocol | None = 
     if args.command == "embeddings":
         input_value: str | list[str]
         if len(args.input) == 1:
-            input_value = _read_input(args.input[0])
+            input_value = args.input[0]
         else:
             input_value = args.input
 
