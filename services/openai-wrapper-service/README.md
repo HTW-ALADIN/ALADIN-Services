@@ -73,6 +73,7 @@ Example generation request:
 The CLI mirrors the API:
 
 ```sh
+uv run openai-wrapper health
 uv run openai-wrapper generate "Write a short explanation of graph rewriting."
 uv run openai-wrapper generate "Write a short explanation of graph rewriting." --text-only
 ```

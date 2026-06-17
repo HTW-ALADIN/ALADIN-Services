@@ -18,6 +18,13 @@ class FakeOpenAIWrapper:
         )
 
 
+def test_health_cli(capsys) -> None:
+    exit_code = main(["health"], service=FakeOpenAIWrapper())
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {"status": "ok"}
+
+
 def test_generate_cli_json(capsys) -> None:
     exit_code = main(["generate", "hello"], service=FakeOpenAIWrapper())
 

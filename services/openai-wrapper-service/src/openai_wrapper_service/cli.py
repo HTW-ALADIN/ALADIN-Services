@@ -24,6 +24,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    subparsers.add_parser("health", help="Print the service health response.")
+
     generate_parser = subparsers.add_parser("generate", help="Generate text from an input prompt.")
     generate_parser.add_argument("input", help="Input text.")
     generate_parser.add_argument("--model")
@@ -41,6 +43,10 @@ def main(argv: list[str] | None = None, service: OpenAIWrapperProtocol | None = 
     parser = build_parser()
     args = parser.parse_args(argv)
     client = service or OpenAIWrapper()
+
+    if args.command == "health":
+        _write_output('{"status":"ok"}', None)
+        return 0
 
     if args.command == "generate":
         response = client.generate(
