@@ -28,12 +28,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     generate_parser = subparsers.add_parser("generate", help="Generate text from an input prompt.")
     generate_parser.add_argument("input", help="Input text.")
-    generate_parser.add_argument("--model")
+    generate_parser.add_argument("--model", required=True)
     generate_parser.add_argument("--instructions")
     generate_parser.add_argument("--max-output-tokens", type=int)
     generate_parser.add_argument("--temperature", type=float)
     generate_parser.add_argument("--store", action="store_true")
-    generate_parser.add_argument("--text-only", action="store_true", help="Write only output_text instead of JSON.")
+    generate_parser.add_argument("--json", action="store_true", help="Write the full response as JSON.")
     generate_parser.add_argument("-o", "--output", type=Path)
 
     return parser
@@ -42,13 +42,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None, service: OpenAIWrapperProtocol | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    client = service or OpenAIWrapper()
 
     if args.command == "health":
         _write_output('{"status":"ok"}', None)
         return 0
 
     if args.command == "generate":
+        client = service or OpenAIWrapper()
         response = client.generate(
             GenerateRequest(
                 input=args.input,
@@ -59,7 +59,7 @@ def main(argv: list[str] | None = None, service: OpenAIWrapperProtocol | None = 
                 store=args.store,
             )
         )
-        payload = response.output_text if args.text_only else response.model_dump_json(indent=2)
+        payload = response.model_dump_json(indent=2) if args.json else response.output_text
         _write_output(payload, args.output)
         return 0
 

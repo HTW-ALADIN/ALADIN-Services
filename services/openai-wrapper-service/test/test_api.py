@@ -14,7 +14,7 @@ class FakeOpenAIWrapper:
     def generate(self, request: GenerateRequest) -> GenerateResponse:
         return GenerateResponse(
             id="resp_test",
-            model=request.model or "test-response-model",
+            model=request.model,
             output_text=f"generated: {request.input}",
             usage=TokenUsage(input_tokens=3, output_tokens=4, total_tokens=7),
         )

@@ -107,16 +107,10 @@
             "description": "User input passed to the OpenAI Responses API."
           },
           "model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "minLength": 1,
             "title": "Model",
-            "description": "OpenAI model id. Uses the service default when omitted."
+            "description": "OpenAI-compatible model id."
           },
           "instructions": {
             "anyOf": [
@@ -181,7 +175,8 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "input"
+          "input",
+          "model"
         ],
         "title": "GenerateRequest"
       },

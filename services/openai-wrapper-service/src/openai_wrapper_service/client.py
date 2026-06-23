@@ -4,10 +4,7 @@ from typing import Protocol
 
 from openai import OpenAI
 
-from openai_wrapper_service.config import (
-    DEFAULT_RESPONSE_MODEL,
-    DEFAULT_TIMEOUT_SECONDS,
-)
+from openai_wrapper_service.config import DEFAULT_TIMEOUT_SECONDS
 from openai_wrapper_service.schemas import (
     GenerateRequest,
     GenerateResponse,
@@ -24,9 +21,8 @@ class OpenAIWrapper:
         self._client = client
 
     def generate(self, request: GenerateRequest) -> GenerateResponse:
-        model = request.model or DEFAULT_RESPONSE_MODEL
         payload = {
-            "model": model,
+            "model": request.model,
             "input": request.input,
             "store": request.store,
         }
@@ -42,7 +38,7 @@ class OpenAIWrapper:
         response = self._get_client().responses.create(**payload)
         return GenerateResponse(
             id=getattr(response, "id", None),
-            model=getattr(response, "model", model),
+            model=getattr(response, "model", request.model),
             output_text=getattr(response, "output_text", ""),
             usage=_usage_from_response(response),
         )

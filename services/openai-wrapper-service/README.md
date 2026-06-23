@@ -32,8 +32,9 @@ Optional environment variables:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `OPENAI_WRAPPER_DEFAULT_RESPONSE_MODEL` | `gpt-5.2` | Default model for `/generate` |
 | `OPENAI_WRAPPER_TIMEOUT_SECONDS` | `60` | OpenAI SDK request timeout |
+
+The model is provided per `/generate` request because available model ids depend on the configured OpenAI-compatible provider.
 
 ## API
 
@@ -62,6 +63,7 @@ Example generation request:
 
 ```json
 {
+  "model": "provider-model-id",
   "input": "Summarize the purpose of ALADIN in one sentence.",
   "instructions": "Answer concisely.",
   "max_output_tokens": 120
@@ -74,8 +76,8 @@ The CLI mirrors the API:
 
 ```sh
 uv run openai-wrapper health
-uv run openai-wrapper generate "Write a short explanation of graph rewriting."
-uv run openai-wrapper generate "Write a short explanation of graph rewriting." --text-only
+uv run openai-wrapper generate "Write a short explanation of graph rewriting." --model provider-model-id
+uv run openai-wrapper generate "Write a short explanation of graph rewriting." --model provider-model-id --json
 ```
 
 ## Docker

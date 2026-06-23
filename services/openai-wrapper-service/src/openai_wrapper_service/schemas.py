@@ -7,7 +7,7 @@ class GenerateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     input: str = Field(..., min_length=1, description="User input passed to the OpenAI Responses API.")
-    model: str | None = Field(None, description="OpenAI model id. Uses the service default when omitted.")
+    model: str = Field(..., min_length=1, description="OpenAI-compatible model id.")
     instructions: str | None = Field(None, description="Optional system/developer-style instructions.")
     max_output_tokens: int | None = Field(None, ge=1, le=32768)
     temperature: float | None = Field(None, ge=0, le=2)
