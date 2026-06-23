@@ -32,6 +32,10 @@ Optional environment variables:
 
 | Variable | Default | Description |
 | --- | --- | --- |
+| `OPENAI_BASE_URL` | OpenAI SDK default | OpenAI-compatible API base URL |
+| `OPENAI_ORG_ID` | unset | OpenAI organization id |
+| `OPENAI_PROJECT_ID` | unset | OpenAI project id |
+| `OPENAI_WRAPPER_MAX_RETRIES` | `2` | OpenAI SDK max retry count |
 | `OPENAI_WRAPPER_TIMEOUT_SECONDS` | `60` | OpenAI SDK request timeout |
 | `PORT` | `8002` | HTTP port used by `make start` and the Docker container |
 

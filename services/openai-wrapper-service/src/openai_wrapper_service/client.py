@@ -4,7 +4,7 @@ from typing import Protocol
 
 from openai import OpenAI
 
-from openai_wrapper_service.config import DEFAULT_TIMEOUT_SECONDS
+from openai_wrapper_service.config import openai_client_options
 from openai_wrapper_service.schemas import (
     GenerateRequest,
     GenerateResponse,
@@ -45,7 +45,7 @@ class OpenAIWrapper:
 
     def _get_client(self) -> OpenAI:
         if self._client is None:
-            self._client = OpenAI(timeout=DEFAULT_TIMEOUT_SECONDS)
+            self._client = OpenAI(**openai_client_options())
         return self._client
 
 
