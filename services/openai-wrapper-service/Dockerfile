@@ -7,6 +7,7 @@ ADD https://astral.sh/uv/install.sh /uv-installer.sh
 RUN sh /uv-installer.sh && rm /uv-installer.sh
 
 ENV PATH="/root/.local/bin/:$PATH"
+ENV PORT=8002
 
 COPY . /app
 WORKDIR /app
@@ -14,4 +15,4 @@ RUN uv sync --locked --no-dev
 
 EXPOSE 8002
 
-CMD ["uv", "run", "--no-sync", "uvicorn", "openai_wrapper_service.api:app", "--host", "0.0.0.0", "--port", "8002", "--app-dir", "src"]
+CMD ["sh", "-c", "uv run --no-sync uvicorn openai_wrapper_service.api:app --host 0.0.0.0 --port ${PORT} --app-dir src"]

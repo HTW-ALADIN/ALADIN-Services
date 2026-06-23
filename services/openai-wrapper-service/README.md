@@ -33,6 +33,7 @@ Optional environment variables:
 | Variable | Default | Description |
 | --- | --- | --- |
 | `OPENAI_WRAPPER_TIMEOUT_SECONDS` | `60` | OpenAI SDK request timeout |
+| `PORT` | `8002` | HTTP port used by `make start` and the Docker container |
 
 The model is provided per `/generate` request because available model ids depend on the configured OpenAI-compatible provider.
 
@@ -91,7 +92,7 @@ make docker-build
 Run:
 
 ```sh
-docker run --rm -p 8002:8002 -e OPENAI_API_KEY openai-wrapper-service
+docker run --rm -p 8002:8002 -e OPENAI_API_KEY -e PORT=8002 openai-wrapper-service
 ```
 
 ## Hardware Requirements
