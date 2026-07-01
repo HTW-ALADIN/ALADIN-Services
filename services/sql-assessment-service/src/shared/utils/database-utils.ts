@@ -1,4 +1,5 @@
 import { DataSource, QueryRunner } from 'typeorm';
+import type { PGlite } from '@electric-sql/pglite';
 import { IAliasMap, IParsedTable } from '../interfaces/domain';
 
 /**
@@ -21,6 +22,22 @@ export function makeRowQueryFn(dataSource: DataSource): RowQueryFn {
 		} finally {
 			await queryRunner.release();
 		}
+	};
+}
+
+/**
+ * Builds a {@link RowQueryFn} backed by a live in-process {@link PGlite}
+ * instance.  Unwraps the `{ rows }` result envelope so the returned array has
+ * the same shape as the TypeORM {@link makeRowQueryFn} path.
+ *
+ * IMPORTANT: PGlite instances are shared and long-lived (stored in
+ * `pgliteInstances`).  This function never closes the instance — callers must
+ * not destroy it after use.
+ */
+export function makePGliteRowQueryFn(db: PGlite): RowQueryFn {
+	return async (sql: string) => {
+		const result = await db.query(sql);
+		return result.rows as any[];
 	};
 }
 

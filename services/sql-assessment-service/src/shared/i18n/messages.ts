@@ -37,7 +37,6 @@ export type MessageKey =
 	| 'GRADING_CONNECTION_READ_ERROR'
 	| 'GRADING_FAILED'
 	| 'GRADING_FAILED_WITH_ERROR'
-	| 'GRADING_PGLITE_NOT_SUPPORTED'
 	// ── grading feedback — result set ─────────────────────────────────────────
 	| 'FEEDBACK_RESULT_SET_MATCH'
 	| 'FEEDBACK_RESULT_SET_MISMATCH'
@@ -151,8 +150,6 @@ export const MESSAGES: MessageCatalogue = {
 		GRADING_CONNECTION_READ_ERROR: 'Error reading connection information.',
 		GRADING_FAILED: 'Unable to grade query.',
 		GRADING_FAILED_WITH_ERROR: 'Unable to grade query. Error: {{value}}',
-		GRADING_PGLITE_NOT_SUPPORTED:
-			'Grading endpoints require a PostgreSQL connection; PGlite is not supported here.',
 		// grading feedback — result set
 		FEEDBACK_RESULT_SET_MATCH: 'Same result set of both queries.',
 		FEEDBACK_RESULT_SET_MISMATCH: 'Result sets differ.',
@@ -295,8 +292,6 @@ export const MESSAGES: MessageCatalogue = {
 		GRADING_FAILED: 'Die Abfrage konnte nicht bewertet werden.',
 		GRADING_FAILED_WITH_ERROR:
 			'Die Abfrage konnte nicht bewertet werden. Fehler: {{value}}',
-		GRADING_PGLITE_NOT_SUPPORTED:
-			'Bewertungsendpunkte erfordern eine PostgreSQL-Verbindung; PGlite wird hier nicht unterstützt.',
 		// grading feedback — result set
 		FEEDBACK_RESULT_SET_MATCH: 'Beide Abfragen liefern dasselbe Ergebnis.',
 		FEEDBACK_RESULT_SET_MISMATCH: 'Die Ergebnismengen stimmen nicht überein.',

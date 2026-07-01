@@ -5,11 +5,16 @@ import { AST, Parser } from 'node-sql-parser';
 import {
 	connectToDatabase,
 	generateDatabaseKey,
+	generatePGliteKey,
+	makePGliteRowQueryFn,
+	makeRowQueryFn,
+	RowQueryFn,
 } from '../shared/utils/database-utils';
 import {
 	isDatabaseRegistered,
 	validateConnectionInfo,
 } from '../shared/utils/validation';
+import { pgliteInstances } from '../database/internal-memory';
 import { SQLQueryGradingService } from './query-grading-service';
 import {
 	ComparisonResult,
@@ -35,9 +40,15 @@ import { DatabaseService } from '../database/database-service';
 // ---------------------------------------------------------------------------
 
 interface ValidatedConnection {
-	connectionInfo: PostgresConnectionOptions;
 	databaseKey: string;
-	dataSource: DataSource;
+	/** Backend-agnostic query executor (TypeORM Postgres or in-process PGlite). */
+	runQuery: RowQueryFn;
+	/**
+	 * Releases any backend resources acquired for this request.  For Postgres
+	 * this destroys the DataSource; for the shared PGlite instance it is a
+	 * no-op (the instance is long-lived and must never be closed here).
+	 */
+	cleanup: () => Promise<void>;
 	lang: SupportedLanguage;
 }
 
@@ -298,20 +309,76 @@ export class GradingController {
 
 		// ---- PGlite branch --------------------------------------------------
 		if ((body.connectionInfo as any)?.type === 'pglite') {
-			res
-				.status(400)
-				.json({ message: t('GRADING_PGLITE_NOT_SUPPORTED', lang) });
-			return null;
+			return this.resolvePGliteConnection(body.connectionInfo as any, lang, res);
 		}
 		// ---------------------------------------------------------------------
 
-		const validationError = validateConnectionInfo(body.connectionInfo, lang);
+		return this.resolvePostgresConnection(body.connectionInfo, lang, res);
+	}
+
+	// =========================================================================
+	// Backend resolution helpers
+	// =========================================================================
+
+	/**
+	 * Resolves a validated {@link ValidatedConnection} for an in-process PGlite
+	 * database.  The PGlite instance is expected to already be registered
+	 * (auto-analyze runs before this helper).  Writes a 400 response and
+	 * returns null on failure.
+	 *
+	 * The returned `cleanup` is intentionally a no-op: the PGlite instance is
+	 * shared and long-lived, so it must never be closed here.
+	 */
+	private resolvePGliteConnection(
+		connectionInfo: any,
+		lang: SupportedLanguage,
+		res: Response,
+	): ValidatedConnection | null {
+		const databaseId = connectionInfo?.databaseId;
+		if (!databaseId || typeof databaseId !== 'string') {
+			res.status(400).json({ message: t('INVALID_CONNECTION_INFO', lang) });
+			return null;
+		}
+
+		const databaseKey = generatePGliteKey(databaseId);
+		if (!isDatabaseRegistered(databaseKey)) {
+			res.status(400).json({ message: t('DATABASE_NOT_REGISTERED', lang) });
+			return null;
+		}
+
+		const db = pgliteInstances.get(databaseId);
+		if (!db) {
+			res.status(400).json({ message: t('DATABASE_NOT_REGISTERED', lang) });
+			return null;
+		}
+
+		return {
+			databaseKey,
+			runQuery: makePGliteRowQueryFn(db),
+			cleanup: async () => {
+				/* shared PGlite instance — never closed here */
+			},
+			lang,
+		};
+	}
+
+	/**
+	 * Resolves a validated {@link ValidatedConnection} backed by a TypeORM
+	 * DataSource for a PostgreSQL connection.  Writes a 400 response and
+	 * returns null on failure.
+	 */
+	private async resolvePostgresConnection(
+		connectionInfo: PostgresConnectionOptions,
+		lang: SupportedLanguage,
+		res: Response,
+	): Promise<ValidatedConnection | null> {
+		const validationError = validateConnectionInfo(connectionInfo, lang);
 		if (validationError) {
 			res.status(400).json({ message: validationError });
 			return null;
 		}
 
-		const { host, port, schema } = body.connectionInfo;
+		const { host, port, schema } = connectionInfo;
 		const databaseKey = generateDatabaseKey(host!, port!, schema!);
 
 		if (!isDatabaseRegistered(databaseKey)) {
@@ -322,7 +389,7 @@ export class GradingController {
 		let dataSource: DataSource;
 		let isConnected: boolean;
 		try {
-			dataSource = new DataSource(body.connectionInfo);
+			dataSource = new DataSource(connectionInfo);
 			isConnected = await connectToDatabase(dataSource);
 		} catch {
 			res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
@@ -335,9 +402,11 @@ export class GradingController {
 		}
 
 		return {
-			connectionInfo: body.connectionInfo,
 			databaseKey,
-			dataSource,
+			runQuery: makeRowQueryFn(dataSource),
+			cleanup: async () => {
+				await dataSource.destroy();
+			},
 			lang,
 		};
 	}
@@ -414,77 +483,71 @@ export class GradingController {
 		}
 		// ---------------------------------------------------------------------
 
-		// ---- PGlite branch --------------------------------------------------
+		// Resolve a backend-agnostic executor for either PGlite or PostgreSQL.
+		let databaseKey: string;
+		let runQuery: RowQueryFn;
+		let cleanup: () => Promise<void>;
+		let schema: string;
+
 		if ((connectionInfo as any)?.type === 'pglite') {
-			return res
-				.status(400)
-				.json({ message: t('GRADING_PGLITE_NOT_SUPPORTED', lang) });
-		}
-		// ---------------------------------------------------------------------
-
-		const validationError = validateConnectionInfo(connectionInfo, lang);
-		if (validationError) {
-			return res.status(400).json({ message: validationError });
-		}
-
-		const databaseKey = generateDatabaseKey(
-			connectionInfo.host!,
-			connectionInfo.port!,
-			connectionInfo.schema!,
-		);
-		if (!isDatabaseRegistered(databaseKey)) {
-			return res
-				.status(400)
-				.json({ message: t('DATABASE_NOT_REGISTERED', lang) });
-		}
-
-		let dataSource: DataSource;
-		let isConnected: boolean;
-		try {
-			dataSource = new DataSource(connectionInfo);
-			isConnected = await connectToDatabase(dataSource);
-		} catch {
-			return res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
+			const validated = this.resolvePGliteConnection(
+				connectionInfo as any,
+				lang,
+				res,
+			);
+			if (!validated) return res;
+			databaseKey = validated.databaseKey;
+			runQuery = validated.runQuery;
+			cleanup = validated.cleanup;
+			schema = 'public';
+		} else {
+			const validated = await this.resolvePostgresConnection(
+				connectionInfo,
+				lang,
+				res,
+			);
+			if (!validated) return res;
+			databaseKey = validated.databaseKey;
+			runQuery = validated.runQuery;
+			cleanup = validated.cleanup;
+			schema = connectionInfo.schema!;
 		}
 
 		const gradingRequest = gradingRequestOptions.gradingRequest;
-		if (isConnected) {
-			try {
-				const resolvedReferenceQuery = this.resolveReferenceQuery(
-					gradingRequest.studentQuery,
-					gradingRequest.referenceQuery,
-					gradingRequest.referenceQueries,
-				);
+		try {
+			const resolvedReferenceQuery = this.resolveReferenceQuery(
+				gradingRequest.studentQuery,
+				gradingRequest.referenceQuery,
+				gradingRequest.referenceQueries,
+			);
 
-				const comparisonResult = await this.queryGradingService.gradeQuery(
-					resolvedReferenceQuery,
-					gradingRequest.studentQuery,
-					dataSource,
-					databaseKey,
-					lang,
-				);
+			const comparisonResult = await this.queryGradingService.gradeQuery(
+				resolvedReferenceQuery,
+				gradingRequest.studentQuery,
+				runQuery,
+				databaseKey,
+				lang,
+			);
 
-				await this.appendTaskDescription(
-					comparisonResult,
-					gradingRequest.studentQuery,
-					connectionInfo.schema!,
-					databaseKey,
-					lang,
-					gradingRequestOptions.generationStrategy,
-					gradingRequestOptions.gptOption,
-				);
+			await this.appendTaskDescription(
+				comparisonResult,
+				gradingRequest.studentQuery,
+				schema,
+				databaseKey,
+				lang,
+				gradingRequestOptions.generationStrategy,
+				gradingRequestOptions.gptOption,
+			);
 
-				await dataSource.destroy();
-				return res.status(200).json({ comparisonResult });
-			} catch (error) {
-				console.log(error);
-				await dataSource.destroy();
-				return res.status(500).json({
-					message: t('GRADING_FAILED_WITH_ERROR', lang, String(error)),
-				});
-			}
+			await cleanup();
+			return res.status(200).json({ comparisonResult });
+		} catch (error) {
+			console.log(error);
+			await cleanup();
+			return res.status(500).json({
+				message: t('GRADING_FAILED_WITH_ERROR', lang, String(error)),
+			});
 		}
-		return res.status(500).json({ message: t('GRADING_FAILED', lang) });
 	}
 
 	// =========================================================================
@@ -602,7 +665,7 @@ export class GradingController {
 		const validated = await this.validateAndConnect(req, res);
 		if (!validated) return res;
 
-		const { dataSource, lang } = validated;
+		const { runQuery, cleanup, lang } = validated;
 		const body = req.body as IRequestComparisonOptions;
 		const { studentQuery } = body;
 
@@ -616,16 +679,16 @@ export class GradingController {
 			const [match, rsFeedback] = await this.resultSetComparator.compare(
 				referenceQuery,
 				studentQuery,
-				dataSource,
+				runQuery,
 			);
-			await dataSource.destroy();
+			await cleanup();
 			const feedback =
 				rsFeedback.length > 0
 					? { verdict: { message: rsFeedback[0] } }
 					: undefined;
 			return res.status(200).json({ match, feedback });
 		} catch (error) {
-			await dataSource.destroy();
+			await cleanup();
 			return res
 				.status(500)
 				.json({ message: t('GRADING_FAILED_WITH_ERROR', lang, String(error)) });
@@ -647,7 +710,7 @@ export class GradingController {
 		const validated = await this.validateAndConnect(req, res);
 		if (!validated) return res;
 
-		const { dataSource, lang } = validated;
+		const { cleanup, lang } = validated;
 		const body = req.body as IRequestComparisonOptions;
 		const { studentQuery } = body;
 
@@ -657,7 +720,7 @@ export class GradingController {
 			body.referenceQueries,
 		);
 
-		await dataSource.destroy(); // No DB call needed for AST comparison
+		await cleanup(); // No DB call needed for AST comparison
 
 		const parser = new Parser();
 		let studentAST: any;
@@ -707,7 +770,7 @@ export class GradingController {
 		const validated = await this.validateAndConnect(req, res);
 		if (!validated) return res;
 
-		const { dataSource, lang } = validated;
+		const { runQuery, cleanup, lang } = validated;
 		const body = req.body as IRequestComparisonOptions;
 		const { studentQuery } = body;
 
@@ -726,12 +789,12 @@ export class GradingController {
 			referenceAST = parser.astify(referenceQuery, { database: 'postgresql' });
 		} catch (error) {
 			console.error(error);
-			await dataSource.destroy();
+			await cleanup();
 			return res.status(400).json({ message: t('GRADING_READ_ERROR', lang) });
 		}
 
 		if (Array.isArray(studentAST) || Array.isArray(referenceAST)) {
-			await dataSource.destroy();
+			await cleanup();
 			return res.status(400).json({ message: t('GRADING_READ_ERROR', lang) });
 		}
 
@@ -749,18 +812,18 @@ export class GradingController {
 				referenceAST as AST,
 				studentAliasMap,
 				referenceAliasMap,
-				dataSource,
+				runQuery,
 				studentQuery,
 				referenceQuery,
 			);
-			await dataSource.destroy();
+			await cleanup();
 			return res.status(200).json({
 				plansMatch: result.plansMatch,
 				feedback: result.executionPlan,
 				penaltyPoints: result.penaltyPoints,
 			});
 		} catch (error) {
-			await dataSource.destroy();
+			await cleanup();
 			return res
 				.status(500)
 				.json({ message: t('GRADING_FAILED_WITH_ERROR', lang, String(error)) });
