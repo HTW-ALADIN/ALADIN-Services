@@ -7,7 +7,7 @@ edition = "2021"
 # Für noise-rs
 noise = "0.9"
 # Für FastNoiseLite (Rust-Wrapper)
-fastnoise-lite = "0.1"
+fastnoise-lite = "1.1.1"
 # Für den Web-Server
 axum = "0.7"
 tokio = { version = "1", features = ["full"] }
