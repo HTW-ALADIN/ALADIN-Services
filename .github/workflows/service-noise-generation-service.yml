@@ -1,16 +1,16 @@
-name: noise-service
+name: noise-generation-service
 on:
   push:
     branches: ["master"]
     paths:
-      - "services/noise-service/**"
+      - "services/noise-generation-service/**"
   pull_request:
     branches: ["master"]
     paths:
-      - "services/noise-service/**"
+      - "services/noise-generation-service/**"
 defaults:
   run:
-    working-directory: services/noise-service
+    working-directory: services/noise-generation-service
 jobs:
   lint:
     name: Lint
@@ -27,8 +27,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            services/noise-service/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('services/noise-service/Cargo.lock') }}
+            services/noise-generation-service/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('services/noise-generation-service/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
       - name: Check formatting
@@ -52,8 +52,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            services/noise-service/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('services/noise-service/Cargo.lock') }}
+            services/noise-generation-service/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('services/noise-generation-service/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
       - name: Run tests with coverage
@@ -61,8 +61,8 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: services/noise-service/coverage.lcov
-          flags: noise-service
+          files: services/noise-generation-service/coverage.lcov
+          flags: noise-generation-service
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
         if: always()
@@ -81,17 +81,17 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            services/noise-service/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('services/noise-service/Cargo.lock') }}
+            services/noise-generation-service/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('services/noise-generation-service/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
       - name: Generate OpenAPI spec
-        run: cargo run --bin generate-openapi
+        run: cp openapi.yaml noise-generation-service.openapi.json
       - name: Upload OpenAPI spec
         uses: actions/upload-artifact@v4
         with:
-          name: openapi-spec-noise-service
-          path: services/noise-service/noise-service.openapi.json
+          name: openapi-spec-noise-generation-service
+          path: services/noise-generation-service/noise-generation-service.openapi.json
 
   build:
     name: Build & Push Docker Image
@@ -113,14 +113,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/noise-service
+          images: ghcr.io/${{ github.repository_owner }}/noise-generation-service
           tags: |
             type=sha,prefix=sha-
             type=raw,value=latest
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: services/noise-service
+          context: services/noise-generation-service
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
