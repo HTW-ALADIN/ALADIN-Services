@@ -1,0 +1,74 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Noise Generation Service",
+    "version": "1.0.0",
+    "description": "Unified REST API for noise generation libraries."
+  },
+  "paths": {
+    "/v1/algorithms": {
+      "get": {
+        "summary": "List all algorithm/backend combinations",
+        "responses": {
+          "200": {
+            "description": "A list of algorithms"
+          }
+        }
+      }
+    },
+    "/v1/noise": {
+      "post": {
+        "summary": "Generate/sample noise",
+        "responses": {
+          "201": {
+            "description": "Noise field created"
+          },
+          "202": {
+            "description": "Noise field generation accepted"
+          }
+        }
+      }
+    },
+    "/v1/noise/{fieldId}": {
+      "get": {
+        "summary": "Retrieve a noise field",
+        "parameters": [
+          {
+            "name": "fieldId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Noise field data"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Release a noise field resource",
+        "parameters": [
+          {
+            "name": "fieldId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Resource deleted"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {}
+  }
+}
