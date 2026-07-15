@@ -1,13 +1,13 @@
 use clap::{Parser, Subcommand};
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug, PartialEq)]
 pub enum Commands {
     /// Generate noise with specified algorithm and backend
     Generate {

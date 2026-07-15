@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use clap::Parser;
 use cli::{Cli, Commands};
-use noise::{NoiseFn, Perlin, Simplex, SuperSimplex, Value};
+use noise::{NoiseFn, Perlin, Simplex, SuperSimplex, Value, OpenSimplex, Worley};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Sampling {
@@ -65,7 +65,7 @@ enum GenerateNoiseRequest {
     },
     #[serde(rename = "cellular")]
     Cellular {
-        backend: String,
+        backend: Option<String>,
         params: serde_json::Value,
         sampling: Sampling,
         output: Option<Output>,
@@ -186,27 +186,27 @@ async fn list_algorithms() -> Json<serde_json::Value> {
 
 async fn generate_noise(Json(payload): Json<GenerateNoiseRequest>) -> (StatusCode, Json<NoiseField>) {
     println!("Received request: {:?}", payload);
-    // In a real implementation, this would actually generate noise based on the algorithm
-    // For now, we'll just return a dummy response
+    let algorithm_name = match &payload {
+        GenerateNoiseRequest::Perlin { .. } => "perlin".to_string(),
+        GenerateNoiseRequest::Simplex { .. } => "simplex".to_string(),
+        GenerateNoiseRequest::OpenSimplex2 { .. } => "opensimplex2".to_string(),
+        GenerateNoiseRequest::SuperSimplex { .. } => "supersimplex".to_string(),
+        GenerateNoiseRequest::Value { .. } => "value".to_string(),
+        GenerateNoiseRequest::Cellular { .. } => "cellular".to_string(),
+        GenerateNoiseRequest::Fbm { .. } => "fbm".to_string(),
+        GenerateNoiseRequest::Billow { .. } => "billow".to_string(),
+        GenerateNoiseRequest::RidgedMulti { .. } => "ridged_multi".to_string(),
+        GenerateNoiseRequest::HybridMulti { .. } => "hybrid_multi".to_string(),
+        GenerateNoiseRequest::PingPong { .. } => "pingpong".to_string(),
+        GenerateNoiseRequest::DomainWarp { .. } => "domain_warp".to_string(),
+        GenerateNoiseRequest::Combinator { .. } => "combinator".to_string(),
+        GenerateNoiseRequest::Utility { .. } => "utility".to_string(),
+    };
+    println!("Matched algorithm: {}", algorithm_name);
     (StatusCode::CREATED, Json(NoiseField {
         id: "nsf_123".to_string(),
         status: "completed".to_string(),
-        algorithm: match &payload {
-            GenerateNoiseRequest::Perlin { .. } => "perlin".to_string(),
-            GenerateNoiseRequest::Simplex { .. } => "simplex".to_string(),
-            GenerateNoiseRequest::OpenSimplex2 { .. } => "opensimplex2".to_string(),
-            GenerateNoiseRequest::SuperSimplex { .. } => "supersimplex".to_string(),
-            GenerateNoiseRequest::Value { .. } => "value".to_string(),
-            GenerateNoiseRequest::Cellular { .. } => "cellular".to_string(),
-            GenerateNoiseRequest::Fbm { .. } => "fbm".to_string(),
-            GenerateNoiseRequest::Billow { .. } => "billow".to_string(),
-            GenerateNoiseRequest::RidgedMulti { .. } => "ridged_multi".to_string(),
-            GenerateNoiseRequest::HybridMulti { .. } => "hybrid_multi".to_string(),
-            GenerateNoiseRequest::PingPong { .. } => "pingpong".to_string(),
-            GenerateNoiseRequest::DomainWarp { .. } => "domain_warp".to_string(),
-            GenerateNoiseRequest::Combinator { .. } => "combinator".to_string(),
-            GenerateNoiseRequest::Utility { .. } => "utility".to_string(),
-        },
+        algorithm: algorithm_name,
     }))
 }
 
@@ -229,7 +229,12 @@ fn generate_supersimplex_noise(x: f64, y: f64) -> f64 {
     supersimplex.get([x, y, 0.0])
 }
 
-fn generate_value_noise(x: f64, y: f64) -> f64 {
-    let value = Value::new(1);
-    value.get([x, y, 0.0])
+fn generate_cellular_noise(x: f64, y: f64) -> f64 {
+    let cellular = Worley::new(1);
+    cellular.get([x, y, 0.0])
+}
+
+fn generate_opensimplex2_noise(x: f64, y: f64) -> f64 {
+    let opensimplex2 = OpenSimplex::new(1);
+    opensimplex2.get([x, y, 0.0])
 }

@@ -1,5 +1,7 @@
 use clap::Parser;
-use noise_generation_service::cli::{Cli, Commands};
+#[path = "../src/cli.rs"]
+mod cli;
+use cli::{Cli, Commands};
 
 #[test]
 fn test_cli_parse_generate() {
