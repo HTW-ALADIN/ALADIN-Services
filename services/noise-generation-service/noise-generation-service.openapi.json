@@ -5,7 +5,42 @@
     "version": "1.0.0",
     "description": "Unified REST API for noise generation libraries."
   },
-  "paths": {
+  "components": {
+    "schemas": {
+      "GenerateNoiseRequest": {
+        "type": "object",
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "enum": [
+              "perlin",
+              "simplex",
+              "opensimplex2",
+              "supersimplex",
+              "value",
+              "cellular",
+              "fbm",
+              "billow",
+              "ridged_multi",
+              "hybrid_multi",
+              "pingpong",
+              "domain_warp",
+              "combinator",
+              "utility"
+            ]
+          },
+          "backend": {
+            "type": "string",
+            "enum": [
+              "fastnoise_lite",
+              "noise_rs"
+            ]
+          }
+        },
+        "required": ["algorithm", "backend"]
+      }
+    }
+  },
     "/v1/algorithms": {
       "get": {
         "summary": "List all algorithm/backend combinations",

@@ -2,7 +2,7 @@ services:
   noise-generation-service:
     build: .
     ports:
-      - "3000:3000"
+      - "8000:3000"
     volumes:
       - .:/app
     environment:
