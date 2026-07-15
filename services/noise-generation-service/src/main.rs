@@ -152,8 +152,8 @@ async fn main() {
         .route("/v1/noise", post(generate_noise))
         .route("/v1/noise/:fieldId", get(get_noise));
 
-    let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("Listening on port 3000");
+    let listener = TcpListener::bind("0.0.0.0:8000").await.unwrap();
+    println!("Listening on port 8000");
     axum::serve(listener, app).await.unwrap();
 }
 
