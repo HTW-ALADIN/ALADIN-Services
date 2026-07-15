@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use clap::Parser;
 use cli::{Cli, Commands};
+use noise::{NoiseFn, Perlin};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Sampling {
@@ -87,4 +88,20 @@ async fn generate_noise(Json(payload): Json<GenerateNoiseRequest>) -> (StatusCod
 
 async fn get_noise(Path(field_id): Path<String>) -> String {
     format!("Get noise field {}", field_id)
+}
+
+fn generate_perlin_noise(x: f64, y: f64) -> f64 {
+    let perlin = Perlin::new(1);
+    perlin.get([x, y, 0.0])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_perlin_generation() {
+        let noise = generate_perlin_noise(0.5, 0.5);
+        assert!(noise >= -1.0 && noise <= 1.0);
+    }
 }
