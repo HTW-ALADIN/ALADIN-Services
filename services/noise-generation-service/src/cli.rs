@@ -1,18 +1,22 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[clap(name = "noise-gen", about = "Noise Generation CLI")]
+#[command(author, version, about, long_about = None)]
 pub struct Cli {
-    #[clap(subcommand)]
+    #[command(subcommand)]
     pub command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Generate noise with specified algorithm and backend
     Generate {
-        #[clap(short, long)]
+        /// The noise algorithm to use
+        #[arg(long)]
         algorithm: String,
-        #[clap(short, long)]
+        
+        /// The backend implementation to use
+        #[arg(long)]
         backend: Option<String>,
     },
 }
