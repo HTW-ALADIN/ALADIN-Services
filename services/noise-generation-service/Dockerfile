@@ -1,29 +1,26 @@
 # Stage 1: Build
-FROM rust:1.80-slim-bookworm AS builder
+FROM rust:1.85-slim-bookworm AS builder
 
-# Installiere Build-Abhängigkeiten
+# Install build dependencies
 RUN apt-get update && apt-get install -y pkg-config build-essential libssl-dev
 
 WORKDIR /app
 COPY . .
 
-# Kompiliere das Projekt
+# Compile the project
 RUN cargo build --release
 
 # Stage 2: Runtime
 FROM debian:bookworm-slim
 
-# Installiere SSL-Bibliotheken für die Laufzeit
+# Install SSL libraries for runtime
 RUN apt-get update && apt-get install -y libssl3
 
-# Kopiere das Binary aus dem Builder
+# Copy the binary from the builder
 COPY --from=builder /app/target/release/noise-generation-service /usr/local/bin/noise-generation-service
 
-# Legt den Benutzer fest
+# Set the user
 USER nobody
 
-# Starte den Service
+# Start the service
 CMD ["/usr/local/bin/noise-generation-service"]
-
-# Starte den Service
-CMD ["noise-generation-service"]
