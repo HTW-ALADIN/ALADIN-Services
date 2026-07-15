@@ -3,7 +3,7 @@ use axum::{
     routing::{get, post},
     Router,
     Json,
-    extract::Path,
+    extract::{Path, State},
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
@@ -11,12 +11,19 @@ use tokio::net::TcpListener;
 use clap::Parser;
 use cli::{Cli, Commands};
 use noise::{NoiseFn, Perlin, Simplex, SuperSimplex, Value, OpenSimplex, Worley};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+#[derive(Clone)]
+struct AppState {
+    fields: Arc<Mutex<HashMap<String, Vec<Vec<f64>>>>>,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Sampling {
     mode: String,
     dimensions: i32,
-    grid: Option<serde_json::Value>,
+    size: Option<Vec<usize>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -147,10 +154,15 @@ async fn main() {
         }
     }
 
+    let state = AppState {
+        fields: Arc::new(Mutex::new(HashMap::new())),
+    };
+
     let app = Router::new()
         .route("/v1/algorithms", get(list_algorithms))
         .route("/v1/noise", post(generate_noise))
-        .route("/v1/noise/:fieldId", get(get_noise));
+        .route("/v1/noise/:fieldId", get(get_noise))
+        .with_state(state);
 
     let listener = TcpListener::bind("0.0.0.0:8000").await.unwrap();
     println!("Listening on port 8000");
@@ -184,7 +196,10 @@ async fn list_algorithms() -> Json<serde_json::Value> {
     ]))
 }
 
-async fn generate_noise(Json(payload): Json<GenerateNoiseRequest>) -> (StatusCode, Json<NoiseField>) {
+async fn generate_noise(
+    State(state): State<AppState>,
+    Json(payload): Json<GenerateNoiseRequest>,
+) -> (StatusCode, Json<NoiseField>) {
     let algorithm_name = match &payload {
         GenerateNoiseRequest::Perlin { .. } => "perlin".to_string(),
         GenerateNoiseRequest::Simplex { .. } => "simplex".to_string(),
@@ -201,16 +216,42 @@ async fn generate_noise(Json(payload): Json<GenerateNoiseRequest>) -> (StatusCod
         GenerateNoiseRequest::Combinator { .. } => "combinator".to_string(),
         GenerateNoiseRequest::Utility { .. } => "utility".to_string(),
     };
+
+    let field_id = format!("nsf_{}", uuid::Uuid::new_v4());
+    
+    // Simple Perlin generation for now
+    let size = match &payload {
+        GenerateNoiseRequest::Perlin { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        _ => vec![10, 10],
+    };
+    
+    let mut field = vec![vec![0.0; size[0]]; size[1]];
+    let perlin = Perlin::new(1);
+    for y in 0..size[1] {
+        for x in 0..size[0] {
+            field[y][x] = perlin.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+        }
+    }
+
+    state.fields.lock().unwrap().insert(field_id.clone(), field);
     
     (StatusCode::CREATED, Json(NoiseField {
-        id: "nsf_123".to_string(),
+        id: field_id,
         status: "completed".to_string(),
         algorithm: algorithm_name,
     }))
 }
 
-async fn get_noise(Path(field_id): Path<String>) -> String {
-    format!("Get noise field {}", field_id)
+async fn get_noise(
+    State(state): State<AppState>,
+    Path(field_id): Path<String>,
+) -> Result<Json<Vec<Vec<f64>>>, StatusCode> {
+    let fields = state.fields.lock().unwrap();
+    if let Some(field) = fields.get(&field_id) {
+        Ok(Json(field.clone()))
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
 }
 
 fn generate_perlin_noise(x: f64, y: f64) -> f64 {

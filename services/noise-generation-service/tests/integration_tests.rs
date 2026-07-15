@@ -353,8 +353,35 @@ async fn test_utility_generation() {
 #[tokio::test]
 async fn test_retrieve_noise_field() {
     let client = reqwest::Client::new();
+    
+    // 1. Generate a field first to get a valid ID
+    let gen_response = client
+        .post("http://localhost:8000/v1/noise")
+        .json(&json!({
+            "algorithm": "perlin",
+            "backend": "fastnoise_lite",
+            "params": {},
+            "sampling": {
+                "mode": "grid",
+                "dimensions": 2
+            },
+            "output": {
+                "format": "json",
+                "normalize": "none"
+            }
+        }))
+        .send()
+        .await
+        .unwrap();
+    
+    assert_eq!(gen_response.status(), 201);
+    
+    let noise_field: serde_json::Value = gen_response.json().await.unwrap();
+    let field_id = noise_field["id"].as_str().unwrap();
+
+    // 2. Retrieve the field using the valid ID
     let response = client
-        .get("http://localhost:8000/v1/noise/nsf_123")
+        .get(format!("http://localhost:8000/v1/noise/{}", field_id))
         .send()
         .await
         .unwrap();
