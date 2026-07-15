@@ -2,6 +2,21 @@
 
 A unified REST API for noise generation libraries, supporting multiple noise algorithms and backends.
 
+## Prerequisites
+
+This repository contains all files necessary to run the application in local development and production environments.
+It requires Docker and Rust 1.80+ on your system.
+
+When cloning this repository and opening it through VSCode, it will ask you to install all recommended VSCode extensions.
+
+## Getting started
+
+In order to install and run this application in your local development environment, you first need to install all dependencies via cargo:
+
+```bash
+cargo build
+```
+
 ## Overview
 
 The Noise Generation Service provides a standardized REST API for generating various types of noise, including Perlin, Simplex, and other advanced noise algorithms. It supports multiple backend implementations for optimal performance and compatibility.
@@ -101,32 +116,32 @@ cargo run -- generate --algorithm perlin --backend fastnoise_lite
 
 ## Testing
 
-To run the tests:
+### Unit Tests
 
 ```bash
-# Run unit tests
 cargo test
+```
 
-# Run integration tests
+### Integration Tests
+
+```bash
 cd tests && cargo test
 ```
 
 ## Deployment
 
-The service is Docker-ready and can be deployed using:
+### Development Environment
 
 ```bash
-# Build the image
-docker build -t noise-generation-service .
-
-# Run the container
-docker run -p 8000:8000 noise-generation-service
-
-# Development environment
+# Start development environment
 docker-compose -f docker-compose.dev.yml up --build
+```
 
-# Production environment  
-docker-compose -f docker-compose.prod.yml up --build
+### Production Environment (Docker + Compose)
+
+```bash
+# Start production environment
+docker-compose -f docker-compose.prod.yml up -d
 ```
 
 ## Contributing

@@ -41,6 +41,7 @@
       }
     }
   },
+  "paths": {
     "/v1/algorithms": {
       "get": {
         "summary": "List all algorithm/backend combinations",
@@ -102,8 +103,5 @@
         }
       }
     }
-  },
-  "components": {
-    "schemas": {}
   }
 }

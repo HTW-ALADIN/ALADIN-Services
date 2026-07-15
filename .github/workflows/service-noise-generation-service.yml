@@ -85,8 +85,8 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('services/noise-generation-service/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Generate OpenAPI spec
-        run: cp openapi.yaml noise-generation-service.openapi.json
+      - name: Verify OpenAPI spec
+        run: test -f noise-generation-service.openapi.json
       - name: Upload OpenAPI spec
         uses: actions/upload-artifact@v4
         with:
