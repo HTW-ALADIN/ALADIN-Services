@@ -222,14 +222,37 @@ async fn generate_noise(
     // Simple Perlin generation for now
     let size = match &payload {
         GenerateNoiseRequest::Perlin { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        GenerateNoiseRequest::Simplex { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
         _ => vec![10, 10],
     };
     
     let mut field = vec![vec![0.0; size[0]]; size[1]];
-    let perlin = Perlin::new(1);
-    for y in 0..size[1] {
-        for x in 0..size[0] {
-            field[y][x] = perlin.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+    
+    match &payload {
+        GenerateNoiseRequest::Perlin { .. } => {
+            let perlin = Perlin::new(1);
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    field[y][x] = perlin.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                }
+            }
+        },
+        GenerateNoiseRequest::Simplex { .. } => {
+            let simplex = Simplex::new(1);
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    field[y][x] = simplex.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                }
+            }
+        },
+        _ => {
+            // Default to Perlin for now if not implemented
+            let perlin = Perlin::new(1);
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    field[y][x] = perlin.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                }
+            }
         }
     }
 
