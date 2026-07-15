@@ -19,5 +19,11 @@ RUN apt-get update && apt-get install -y libssl3
 # Kopiere das Binary aus dem Builder
 COPY --from=builder /app/target/release/noise-generation-service /usr/local/bin/noise-generation-service
 
+# Legt den Benutzer fest
+USER nobody
+
+# Starte den Service
+CMD ["/usr/local/bin/noise-generation-service"]
+
 # Starte den Service
 CMD ["noise-generation-service"]
