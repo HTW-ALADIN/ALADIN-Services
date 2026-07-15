@@ -160,19 +160,27 @@ async fn main() {
 async fn list_algorithms() -> Json<serde_json::Value> {
     Json(serde_json::json!([
         {"algorithm": "perlin", "backend": "fastnoise_lite"},
-        {"algorithm": "simplex", "backend": "fastnoise_lite"},
+        {"algorithm": "perlin", "backend": "noise_rs"},
+        {"algorithm": "simplex", "backend": "noise_rs"},
         {"algorithm": "opensimplex2", "backend": "fastnoise_lite"},
-        {"algorithm": "supersimplex", "backend": "fastnoise_lite"},
+        {"algorithm": "opensimplex2", "backend": "noise_rs"},
+        {"algorithm": "supersimplex", "backend": "noise_rs"},
         {"algorithm": "value", "backend": "fastnoise_lite"},
+        {"algorithm": "value", "backend": "noise_rs"},
         {"algorithm": "cellular", "backend": "fastnoise_lite"},
+        {"algorithm": "cellular", "backend": "noise_rs"},
         {"algorithm": "fbm", "backend": "fastnoise_lite"},
-        {"algorithm": "billow", "backend": "fastnoise_lite"},
+        {"algorithm": "fbm", "backend": "noise_rs"},
+        {"algorithm": "billow", "backend": "noise_rs"},
         {"algorithm": "ridged_multi", "backend": "fastnoise_lite"},
-        {"algorithm": "hybrid_multi", "backend": "fastnoise_lite"},
+        {"algorithm": "ridged_multi", "backend": "noise_rs"},
+        {"algorithm": "hybrid_multi", "backend": "noise_rs"},
         {"algorithm": "pingpong", "backend": "fastnoise_lite"},
+        {"algorithm": "pingpong", "backend": "noise_rs"},
         {"algorithm": "domain_warp", "backend": "fastnoise_lite"},
-        {"algorithm": "combinator", "backend": "fastnoise_lite"},
-        {"algorithm": "utility", "backend": "fastnoise_lite"}
+        {"algorithm": "domain_warp", "backend": "noise_rs"},
+        {"algorithm": "combinator", "backend": "noise_rs"},
+        {"algorithm": "utility", "backend": "noise_rs"}
     ]))
 }
 

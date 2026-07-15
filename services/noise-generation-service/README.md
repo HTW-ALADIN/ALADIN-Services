@@ -2,16 +2,6 @@
 
 A unified REST API for noise generation libraries, supporting multiple noise algorithms and backends.
 
-## Table of Contents
-- [Overview](#overview)
-- [Features](#features)
-- [API Endpoints](#api-endpoints)
-- [Algorithms](#algorithms)
-- [Usage](#usage)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Contributing](#contributing)
-
 ## Overview
 
 The Noise Generation Service provides a standardized REST API for generating various types of noise, including Perlin, Simplex, and other advanced noise algorithms. It supports multiple backend implementations for optimal performance and compatibility.
@@ -23,15 +13,16 @@ The Noise Generation Service provides a standardized REST API for generating var
 - Standardized REST API
 - Docker-ready deployment
 - Comprehensive test coverage
+- CLI interface
 
 ## API Endpoints
 
-### 1. List Algorithms
+### List Algorithms
 - **Endpoint**: `GET /v1/algorithms`
 - **Description**: Lists all available algorithm/backend combinations
 - **Response**: Array of algorithm objects with backend information
 
-### 2. Generate Noise
+### Generate Noise
 - **Endpoint**: `POST /v1/noise`
 - **Description**: Generates noise based on the specified algorithm and backend
 - **Request Body**:
@@ -44,33 +35,33 @@ The Noise Generation Service provides a standardized REST API for generating var
   - `201`: Noise field created
   - `202`: Noise field generation accepted
 
-### 3. Retrieve Noise Field
+### Retrieve Noise Field
 - **Endpoint**: `GET /v1/noise/{fieldId}`
 - **Description**: Retrieves a generated noise field by its ID
 - **Parameters**:
   - `fieldId`: The ID of the noise field to retrieve
 - **Response**: Noise field data
 
-## Algorithms
+## Algorithms and Backends
 
-The service supports the following noise algorithms:
+The service supports 14 noise algorithm families with specific backend support:
 
-| Algorithm | Description | Backend Support |
-|-----------|-------------|-----------------|
-| `perlin` | Perlin noise | `fastnoise_lite`, `noise_rs` |
-| `simplex` | Simplex noise (classic) | `fastnoise_lite`, `noise_rs` |
-| `opensimplex2` | OpenSimplex2 / OpenSimplex2S | `fastnoise_lite`, `noise_rs` |
-| `supersimplex` | SuperSimplex | `fastnoise_lite`, `noise_rs` |
-| `value` | Value noise (+cubic) | `fastnoise_lite`, `noise_rs` |
-| `cellular` | Cellular / Worley / Voronoi | `fastnoise_lite`, `noise_rs` |
-| `fbm` | Fractal Brownian Motion | `fastnoise_lite`, `noise_rs` |
-| `billow` | Billow noise | `fastnoise_lite`, `noise_rs` |
-| `ridged_multi` | Ridged multifractal | `fastnoise_lite`, `noise_rs` |
-| `hybrid_multi` | HybridMulti fractal | `fastnoise_lite`, `noise_rs` |
-| `pingpong` | PingPong fractal | `fastnoise_lite`, `noise_rs` |
-| `domain_warp` | Domain warping | `fastnoise_lite`, `noise_rs` |
-| `combinator` | Generic combinators | `fastnoise_lite`, `noise_rs` |
-| `utility` | Utility / deterministic generators | `fastnoise_lite`, `noise_rs` |
+| Algorithm | Canonical Name | Family | Backend Support | Underlying Function |
+|-----------|----------------|--------|-----------------|---------------------|
+| `perlin` | Perlin noise | Perlin | `fastnoise_lite`, `noise_rs` | `SetNoiseType(Perlin)` + `GetNoise(x, y[, z])` / `Perlin::new(seed).get([x, y])` |
+| `simplex` | Simplex noise (classic) | Simplex | `noise_rs` only | `Simplex::new(seed).get(point)` |
+| `opensimplex2` | OpenSimplex2 / OpenSimplex2S | OpenSimplex | `fastnoise_lite` (default) | `SetNoiseType(OpenSimplex2 | OpenSimplex2S)` + `GetNoise(x, y[, z])` |
+| `supersimplex` | SuperSimplex | SuperSimplex | `noise_rs` only | `SuperSimplex::new(seed).get(point)` |
+| `value` | Value noise (+cubic) | Value | `fastnoise_lite` (default) | `SetNoiseType(Value | ValueCubic)` + `GetNoise(x, y[, z])` |
+| `cellular` | Cellular / Worley / Voronoi | Cellular | `fastnoise_lite` (default) | `SetNoiseType(Cellular)`, `SetCellularDistanceFunction(...)`, `SetCellularReturnType(...)`, `SetCellularJitter(...)` + `GetNoise(x, y[, z])` |
+| `fbm` | Fractal Brownian Motion | Fractal | `fastnoise_lite` (default) | `SetFractalType(FBm)`, `SetFractalOctaves/Lacunarity/Gain(...)` wraps a `source` sub-field |
+| `billow` | Billow noise | Fractal | `noise_rs` only | `Billow::<Source>::new(seed).set_octaves/...(...).get(point)` |
+| `ridged_multi` | Ridged multifractal | Fractal | `fastnoise_lite` (default) | `SetFractalType(Ridged)` wraps a `source` sub-field |
+| `hybrid_multi` | HybridMulti fractal | Fractal | `noise_rs` only | `HybridMulti::<Source>::new(seed).set_octaves/...(...).get(point)` |
+| `pingpong` | PingPong fractal | Fractal | `fastnoise_lite` only | `SetFractalType(PingPong)`, `SetFractalPingPongStrength(...)` wraps a `source` sub-field |
+| `domain_warp` | Domain warping | Transform | `fastnoise_lite` only | `SetDomainWarpType(...)`, `SetDomainWarpAmp(...)` + `DomainWarp2D/3D(x, y[, z])` |
+| `combinator` | Generic combinators | Combinator | `noise_rs` only | `Add`/`Multiply`/`Min`/`Max`/`Blend`/`Turbulence`/`ScalePoint` (selected via `op` sub-field) |
+| `utility` | Utility / deterministic generators | Utility | `noise_rs` only | `Constant::new(value)` / `Cylinders::new()` (selected via `kind` sub-field) |
 
 ## Usage
 
@@ -101,15 +92,11 @@ curl -X POST http://localhost:8000/v1/noise \
 curl -X GET http://localhost:8000/v1/noise/nsf_123
 ```
 
-### Using with Docker
+### Using the CLI
 
 ```bash
-# Build and run with Docker
-docker-compose build
-docker-compose up -d
-
-# Access the service
-curl http://localhost:8000/v1/algorithms
+# Generate noise using CLI
+cargo run -- generate --algorithm perlin --backend fastnoise_lite
 ```
 
 ## Testing
@@ -134,6 +121,12 @@ docker build -t noise-generation-service .
 
 # Run the container
 docker run -p 8000:8000 noise-generation-service
+
+# Development environment
+docker-compose -f docker-compose.dev.yml up --build
+
+# Production environment  
+docker-compose -f docker-compose.prod.yml up --build
 ```
 
 ## Contributing
