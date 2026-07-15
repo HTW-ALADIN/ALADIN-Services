@@ -51,6 +51,31 @@ async fn test_simplex_generation() {
 }
 
 #[tokio::test]
+async fn test_opensimplex2_generation() {
+    let client = reqwest::Client::new();
+    let response = client
+        .post("http://localhost:8000/v1/noise")
+        .json(&json!({
+            "algorithm": "opensimplex2",
+            "backend": "fastnoise_lite",
+            "params": {},
+            "sampling": {
+                "mode": "grid",
+                "dimensions": 2
+            },
+            "output": {
+                "format": "json",
+                "normalize": "none"
+            }
+        }))
+        .send()
+        .await
+        .unwrap();
+    
+    assert_eq!(response.status(), 201);
+}
+
+#[tokio::test]
 async fn test_supersimplex_generation() {
     let client = reqwest::Client::new();
     let response = client
@@ -82,6 +107,31 @@ async fn test_value_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "value",
+            "backend": "fastnoise_lite",
+            "params": {},
+            "sampling": {
+                "mode": "grid",
+                "dimensions": 2
+            },
+            "output": {
+                "format": "json",
+                "normalize": "none"
+            }
+        }))
+        .send()
+        .await
+        .unwrap();
+    
+    assert_eq!(response.status(), 201);
+}
+
+#[tokio::test]
+async fn test_cellular_generation() {
+    let client = reqwest::Client::new();
+    let response = client
+        .post("http://localhost:8000/v1/noise")
+        .json(&json!({
+            "algorithm": "cellular",
             "backend": "fastnoise_lite",
             "params": {},
             "sampling": {

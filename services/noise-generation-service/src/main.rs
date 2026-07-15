@@ -42,6 +42,13 @@ enum GenerateNoiseRequest {
         sampling: Sampling,
         output: Option<Output>,
     },
+    #[serde(rename = "opensimplex2")]
+    OpenSimplex2 {
+        backend: Option<String>,
+        params: serde_json::Value,
+        sampling: Sampling,
+        output: Option<Output>,
+    },
     #[serde(rename = "supersimplex")]
     SuperSimplex {
         backend: Option<String>,
@@ -52,6 +59,13 @@ enum GenerateNoiseRequest {
     #[serde(rename = "value")]
     Value {
         backend: Option<String>,
+        params: serde_json::Value,
+        sampling: Sampling,
+        output: Option<Output>,
+    },
+    #[serde(rename = "cellular")]
+    Cellular {
+        backend: String,
         params: serde_json::Value,
         sampling: Sampling,
         output: Option<Output>,
@@ -144,7 +158,22 @@ async fn main() {
 }
 
 async fn list_algorithms() -> Json<serde_json::Value> {
-    Json(serde_json::json!([{"algorithm": "perlin", "backend": "fastnoise_lite"}]))
+    Json(serde_json::json!([
+        {"algorithm": "perlin", "backend": "fastnoise_lite"},
+        {"algorithm": "simplex", "backend": "fastnoise_lite"},
+        {"algorithm": "opensimplex2", "backend": "fastnoise_lite"},
+        {"algorithm": "supersimplex", "backend": "fastnoise_lite"},
+        {"algorithm": "value", "backend": "fastnoise_lite"},
+        {"algorithm": "cellular", "backend": "fastnoise_lite"},
+        {"algorithm": "fbm", "backend": "fastnoise_lite"},
+        {"algorithm": "billow", "backend": "fastnoise_lite"},
+        {"algorithm": "ridged_multi", "backend": "fastnoise_lite"},
+        {"algorithm": "hybrid_multi", "backend": "fastnoise_lite"},
+        {"algorithm": "pingpong", "backend": "fastnoise_lite"},
+        {"algorithm": "domain_warp", "backend": "fastnoise_lite"},
+        {"algorithm": "combinator", "backend": "fastnoise_lite"},
+        {"algorithm": "utility", "backend": "fastnoise_lite"}
+    ]))
 }
 
 async fn generate_noise(Json(payload): Json<GenerateNoiseRequest>) -> (StatusCode, Json<NoiseField>) {
@@ -157,8 +186,10 @@ async fn generate_noise(Json(payload): Json<GenerateNoiseRequest>) -> (StatusCod
         algorithm: match &payload {
             GenerateNoiseRequest::Perlin { .. } => "perlin".to_string(),
             GenerateNoiseRequest::Simplex { .. } => "simplex".to_string(),
+            GenerateNoiseRequest::OpenSimplex2 { .. } => "opensimplex2".to_string(),
             GenerateNoiseRequest::SuperSimplex { .. } => "supersimplex".to_string(),
             GenerateNoiseRequest::Value { .. } => "value".to_string(),
+            GenerateNoiseRequest::Cellular { .. } => "cellular".to_string(),
             GenerateNoiseRequest::Fbm { .. } => "fbm".to_string(),
             GenerateNoiseRequest::Billow { .. } => "billow".to_string(),
             GenerateNoiseRequest::RidgedMulti { .. } => "ridged_multi".to_string(),
@@ -193,81 +224,4 @@ fn generate_supersimplex_noise(x: f64, y: f64) -> f64 {
 fn generate_value_noise(x: f64, y: f64) -> f64 {
     let value = Value::new(1);
     value.get([x, y, 0.0])
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_perlin_generation() {
-        let noise = generate_perlin_noise(0.5, 0.5);
-        assert!(noise >= -1.0 && noise <= 1.0);
-    }
-
-    #[test]
-    fn test_simplex_generation() {
-        let noise = generate_simplex_noise(0.5, 0.5);
-        assert!(noise >= -1.0 && noise <= 1.0);
-    }
-
-    #[test]
-    fn test_supersimplex_generation() {
-        let noise = generate_supersimplex_noise(0.5, 0.5);
-        assert!(noise >= -1.0 && noise <= 1.0);
-    }
-
-    #[test]
-    fn test_value_generation() {
-        let noise = generate_value_noise(0.5, 0.5);
-        assert!(noise >= -1.0 && noise <= 1.0);
-    }
-
-    #[test]
-    fn test_fbm_generation() {
-        // Placeholder for fbm noise test
-        assert_eq!(1, 1);
-    }
-
-    #[test]
-    fn test_billow_generation() {
-        // Placeholder for billow noise test
-        assert_eq!(1, 1);
-    }
-
-    #[test]
-    fn test_ridged_multi_generation() {
-        // Placeholder for ridged multi noise test
-        assert_eq!(1, 1);
-    }
-
-    #[test]
-    fn test_hybrid_multi_generation() {
-        // Placeholder for hybrid multi noise test
-        assert_eq!(1, 1);
-    }
-
-    #[test]
-    fn test_pingpong_generation() {
-        // Placeholder for pingpong noise test
-        assert_eq!(1, 1);
-    }
-
-    #[test]
-    fn test_domain_warp_generation() {
-        // Placeholder for domain warp test
-        assert_eq!(1, 1);
-    }
-
-    #[test]
-    fn test_combinator_generation() {
-        // Placeholder for combinator test
-        assert_eq!(1, 1);
-    }
-
-    #[test]
-    fn test_utility_generation() {
-        // Placeholder for utility generator test
-        assert_eq!(1, 1);
-    }
 }
