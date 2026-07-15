@@ -77,7 +77,8 @@ async fn test_opensimplex2_generation() {
             "params": {},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2
+                "dimensions": 2,
+                "size": [5, 5]
             },
             "output": {
                 "format": "json",
@@ -89,6 +90,21 @@ async fn test_opensimplex2_generation() {
         .unwrap();
     
     assert_eq!(response.status(), 201);
+    
+    let noise_field: serde_json::Value = response.json().await.unwrap();
+    let field_id = noise_field["id"].as_str().unwrap();
+
+    // Retrieve and verify the field
+    let get_response = client
+        .get(format!("http://localhost:8000/v1/noise/{}", field_id))
+        .send()
+        .await
+        .unwrap();
+    
+    assert_eq!(get_response.status(), 200);
+    let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
+    assert_eq!(field_data.len(), 5);
+    assert_eq!(field_data[0].len(), 5);
 }
 
 #[tokio::test]
@@ -367,10 +383,10 @@ async fn test_utility_generation() {
 }
 
 #[tokio::test]
-async fn test_retrieve_noise_field() {
+async fn test_get_noise_point() {
     let client = reqwest::Client::new();
     
-    // 1. Generate a field first to get a valid ID
+    // 1. Generate a field
     let gen_response = client
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
@@ -379,7 +395,8 @@ async fn test_retrieve_noise_field() {
             "params": {},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2
+                "dimensions": 2,
+                "size": [5, 5]
             },
             "output": {
                 "format": "json",
@@ -395,12 +412,15 @@ async fn test_retrieve_noise_field() {
     let noise_field: serde_json::Value = gen_response.json().await.unwrap();
     let field_id = noise_field["id"].as_str().unwrap();
 
-    // 2. Retrieve the field using the valid ID
+    // 2. Query a specific point
     let response = client
-        .get(format!("http://localhost:8000/v1/noise/{}", field_id))
+        .get(format!("http://localhost:8000/v1/noise/{}/point?x=1&y=2", field_id))
         .send()
         .await
         .unwrap();
     
     assert_eq!(response.status(), 200);
+    let point_value: f64 = response.json().await.unwrap();
+    // Just check if it's a valid number
+    assert!(point_value.is_finite());
 }

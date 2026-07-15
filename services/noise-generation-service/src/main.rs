@@ -3,14 +3,14 @@ use axum::{
     routing::{get, post},
     Router,
     Json,
-    extract::{Path, State},
+    extract::{Path, State, Query},
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use clap::Parser;
 use cli::{Cli, Commands};
-use noise::{NoiseFn, Perlin, Simplex, SuperSimplex, Value, OpenSimplex, Worley};
+use noise::{NoiseFn, Perlin, Simplex, SuperSimplex, OpenSimplex, Worley};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -162,6 +162,7 @@ async fn main() {
         .route("/v1/algorithms", get(list_algorithms))
         .route("/v1/noise", post(generate_noise))
         .route("/v1/noise/:fieldId", get(get_noise))
+        .route("/v1/noise/:fieldId/point", get(get_noise_point))
         .with_state(state);
 
     let listener = TcpListener::bind("0.0.0.0:8000").await.unwrap();
@@ -201,7 +202,7 @@ async fn generate_noise(
     Json(payload): Json<GenerateNoiseRequest>,
 ) -> (StatusCode, Json<NoiseField>) {
     let algorithm_name = match &payload {
-        GenerateNoiseRequest::Perlin { .. } => "perlin".to_string(),
+        GenerateNoiseRequest::Perlin { backend: _, .. } => "perlin".to_string(),
         GenerateNoiseRequest::Simplex { .. } => "simplex".to_string(),
         GenerateNoiseRequest::OpenSimplex2 { .. } => "opensimplex2".to_string(),
         GenerateNoiseRequest::SuperSimplex { .. } => "supersimplex".to_string(),
@@ -219,17 +220,27 @@ async fn generate_noise(
 
     let field_id = format!("nsf_{}", uuid::Uuid::new_v4());
     
-    // Simple Perlin generation for now
     let size = match &payload {
         GenerateNoiseRequest::Perlin { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
         GenerateNoiseRequest::Simplex { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
-        _ => vec![10, 10],
+        GenerateNoiseRequest::OpenSimplex2 { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        GenerateNoiseRequest::SuperSimplex { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        GenerateNoiseRequest::Value { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        GenerateNoiseRequest::Cellular { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        GenerateNoiseRequest::Fbm { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        GenerateNoiseRequest::Billow { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        GenerateNoiseRequest::RidgedMulti { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        GenerateNoiseRequest::HybridMulti { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        GenerateNoiseRequest::PingPong { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        GenerateNoiseRequest::DomainWarp { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        GenerateNoiseRequest::Combinator { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        GenerateNoiseRequest::Utility { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
     };
     
     let mut field = vec![vec![0.0; size[0]]; size[1]];
     
     match &payload {
-        GenerateNoiseRequest::Perlin { .. } => {
+        GenerateNoiseRequest::Perlin { backend, .. } => {
             let perlin = Perlin::new(1);
             for y in 0..size[1] {
                 for x in 0..size[0] {
@@ -242,6 +253,14 @@ async fn generate_noise(
             for y in 0..size[1] {
                 for x in 0..size[0] {
                     field[y][x] = simplex.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                }
+            }
+        },
+        GenerateNoiseRequest::OpenSimplex2 { .. } => {
+            let opensimplex = OpenSimplex::new(1);
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    field[y][x] = opensimplex.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
                 }
             }
         },
@@ -277,27 +296,29 @@ async fn get_noise(
     }
 }
 
-fn generate_perlin_noise(x: f64, y: f64) -> f64 {
-    let perlin = Perlin::new(1);
-    perlin.get([x, y, 0.0])
+#[derive(Deserialize)]
+struct PointQuery {
+    x: usize,
+    y: usize,
 }
 
-fn generate_simplex_noise(x: f64, y: f64) -> f64 {
-    let simplex = Simplex::new(1);
-    simplex.get([x, y, 0.0])
-}
-
-fn generate_supersimplex_noise(x: f64, y: f64) -> f64 {
-    let supersimplex = SuperSimplex::new(1);
-    supersimplex.get([x, y, 0.0])
-}
-
-fn generate_cellular_noise(x: f64, y: f64) -> f64 {
-    let cellular = Worley::new(1);
-    cellular.get([x, y, 0.0])
-}
-
-fn generate_opensimplex2_noise(x: f64, y: f64) -> f64 {
-    let opensimplex2 = OpenSimplex::new(1);
-    opensimplex2.get([x, y, 0.0])
+async fn get_noise_point(
+    State(state): State<AppState>,
+    Path(field_id): Path<String>,
+    Query(query): Query<PointQuery>,
+) -> Result<Json<f64>, StatusCode> {
+    let fields = state.fields.lock().unwrap();
+    if let Some(field) = fields.get(&field_id) {
+        if let Some(row) = field.get(query.y) {
+            if let Some(value) = row.get(query.x) {
+                Ok(Json(*value))
+            } else {
+                Err(StatusCode::BAD_REQUEST)
+            }
+        } else {
+            Err(StatusCode::BAD_REQUEST)
+        }
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
 }
