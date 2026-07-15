@@ -185,7 +185,6 @@ async fn list_algorithms() -> Json<serde_json::Value> {
 }
 
 async fn generate_noise(Json(payload): Json<GenerateNoiseRequest>) -> (StatusCode, Json<NoiseField>) {
-    println!("Received request: {:?}", payload);
     let algorithm_name = match &payload {
         GenerateNoiseRequest::Perlin { .. } => "perlin".to_string(),
         GenerateNoiseRequest::Simplex { .. } => "simplex".to_string(),
@@ -202,7 +201,7 @@ async fn generate_noise(Json(payload): Json<GenerateNoiseRequest>) -> (StatusCod
         GenerateNoiseRequest::Combinator { .. } => "combinator".to_string(),
         GenerateNoiseRequest::Utility { .. } => "utility".to_string(),
     };
-    println!("Matched algorithm: {}", algorithm_name);
+    
     (StatusCode::CREATED, Json(NoiseField {
         id: "nsf_123".to_string(),
         status: "completed".to_string(),
