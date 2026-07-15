@@ -57,6 +57,15 @@ The Noise Generation Service provides a standardized REST API for generating var
   - `fieldId`: The ID of the noise field to retrieve
 - **Response**: Noise field data
 
+### Retrieve Noise Point
+- **Endpoint**: `GET /v1/noise/{fieldId}/point`
+- **Description**: Retrieves a specific noise value at (x, y) coordinates
+- **Parameters**:
+  - `fieldId`: The ID of the noise field
+  - `x`: X coordinate
+  - `y`: Y coordinate
+- **Response**: Noise value (float)
+
 ## Algorithms and Backends
 
 The service supports 14 noise algorithm families with specific backend support:

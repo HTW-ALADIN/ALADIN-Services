@@ -114,11 +114,12 @@ async fn test_supersimplex_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "supersimplex",
-            "backend": "fastnoise_lite",
+            "backend": "noise_rs",
             "params": {},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2
+                "dimensions": 2,
+                "size": [5, 5]
             },
             "output": {
                 "format": "json",
@@ -130,6 +131,21 @@ async fn test_supersimplex_generation() {
         .unwrap();
     
     assert_eq!(response.status(), 201);
+    
+    let noise_field: serde_json::Value = response.json().await.unwrap();
+    let field_id = noise_field["id"].as_str().unwrap();
+
+    // Retrieve and verify the field
+    let get_response = client
+        .get(format!("http://localhost:8000/v1/noise/{}", field_id))
+        .send()
+        .await
+        .unwrap();
+    
+    assert_eq!(get_response.status(), 200);
+    let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
+    assert_eq!(field_data.len(), 5);
+    assert_eq!(field_data[0].len(), 5);
 }
 
 #[tokio::test]
@@ -143,7 +159,8 @@ async fn test_value_generation() {
             "params": {},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2
+                "dimensions": 2,
+                "size": [5, 5]
             },
             "output": {
                 "format": "json",
@@ -155,56 +172,88 @@ async fn test_value_generation() {
         .unwrap();
     
     assert_eq!(response.status(), 201);
+    
+    let noise_field: serde_json::Value = response.json().await.unwrap();
+    let field_id = noise_field["id"].as_str().unwrap();
+
+    // Retrieve and verify the field
+    let get_response = client
+        .get(format!("http://localhost:8000/v1/noise/{}", field_id))
+        .send()
+        .await
+        .unwrap();
+    
+    assert_eq!(get_response.status(), 200);
+    let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
+    assert_eq!(field_data.len(), 5);
+    assert_eq!(field_data[0].len(), 5);
 }
 
 #[tokio::test]
-async fn test_cellular_generation() {
+async fn test_cellular_parameters() {
     let client = reqwest::Client::new();
-    let response = client
-        .post("http://localhost:8000/v1/noise")
+    
+    // Generate field 1: Euclidean, CellValue, Jitter 0.45
+    let resp1 = client.post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "cellular",
             "backend": "fastnoise_lite",
-            "params": {},
-            "sampling": {
-                "mode": "grid",
-                "dimensions": 2
-            },
-            "output": {
-                "format": "json",
-                "normalize": "none"
-            }
+            "params": {"distance_function": "euclidean", "return_type": "cell_value", "jitter": 0.45},
+            "sampling": {"mode": "grid", "dimensions": 2, "size": [5, 5]},
+            "output": {"format": "json", "normalize": "none"}
         }))
-        .send()
-        .await
-        .unwrap();
-    
-    assert_eq!(response.status(), 201);
+        .send().await.unwrap();
+    let id1 = resp1.json::<serde_json::Value>().await.unwrap()["id"].as_str().unwrap().to_string();
+    let field1: Vec<Vec<f64>> = client.get(format!("http://localhost:8000/v1/noise/{}", id1)).send().await.unwrap().json().await.unwrap();
+
+    // Generate field 2: Manhattan, Distance, Jitter 0.9
+    let resp2 = client.post("http://localhost:8000/v1/noise")
+        .json(&json!({
+            "algorithm": "cellular",
+            "backend": "fastnoise_lite",
+            "params": {"distance_function": "manhattan", "return_type": "distance", "jitter": 0.9},
+            "sampling": {"mode": "grid", "dimensions": 2, "size": [5, 5]},
+            "output": {"format": "json", "normalize": "none"}
+        }))
+        .send().await.unwrap();
+    let id2 = resp2.json::<serde_json::Value>().await.unwrap()["id"].as_str().unwrap().to_string();
+    let field2: Vec<Vec<f64>> = client.get(format!("http://localhost:8000/v1/noise/{}", id2)).send().await.unwrap().json().await.unwrap();
+
+    // Assert fields are different
+    assert_ne!(field1, field2);
 }
 
 #[tokio::test]
-async fn test_fbm_generation() {
+async fn test_fbm_parameters() {
     let client = reqwest::Client::new();
-    let response = client
-        .post("http://localhost:8000/v1/noise")
+    
+    // Generate field: FBm, Octaves 3, Lacunarity 2.0, Gain 0.5
+    let resp = client.post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "fbm",
             "backend": "fastnoise_lite",
-            "params": {},
-            "sampling": {
-                "mode": "grid",
-                "dimensions": 2
-            },
-            "output": {
-                "format": "json",
-                "normalize": "none"
-            }
+            "params": {"octaves": 3, "lacunarity": 2.0, "gain": 0.5},
+            "sampling": {"mode": "grid", "dimensions": 2, "size": [5, 5]},
+            "output": {"format": "json", "normalize": "none"}
         }))
+        .send().await.unwrap();
+    
+    assert_eq!(resp.status(), 201);
+    
+    let noise_field: serde_json::Value = resp.json().await.unwrap();
+    let field_id = noise_field["id"].as_str().unwrap();
+
+    // Retrieve and verify the field
+    let get_response = client
+        .get(format!("http://localhost:8000/v1/noise/{}", field_id))
         .send()
         .await
         .unwrap();
     
-    assert_eq!(response.status(), 201);
+    assert_eq!(get_response.status(), 200);
+    let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
+    assert_eq!(field_data.len(), 5);
+    assert_eq!(field_data[0].len(), 5);
 }
 
 #[tokio::test]
@@ -214,11 +263,12 @@ async fn test_billow_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "billow",
-            "backend": "fastnoise_lite",
-            "params": {},
+            "backend": "noise_rs",
+            "params": {"octaves": 3, "persistence": 0.5},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2
+                "dimensions": 2,
+                "size": [5, 5]
             },
             "output": {
                 "format": "json",
@@ -230,6 +280,21 @@ async fn test_billow_generation() {
         .unwrap();
     
     assert_eq!(response.status(), 201);
+    
+    let noise_field: serde_json::Value = response.json().await.unwrap();
+    let field_id = noise_field["id"].as_str().unwrap();
+
+    // Retrieve and verify the field
+    let get_response = client
+        .get(format!("http://localhost:8000/v1/noise/{}", field_id))
+        .send()
+        .await
+        .unwrap();
+    
+    assert_eq!(get_response.status(), 200);
+    let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
+    assert_eq!(field_data.len(), 5);
+    assert_eq!(field_data[0].len(), 5);
 }
 
 #[tokio::test]
@@ -264,11 +329,12 @@ async fn test_hybrid_multi_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "hybrid_multi",
-            "backend": "fastnoise_lite",
-            "params": {},
+            "backend": "noise_rs",
+            "params": {"octaves": 3, "persistence": 0.5},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2
+                "dimensions": 2,
+                "size": [5, 5]
             },
             "output": {
                 "format": "json",
@@ -280,6 +346,21 @@ async fn test_hybrid_multi_generation() {
         .unwrap();
     
     assert_eq!(response.status(), 201);
+    
+    let noise_field: serde_json::Value = response.json().await.unwrap();
+    let field_id = noise_field["id"].as_str().unwrap();
+
+    // Retrieve and verify the field
+    let get_response = client
+        .get(format!("http://localhost:8000/v1/noise/{}", field_id))
+        .send()
+        .await
+        .unwrap();
+    
+    assert_eq!(get_response.status(), 200);
+    let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
+    assert_eq!(field_data.len(), 5);
+    assert_eq!(field_data[0].len(), 5);
 }
 
 #[tokio::test]
@@ -315,10 +396,11 @@ async fn test_domain_warp_generation() {
         .json(&json!({
             "algorithm": "domain_warp",
             "backend": "fastnoise_lite",
-            "params": {},
+            "params": {"warp_type": "open_simplex2", "amplitude": 30.0},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2
+                "dimensions": 2,
+                "size": [5, 5]
             },
             "output": {
                 "format": "json",
@@ -330,6 +412,21 @@ async fn test_domain_warp_generation() {
         .unwrap();
     
     assert_eq!(response.status(), 201);
+    
+    let noise_field: serde_json::Value = response.json().await.unwrap();
+    let field_id = noise_field["id"].as_str().unwrap();
+
+    // Retrieve and verify the field
+    let get_response = client
+        .get(format!("http://localhost:8000/v1/noise/{}", field_id))
+        .send()
+        .await
+        .unwrap();
+    
+    assert_eq!(get_response.status(), 200);
+    let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
+    assert_eq!(field_data.len(), 5);
+    assert_eq!(field_data[0].len(), 5);
 }
 
 #[tokio::test]
@@ -339,11 +436,12 @@ async fn test_combinator_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "combinator",
-            "backend": "fastnoise_lite",
-            "params": {},
+            "backend": "noise_rs",
+            "params": {"op": "add"},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2
+                "dimensions": 2,
+                "size": [5, 5]
             },
             "output": {
                 "format": "json",
@@ -355,6 +453,21 @@ async fn test_combinator_generation() {
         .unwrap();
     
     assert_eq!(response.status(), 201);
+    
+    let noise_field: serde_json::Value = response.json().await.unwrap();
+    let field_id = noise_field["id"].as_str().unwrap();
+
+    // Retrieve and verify the field
+    let get_response = client
+        .get(format!("http://localhost:8000/v1/noise/{}", field_id))
+        .send()
+        .await
+        .unwrap();
+    
+    assert_eq!(get_response.status(), 200);
+    let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
+    assert_eq!(field_data.len(), 5);
+    assert_eq!(field_data[0].len(), 5);
 }
 
 #[tokio::test]
@@ -364,11 +477,12 @@ async fn test_utility_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "utility",
-            "backend": "fastnoise_lite",
-            "params": {},
+            "backend": "noise_rs",
+            "params": {"kind": "constant", "value": 0.5},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2
+                "dimensions": 2,
+                "size": [5, 5]
             },
             "output": {
                 "format": "json",
@@ -380,6 +494,22 @@ async fn test_utility_generation() {
         .unwrap();
     
     assert_eq!(response.status(), 201);
+    
+    let noise_field: serde_json::Value = response.json().await.unwrap();
+    let field_id = noise_field["id"].as_str().unwrap();
+
+    // Retrieve and verify the field
+    let get_response = client
+        .get(format!("http://localhost:8000/v1/noise/{}", field_id))
+        .send()
+        .await
+        .unwrap();
+    
+    assert_eq!(get_response.status(), 200);
+    let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
+    assert_eq!(field_data.len(), 5);
+    assert_eq!(field_data[0].len(), 5);
+    assert_eq!(field_data[0][0], 0.5);
 }
 
 #[tokio::test]

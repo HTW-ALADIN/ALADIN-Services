@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use clap::Parser;
 use cli::{Cli, Commands};
-use noise::{NoiseFn, Perlin, Simplex, SuperSimplex, OpenSimplex, Worley};
+use noise::{NoiseFn, Perlin, Simplex, SuperSimplex, OpenSimplex, Worley, Value, Billow, MultiFractal, RidgedMulti};
+use fastnoise_lite::FastNoiseLite;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -241,10 +242,21 @@ async fn generate_noise(
     
     match &payload {
         GenerateNoiseRequest::Perlin { backend, .. } => {
-            let perlin = Perlin::new(1);
-            for y in 0..size[1] {
-                for x in 0..size[0] {
-                    field[y][x] = perlin.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+            let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+            if backend == "fastnoise_lite" {
+                let mut noise = FastNoiseLite::with_seed(1);
+                noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
+                for y in 0..size[1] {
+                    for x in 0..size[0] {
+                        field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
+                    }
+                }
+            } else {
+                let perlin = Perlin::new(1);
+                for y in 0..size[1] {
+                    for x in 0..size[0] {
+                        field[y][x] = perlin.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                    }
                 }
             }
         },
@@ -256,11 +268,218 @@ async fn generate_noise(
                 }
             }
         },
-        GenerateNoiseRequest::OpenSimplex2 { .. } => {
-            let opensimplex = OpenSimplex::new(1);
+        GenerateNoiseRequest::OpenSimplex2 { backend, params, .. } => {
+            let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+            if backend == "fastnoise_lite" {
+                let mut noise = FastNoiseLite::with_seed(1);
+                let smooth = params.get("smooth").and_then(|v| v.as_bool()).unwrap_or(false);
+                noise.set_noise_type(Some(if smooth { fastnoise_lite::NoiseType::OpenSimplex2S } else { fastnoise_lite::NoiseType::OpenSimplex2 }));
+                for y in 0..size[1] {
+                    for x in 0..size[0] {
+                        field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
+                    }
+                }
+            } else {
+                let opensimplex = OpenSimplex::new(1);
+                for y in 0..size[1] {
+                    for x in 0..size[0] {
+                        field[y][x] = opensimplex.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                    }
+                }
+            }
+        },
+        GenerateNoiseRequest::Value { backend, params, .. } => {
+            let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+            if backend == "fastnoise_lite" {
+                let mut noise = FastNoiseLite::with_seed(1);
+                let interpolation = params.get("interpolation").and_then(|v| v.as_str()).unwrap_or("value");
+                noise.set_noise_type(Some(if interpolation == "cubic" { fastnoise_lite::NoiseType::ValueCubic } else { fastnoise_lite::NoiseType::Value }));
+                for y in 0..size[1] {
+                    for x in 0..size[0] {
+                        field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
+                    }
+                }
+            } else {
+                let value = Value::new(1);
+                for y in 0..size[1] {
+                    for x in 0..size[0] {
+                        field[y][x] = value.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                    }
+                }
+            }
+        },
+        GenerateNoiseRequest::SuperSimplex { .. } => {
+            let supersimplex = SuperSimplex::new(1);
             for y in 0..size[1] {
                 for x in 0..size[0] {
-                    field[y][x] = opensimplex.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                    field[y][x] = supersimplex.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                }
+            }
+        },
+        GenerateNoiseRequest::Cellular { backend, params, .. } => {
+            let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+            if backend == "fastnoise_lite" {
+                let mut noise = FastNoiseLite::with_seed(1);
+                noise.set_noise_type(Some(fastnoise_lite::NoiseType::Cellular));
+                
+                let dist = params.get("distance_function").and_then(|v| v.as_str()).unwrap_or("euclidean");
+                let ret = params.get("return_type").and_then(|v| v.as_str()).unwrap_or("cell_value");
+                let jitter = params.get("jitter").and_then(|v| v.as_f64()).unwrap_or(0.45);
+                
+                // Map string params to fastnoise_lite enums
+                noise.set_cellular_distance_function(Some(match dist {
+                    "manhattan" => fastnoise_lite::CellularDistanceFunction::Manhattan,
+                    _ => fastnoise_lite::CellularDistanceFunction::Euclidean,
+                }));
+                noise.set_cellular_return_type(Some(match ret {
+                    "distance" => fastnoise_lite::CellularReturnType::Distance,
+                    _ => fastnoise_lite::CellularReturnType::CellValue,
+                }));
+                noise.set_cellular_jitter(Some(jitter as f32));
+                
+                for y in 0..size[1] {
+                    for x in 0..size[0] {
+                        field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
+                    }
+                }
+            } else {
+                let cellular = Worley::new(1);
+                for y in 0..size[1] {
+                    for x in 0..size[0] {
+                        field[y][x] = cellular.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                    }
+                }
+            }
+        },
+        GenerateNoiseRequest::Fbm { backend, params, .. } => {
+            let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+            if backend == "fastnoise_lite" {
+                let mut noise = FastNoiseLite::with_seed(1);
+                noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
+                noise.set_fractal_type(Some(fastnoise_lite::FractalType::FBm));
+                
+                let octaves = params.get("octaves").and_then(|v| v.as_i64()).unwrap_or(3) as i32;
+                let lacunarity = params.get("lacunarity").and_then(|v| v.as_f64()).unwrap_or(2.0) as f32;
+                let gain = params.get("gain").and_then(|v| v.as_f64()).unwrap_or(0.5) as f32;
+                
+                noise.set_fractal_octaves(Some(octaves));
+                noise.set_fractal_lacunarity(Some(lacunarity));
+                noise.set_fractal_gain(Some(gain));
+                
+                for y in 0..size[1] {
+                    for x in 0..size[0] {
+                        field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
+                    }
+                }
+            } else {
+                let fbm = Perlin::new(1); // Fbm uses Perlin as base
+                for y in 0..size[1] {
+                    for x in 0..size[0] {
+                        field[y][x] = fbm.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                    }
+                }
+            }
+        },
+        GenerateNoiseRequest::Billow { backend, params, .. } => {
+            let billow = Billow::<Perlin>::new(1);
+            let octaves = params.get("octaves").and_then(|v| v.as_i64()).unwrap_or(6) as usize;
+            let persistence = params.get("persistence").and_then(|v| v.as_f64()).unwrap_or(0.5) as f64;
+            
+            let billow = billow.set_octaves(octaves).set_persistence(persistence);
+            
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    field[y][x] = billow.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                }
+            }
+        },
+        GenerateNoiseRequest::HybridMulti { backend, params, .. } => {
+            let hybrid = noise::HybridMulti::<Perlin>::new(1);
+            let octaves = params.get("octaves").and_then(|v| v.as_i64()).unwrap_or(6) as usize;
+            let persistence = params.get("persistence").and_then(|v| v.as_f64()).unwrap_or(0.5) as f64;
+            
+            let hybrid = hybrid.set_octaves(octaves).set_persistence(persistence);
+            
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    field[y][x] = hybrid.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                }
+            }
+        },
+        GenerateNoiseRequest::RidgedMulti { backend, params, .. } => {
+            let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+            if backend == "fastnoise_lite" {
+                let mut noise = FastNoiseLite::with_seed(1);
+                noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
+                noise.set_fractal_type(Some(fastnoise_lite::FractalType::Ridged));
+                
+                let octaves = params.get("octaves").and_then(|v| v.as_i64()).unwrap_or(3) as i32;
+                let lacunarity = params.get("lacunarity").and_then(|v| v.as_f64()).unwrap_or(2.0) as f32;
+                let gain = params.get("gain").and_then(|v| v.as_f64()).unwrap_or(0.5) as f32;
+                
+                noise.set_fractal_octaves(Some(octaves));
+                noise.set_fractal_lacunarity(Some(lacunarity));
+                noise.set_fractal_gain(Some(gain));
+                
+                for y in 0..size[1] {
+                    for x in 0..size[0] {
+                        field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
+                    }
+                }
+            } else {
+                let ridged = noise::RidgedMulti::<Perlin>::new(1);
+                for y in 0..size[1] {
+                    for x in 0..size[0] {
+                        field[y][x] = ridged.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                    }
+                }
+            }
+        },
+        GenerateNoiseRequest::PingPong { backend, params, .. } => {
+            let mut noise = FastNoiseLite::with_seed(1);
+            noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
+            noise.set_fractal_type(Some(fastnoise_lite::FractalType::PingPong));
+            
+            let strength = params.get("strength").and_then(|v| v.as_f64()).unwrap_or(2.0) as f32;
+            noise.set_fractal_ping_pong_strength(Some(strength));
+            
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
+                }
+            }
+        },
+        GenerateNoiseRequest::DomainWarp { backend, params, .. } => {
+            let mut noise = FastNoiseLite::with_seed(1);
+            let warp_type = params.get("warp_type").and_then(|v| v.as_str()).unwrap_or("open_simplex2");
+            let amplitude = params.get("amplitude").and_then(|v| v.as_f64()).unwrap_or(30.0) as f32;
+            
+            noise.set_domain_warp_type(Some(match warp_type {
+                "open_simplex2" => fastnoise_lite::DomainWarpType::OpenSimplex2,
+                _ => fastnoise_lite::DomainWarpType::OpenSimplex2,
+            }));
+            noise.set_domain_warp_amp(Some(amplitude));
+            
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
+                }
+            }
+        },
+        GenerateNoiseRequest::Combinator { backend, params, .. } => {
+            let op = params.get("op").and_then(|v| v.as_str()).unwrap_or("add");
+            let source1 = Perlin::new(1);
+            let source2 = Simplex::new(2);
+            
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    let val1 = source1.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                    let val2 = source2.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                    field[y][x] = match op {
+                        "add" => val1 + val2,
+                        "multiply" => val1 * val2,
+                        _ => val1 + val2,
+                    };
                 }
             }
         },
