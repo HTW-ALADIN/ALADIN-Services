@@ -133,7 +133,7 @@ The service is Docker-ready and can be deployed using:
 docker build -t noise-generation-service .
 
 # Run the container
-docker run -p 3000:3000 noise-generation-service
+docker run -p 8000:8000 noise-generation-service
 ```
 
 ## Contributing

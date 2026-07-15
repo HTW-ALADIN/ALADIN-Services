@@ -1,4 +1,4 @@
-.PHONY: build build-local run test lint clean
+.PHONY: build build-local run test lint clean dev prod
 
 build:
 	docker build -t noise-generation-service .
@@ -7,14 +7,16 @@ build-local:
 	cargo build --release
 
 run:
-	docker run -p 3000:3000 noise-generation-service
+	docker run -p 8000:8000 noise-generation-service
+
+dev:
+	docker-compose -f docker-compose.dev.yml up --build
+
+prod:
+	docker-compose -f docker-compose.prod.yml up --build
 
 test:
-	docker run --rm -v $(PWD):/app -w /app rust:1.80-slim-bookworm cargo test --manifest-path /app/services/noise-generation-service/Cargo.toml
-
-lint:
-	docker run --rm -v $(PWD):/app -w /app rust:1.80-slim-bookworm cargo clippy --manifest-path /app/services/noise-generation-service/Cargo.toml --all-targets --all-features -- -D warnings
+	cargo test
 
 clean:
-	docker rmi noise-generation-service
-	cargo clean
+	rm -rf target/

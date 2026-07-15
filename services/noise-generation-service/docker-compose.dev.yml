@@ -2,8 +2,10 @@ services:
   noise-generation-service:
     build: .
     ports:
-      - "8000:3000"
+      - "8000:8000"
     volumes:
       - .:/app
     environment:
-      - RUST_LOG=info
+      - RUST_LOG=debug
+    stdin_open: true
+    tty: true
