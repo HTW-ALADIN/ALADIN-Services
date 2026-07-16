@@ -3,12 +3,6 @@ services:
     build: .
     ports:
       - "8000:8000"
-    environment:
-      - RUST_LOG=debug
-  noise-generation-service:
-    build: .
-    ports:
-      - "8000:8000"
     volumes:
       - .:/app
     environment:

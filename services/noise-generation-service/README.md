@@ -28,9 +28,11 @@ Unified REST API for multiple noise generation libraries and algorithms.
 
 ### API Endpoints
 
-- `GET /v1/algorithms` - List all available algorithms and backends
-- `POST /v1/noise` - Generate noise field with specified algorithm
-- `GET /api-docs/openapi.json` - OpenAPI specification
+- `GET /v1/algorithms` — List all available algorithms and backends
+- `POST /v1/noise` — Generate noise field with specified algorithm
+- `GET /v1/noise/{id}` — Retrieve a generated noise field by ID
+- `GET /v1/noise/{id}/point?x=...&y=...` — Query a single point from a noise field
+- `GET /api-docs/openapi.json` — OpenAPI specification
 
 ### Example Requests
 
@@ -132,36 +134,65 @@ curl -X POST http://localhost:8000/v1/noise \
 
 ## CLI Usage (Mirroring REST API)
 
-The service includes a **comprehensive CLI** that mirrors all REST API functionality:
+The service includes a **comprehensive CLI** that mirrors **all REST API functionality**.
+Use `-U` / `--server-url` to target a remote server for `get` and `point` commands.
 
 ### List Available Algorithms
 ```bash
+# JSON output (default)
 noise-generation-service list
-# Outputs JSON list of all 23 algorithm/backend combinations
+
+# Table format (human-readable)
+noise-generation-service list --format table
 ```
 
-### Generate Noise via CLI
+### Generate Noise Locally (all 14 algorithms)
 ```bash
 # Basic usage
 noise-generation-service generate --algorithm perlin --width 64 --height 64
 
-# With custom parameters
+# With custom parameters (all algorithms supported)
 noise-generation-service generate \
-  --algorithm perlin \
-  --backend fastnoise_lite \
+  --algorithm fbm \
   --seed 42 \
   --width 128 --height 128 \
   --param octaves=6 \
   --param frequency=0.1 \
+  --param lacunarity=2.0 \
+  --param persistence=0.5 \
   --output noise_field.json
 
-# White noise with custom seed
+# CSV output
 noise-generation-service generate \
   --algorithm white \
   --param seed=999 \
   --width 32 --height 32 \
   --format csv \
   --output noise.csv
+
+# Combinator noise with blend operation
+noise-generation-service generate \
+  --algorithm combinator \
+  --param op=blend \
+  --param blend_factor=0.5 \
+  --width 32 --height 32
+```
+
+### Get Noise Field from Server (remote)
+```bash
+# Fetch field by ID (stdout)
+noise-generation-service get nsf_abc123...
+
+# Save to file
+noise-generation-service get nsf_abc123... --output field.json
+
+# Custom server URL
+noise-generation-service -U http://other-server:8000 get nsf_abc123...
+```
+
+### Query Single Point from Server (remote)
+```bash
+noise-generation-service point nsf_abc123... --x 10 --y 25
 ```
 
 ### Start HTTP Server
@@ -180,12 +211,17 @@ noise-generation-service openapi
 
 # Save to file
 noise-generation-service openapi --output api-spec.json
+
+# JSON format (default)
+noise-generation-service openapi --format json
 ```
 
 ### CLI Help
 ```bash
-noise-generation-service --help
+noise-generation-service --help           # All commands
 noise-generation-service generate --help  # Command-specific help
+noise-generation-service get --help
+noise-generation-service point --help
 ```
 
 ## Development
@@ -202,9 +238,9 @@ make test
 
 ### Running locally
 ```bash
-make start  # Uses docker-compose
+make start  # Direct execution via cargo run
 # OR
-cargo run   # Direct execution on localhost:8000
+cargo run   # Same as make start
 # OR  
 cargo run -- server --port 8001  # CLI with custom port
 ```
@@ -220,174 +256,59 @@ cargo run -- openapi --output spec.json  # Via CLI
 
 - **Language**: Rust (Edition 2021)
 - **Web Framework**: Axum 0.7
-- **Noise Libraries**: 
-  - `fastnoise-lite` v1.1.1 (FastNoiseLite C++ port)
-  - `noise` v0.9 (Pure Rust implementations)
+- **Noise Libraries**: `fastnoise-lite` v1.1.1, `noise` v0.9
 - **OpenAPI**: Auto-generated via `utoipa` v4
-- **Port**: 8000 (configurable via Docker)
+- **Port**: 8000 (configurable)
+- **License**: MIT
 
-A unified REST API for noise generation libraries, supporting multiple noise algorithms and backends.
+## Algorithms Reference
 
-## Prerequisites
+All rows use `POST /v1/noise` with the given `algorithm` tag (and optional `backend` discriminator);
+retrieval is always via `GET /v1/noise/{fieldId}`.
 
-This repository contains all files necessary to run the application in local development and production environments.
-It requires Docker and Rust 1.80+ on your system.
+### Core Noise Algorithms (Tier 1)
 
-When cloning this repository and opening it through VSCode, it will ask you to install all recommended VSCode extensions.
+| `algorithm` tag | Canonical family | Backend options | Underlying function |
+|----------------|------------------|-----------------|---------------------|
+| `perlin` | Perlin noise | `fastnoise_lite` (default) | `SetNoiseType(Perlin)` + `GetNoise(x, y[, z])` |
+| | | `noise_rs` | `Perlin::new(seed).get([x, y])` (or `PerlinSurflet` via `variant` sub-field) |
+| `simplex` | Simplex noise (classic) | `noise_rs` (only) | `Simplex::new(seed).get(point)` |
+| `opensimplex2` | OpenSimplex2 / OpenSimplex2S | `fastnoise_lite` (default) | `SetNoiseType(OpenSimplex2 \| OpenSimplex2S)` + `GetNoise(x, y[, z])` (variant via `smooth` sub-field) |
+| | | `noise_rs` | `OpenSimplex::new(seed).get(point)` |
+| `supersimplex` | SuperSimplex | `noise_rs` (only) | `SuperSimplex::new(seed).get(point)` |
+| `value` | Value noise (+cubic) | `fastnoise_lite` (default) | `SetNoiseType(Value \| ValueCubic)` + `GetNoise(x, y[, z])` (variant via `interpolation` sub-field) |
+| | | `noise_rs` | `Value::new(seed).get(point)` |
+| `cellular` | Cellular / Worley / Voronoi | `fastnoise_lite` (default) | `SetNoiseType(Cellular)`, `SetCellularDistanceFunction(...)`, `SetCellularReturnType(...)`, `SetCellularJitter(...)` + `GetNoise(x, y[, z])` |
+| | | `noise_rs` | `Worley::new(seed).set_distance_function(...).set_return_type(...).get(point)` |
 
-## Getting started
+### Fractal Algorithms (Tier 1)
 
-In order to install and run this application in your local development environment, you first need to install all dependencies via cargo:
+| `algorithm` tag | Canonical family | Backend options | Underlying function |
+|----------------|------------------|-----------------|---------------------|
+| `fbm` | Fractal Brownian Motion | `fastnoise_lite` (default) | `SetFractalType(FBm)`, `SetFractalOctaves/Lacunarity/Gain(...)` wraps a `source` sub-field (any base algorithm) |
+| | | `noise_rs` | `Fbm::<Source>::new(seed).set_octaves/lacunarity/persistence(...).get(point)` |
+| `billow` | Billow noise | `noise_rs` (only) | `Billow::<Source>::new(seed).set_octaves/...(...).get(point)` |
+| `ridged_multi` | Ridged multifractal | `fastnoise_lite` (default) | `SetFractalType(Ridged)` wraps a `source` sub-field |
+| | | `noise_rs` | `RidgedMulti::<Source>::new(seed).set_octaves/...(...).get(point)` |
+| `hybrid_multi` | HybridMulti fractal | `noise_rs` (only) | `HybridMulti::<Source>::new(seed).set_octaves/...(...).get(point)` |
+| `pingpong` | PingPong fractal | `fastnoise_lite` (only) | `SetFractalType(PingPong)`, `SetFractalPingPongStrength(...)` wraps a `source` sub-field |
 
-```bash
-cargo build
-```
+### Advanced Algorithms (Tier 1)
 
-## Overview
+| `algorithm` tag | Canonical family | Backend options | Underlying function |
+|----------------|------------------|-----------------|---------------------|
+| `domain_warp` | Domain warping | `fastnoise_lite` (only) | `SetDomainWarpType(...)`, `SetDomainWarpAmp(...)` + `DomainWarp2D/3D(x, y[, z])` |
+| `combinator` | Generic combinators | `noise_rs` (only) | `Add`/`Multiply`/`Min`/`Max`/`Blend`/`Turbulence`/`ScalePoint` (selected via `op` sub-field, each wrapping 1–2 `source` sub-fields) |
+| `utility` | Utility / deterministic generators | `noise_rs` (only) | `Constant::new(value)` / `Cylinders::new()` (selected via `kind` sub-field) |
 
-The Noise Generation Service provides a standardized REST API for generating various types of noise, including Perlin, Simplex, and other advanced noise algorithms. It supports multiple backend implementations for optimal performance and compatibility.
+### Native White Noise (Tier 2 — no external library)
 
-## Features
+White noise requires no coherence/interpolation logic and is implemented natively
+rather than via an external library. Because it is inherently uncorrelated, its
+`params` schema is minimal (`seed` only) and `sampling.mode: "grid"` bypasses
+interpolation entirely — each grid cell is sampled independently, so generation
+is trivially parallelizable.
 
-- Multiple noise algorithms support
-- Flexible backend selection
-- Standardized REST API
-- Docker-ready deployment
-- Comprehensive test coverage
-- CLI interface
-
-## API Endpoints
-
-### List Algorithms
-- **Endpoint**: `GET /v1/algorithms`
-- **Description**: Lists all available algorithm/backend combinations
-- **Response**: Array of algorithm objects with backend information
-
-### Generate Noise
-- **Endpoint**: `POST /v1/noise`
-- **Description**: Generates noise based on the specified algorithm and backend
-- **Request Body**:
-  - `algorithm`: The noise generation algorithm to use
-  - `backend`: The backend implementation to use
-  - `params`: Algorithm-specific parameters
-  - `sampling`: Sampling configuration
-  - `output`: Output format configuration
-- **Responses**:
-  - `201`: Noise field created
-  - `202`: Noise field generation accepted
-
-### Retrieve Noise Field
-- **Endpoint**: `GET /v1/noise/{fieldId}`
-- **Description**: Retrieves a generated noise field by its ID
-- **Parameters**:
-  - `fieldId`: The ID of the noise field to retrieve
-- **Response**: Noise field data
-
-### Retrieve Noise Point
-- **Endpoint**: `GET /v1/noise/{fieldId}/point`
-- **Description**: Retrieves a specific noise value at (x, y) coordinates
-- **Parameters**:
-  - `fieldId`: The ID of the noise field
-  - `x`: X coordinate
-  - `y`: Y coordinate
-- **Response**: Noise value (float)
-
-## Algorithms and Backends
-
-The service supports 14 noise algorithm families with specific backend support:
-
-| Algorithm | Canonical Name | Family | Backend Support | Underlying Function |
-|-----------|----------------|--------|-----------------|---------------------|
-| `perlin` | Perlin noise | Perlin | `fastnoise_lite`, `noise_rs` | `SetNoiseType(Perlin)` + `GetNoise(x, y[, z])` / `Perlin::new(seed).get([x, y])` |
-| `simplex` | Simplex noise (classic) | Simplex | `noise_rs` only | `Simplex::new(seed).get(point)` |
-| `opensimplex2` | OpenSimplex2 / OpenSimplex2S | OpenSimplex | `fastnoise_lite` (default) | `SetNoiseType(OpenSimplex2 | OpenSimplex2S)` + `GetNoise(x, y[, z])` |
-| `supersimplex` | SuperSimplex | SuperSimplex | `noise_rs` only | `SuperSimplex::new(seed).get(point)` |
-| `value` | Value noise (+cubic) | Value | `fastnoise_lite` (default) | `SetNoiseType(Value | ValueCubic)` + `GetNoise(x, y[, z])` |
-| `cellular` | Cellular / Worley / Voronoi | Cellular | `fastnoise_lite` (default) | `SetNoiseType(Cellular)`, `SetCellularDistanceFunction(...)`, `SetCellularReturnType(...)`, `SetCellularJitter(...)` + `GetNoise(x, y[, z])` |
-| `fbm` | Fractal Brownian Motion | Fractal | `fastnoise_lite` (default) | `SetFractalType(FBm)`, `SetFractalOctaves(octaves)`, `SetFractalLacunarity(lacunarity)`, `SetFractalGain(gain)` |
-| `billow` | Billow noise | Fractal | `noise_rs` only | `Billow::new(seed).set_octaves(octaves).set_persistence(persistence)` |
-| `ridged_multi` | Ridged multifractal | Fractal | `fastnoise_lite` (default) | `SetFractalType(Ridged)`, `SetFractalOctaves(octaves)`, `SetFractalLacunarity(lacunarity)`, `SetFractalGain(gain)` |
-| `hybrid_multi` | HybridMulti fractal | Fractal | `noise_rs` only | `HybridMulti::new(seed).set_octaves(octaves).set_persistence(persistence)` |
-| `pingpong` | PingPong fractal | Fractal | `fastnoise_lite` only | `SetFractalType(PingPong)`, `SetFractalPingPongStrength(strength)` |
-| `domain_warp` | Domain warping | Transform | `fastnoise_lite` only | `SetDomainWarpType(warp_type)`, `SetDomainWarpAmp(amplitude)` + `DomainWarp2D/3D(x, y[, z])` |
-| `combinator` | Generic combinators | Combinator | `noise_rs` only | `Add`/`Multiply`/`Min`/`Max`/`Blend`/`Turbulence`/`ScalePoint` (selected via `op` sub-field, wrapping `source1`, `source2`) |
-| `utility` | Utility / deterministic generators | Utility | `noise_rs` only | `Constant::new(value)` / `Cylinders::new()` (selected via `kind` sub-field) |
-| `white` | White noise | Native | `native` | `seeded_prng(seed, x, y, z, w).next_f32() * 2.0 - 1.0` — uncorrelated per-cell/per-point noise, no interpolation |
-
-## Usage
-
-### Basic Usage
-
-```bash
-# List available algorithms
-curl -X GET http://localhost:8000/v1/algorithms
-
-# Generate Perlin noise
-curl -X POST http://localhost:8000/v1/noise \
-  -H "Content-Type: application/json" \
-  -d '{
-    "algorithm": "perlin",
-    "backend": "fastnoise_lite",
-    "params": {},
-    "sampling": {
-      "mode": "grid",
-      "dimensions": 2
-    },
-    "output": {
-      "format": "json",
-      "normalize": "none"
-    }
-  }'
-
-# Retrieve noise field
-curl -X GET http://localhost:8000/v1/noise/nsf_123
-```
-
-### Using the CLI
-
-```bash
-# Generate noise using CLI
-cargo run -- generate --algorithm perlin --backend fastnoise_lite
-```
-
-## Testing
-
-### Unit Tests
-
-```bash
-cargo test
-```
-
-### Integration Tests
-
-```bash
-cd tests && cargo test
-```
-
-## Deployment
-
-### Development Environment
-
-```bash
-# Start development environment
-docker-compose -f docker-compose.dev.yml up --build
-```
-
-### Production Environment (Docker + Compose)
-
-```bash
-# Start production environment
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## License
-
-This project is licensed under the MIT License.
+| `algorithm` tag | Canonical family | Backend | Underlying function |
+|----------------|------------------|---------|---------------------|
+| `white` | White noise | `native` (only) | `seeded_prng(seed, x, y, z, w).next_f32() * 2.0 - 1.0` — uncorrelated per-cell/per-point noise, no interpolation |

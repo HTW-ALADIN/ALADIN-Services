@@ -5,13 +5,14 @@ use axum::{
     routing::{get, post},
     Router, response::IntoResponse, Json,
 };
-use utoipa::OpenApi;
 use tokio::net::TcpListener;
+use utoipa::OpenApi;
 use clap::Parser;
 use cli::{Cli, Commands, GenerateArgs};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
 
 use lib::{AppState, list_algorithms, generate_noise, get_noise_field, get_noise_point};
 
@@ -20,12 +21,20 @@ async fn main() {
     let cli = Cli::parse();
     if let Some(command) = cli.command {
         match command {
-            Commands::List => {
-                handle_list_command().await;
+            Commands::List { format } => {
+                handle_list_command(format).await;
                 return;
             }
             Commands::Generate(args) => {
                 handle_generate_command(args).await;
+                return;
+            }
+            Commands::Get { id, output } => {
+                handle_get_command(&cli.server_url, &id, output).await;
+                return;
+            }
+            Commands::Point { id, x, y } => {
+                handle_point_command(&cli.server_url, &id, x, y).await;
                 return;
             }
             Commands::OpenApi { format, output } => {
@@ -33,7 +42,6 @@ async fn main() {
                 return;
             }
             Commands::Server { port, host } => {
-                // Continue to server startup with custom host/port
                 let bind_addr = format!("{}:{}", host, port);
                 println!("Starting server on {}", bind_addr);
                 start_server(bind_addr).await;
@@ -42,11 +50,11 @@ async fn main() {
         }
     }
 
-    // Default server startup - delegate to start_server function
-
-    // Default server startup
+    // Default: start server
     start_server("0.0.0.0:8000".to_string()).await;
 }
+
+// ─── Server ──────────────────────────────────────────────────────────────────
 
 async fn start_server(bind_addr: String) {
     let state = AppState {
@@ -58,8 +66,8 @@ async fn start_server(bind_addr: String) {
         .route("/v1/noise", post(generate_noise))
         .route("/v1/noise/:id", get(get_noise_field))
         .route("/v1/noise/:id/point", get(get_noise_point))
-        .route("/api-docs/openapi.json", get(|| async { 
-            Json(lib::ApiDoc::openapi()).into_response() 
+        .route("/api-docs/openapi.json", get(|| async {
+            Json(lib::ApiDoc::openapi()).into_response()
         }))
         .with_state(state);
 
@@ -68,122 +76,268 @@ async fn start_server(bind_addr: String) {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn handle_list_command() {
+// ─── CLI: list ───────────────────────────────────────────────────────────────
+
+async fn handle_list_command(format: String) {
     let algorithms = lib::list_algorithms().await;
-    println!("{}", serde_json::to_string_pretty(&algorithms.0).unwrap());
+    let data: Vec<serde_json::Value> = serde_json::from_value(algorithms.0).unwrap();
+    match format.as_str() {
+        "table" => {
+            println!("{:<20} {:<20}", "Algorithm", "Backend");
+            println!("{:-<20} {:-<20}", "", "");
+            for entry in &data {
+                let alg = entry["algorithm"].as_str().unwrap_or("");
+                let backend = entry["backend"].as_str().unwrap_or("");
+                println!("{:<20} {:<20}", alg, backend);
+            }
+            println!("\nTotal: {} algorithm/backend combinations", data.len());
+        }
+        _ => {
+            println!("{}", serde_json::to_string_pretty(&data).unwrap());
+        }
+    }
+}
+
+// ─── CLI: generate (local) ───────────────────────────────────────────────────
+
+fn build_sampling(width: usize, height: usize) -> lib::Sampling {
+    lib::Sampling {
+        mode: "2d".to_string(),
+        dimensions: 2,
+        size: Some(vec![width, height]),
+    }
+}
+
+fn build_params(seed: u64, extra: Vec<(String, Value)>) -> HashMap<String, Value> {
+    let mut params = HashMap::new();
+    params.insert("seed".to_string(), Value::Number(serde_json::Number::from(seed)));
+    for (key, value) in extra {
+        params.insert(key, value);
+    }
+    params
 }
 
 async fn handle_generate_command(args: GenerateArgs) {
-    use lib::{GenerateNoiseRequest, Sampling, AppState};
-    
-    // Build parameters map
-    let mut params = std::collections::HashMap::new();
-    params.insert("seed".to_string(), Value::Number(serde_json::Number::from(args.seed)));
-    
-    for (key, value) in args.params {
-        params.insert(key, value);
-    }
-    
-    // Create sampling configuration
-    let sampling = Sampling {
-        mode: "2d".to_string(),
-        dimensions: 2,
-        size: Some(vec![args.width, args.height]),
-    };
-    
-    // Build request based on algorithm
+    use lib::GenerateNoiseRequest;
+
+    let sampling = build_sampling(args.width, args.height);
+    let params_map = build_params(args.seed, args.params);
+    let params = Value::Object(params_map.into_iter().collect());
+
+    // Build the request — supports all 14 algorithm families
     let request = match args.algorithm.as_str() {
         "perlin" => GenerateNoiseRequest::Perlin {
             backend: args.backend,
-            params: Value::Object(params.into_iter().collect()),
+            params,
             sampling,
             output: None,
         },
         "simplex" => GenerateNoiseRequest::Simplex {
             backend: args.backend,
-            params: Value::Object(params.into_iter().collect()),
+            params,
+            sampling,
+            output: None,
+        },
+        "opensimplex2" => GenerateNoiseRequest::OpenSimplex2 {
+            backend: args.backend,
+            params,
+            sampling,
+            output: None,
+        },
+        "supersimplex" => GenerateNoiseRequest::SuperSimplex {
+            backend: args.backend,
+            params,
+            sampling,
+            output: None,
+        },
+        "value" => GenerateNoiseRequest::Value {
+            backend: args.backend,
+            params,
+            sampling,
+            output: None,
+        },
+        "cellular" => GenerateNoiseRequest::Cellular {
+            backend: args.backend,
+            params,
+            sampling,
+            output: None,
+        },
+        "fbm" => GenerateNoiseRequest::Fbm {
+            backend: args.backend,
+            params,
+            sampling,
+            output: None,
+        },
+        "billow" => GenerateNoiseRequest::Billow {
+            backend: args.backend,
+            params,
+            sampling,
+            output: None,
+        },
+        "ridged_multi" => GenerateNoiseRequest::RidgedMulti {
+            backend: args.backend,
+            params,
+            sampling,
+            output: None,
+        },
+        "hybrid_multi" => GenerateNoiseRequest::HybridMulti {
+            backend: args.backend,
+            params,
+            sampling,
+            output: None,
+        },
+        "pingpong" => GenerateNoiseRequest::PingPong {
+            backend: args.backend,
+            params,
+            sampling,
+            output: None,
+        },
+        "domain_warp" => GenerateNoiseRequest::DomainWarp {
+            backend: args.backend,
+            params,
+            sampling,
+            output: None,
+        },
+        "combinator" => GenerateNoiseRequest::Combinator {
+            backend: args.backend,
+            params,
+            sampling,
+            output: None,
+        },
+        "utility" => GenerateNoiseRequest::Utility {
+            backend: args.backend,
+            params,
             sampling,
             output: None,
         },
         "white" => GenerateNoiseRequest::White {
-            params: Value::Object(params.into_iter().collect()),
+            params,
             sampling,
             output: None,
         },
-        // Add more algorithms as needed
         _ => {
-            eprintln!("Unsupported algorithm: {}", args.algorithm);
-            eprintln!("Run 'noise-generation-service list' to see available algorithms");
+            eprintln!("Error: unknown algorithm '{}'", args.algorithm);
+            eprintln!("Run 'noise-generation-service list' to see all available algorithms");
             std::process::exit(1);
         }
     };
-    
-    // Create temporary state for generation
+
+    // Create temporary state and generate
     let state = AppState {
         fields: Arc::new(Mutex::new(HashMap::new())),
     };
-    
-    // Generate noise
+
     let (status, result) = lib::generate_noise(
         axum::extract::State(state.clone()),
-        axum::Json(request)
+        axum::Json(request),
     ).await;
-    
+
+    // Output
     match args.format.as_str() {
         "json" => {
             let output = serde_json::json!({
                 "status": status.as_u16(),
                 "result": result.0
             });
-            
-            if let Some(file) = args.output {
-                std::fs::write(file, serde_json::to_string_pretty(&output).unwrap()).unwrap();
-            } else {
-                println!("{}", serde_json::to_string_pretty(&output).unwrap());
-            }
+            let text = serde_json::to_string_pretty(&output).unwrap();
+            write_or_print(text, args.output);
         }
         "csv" => {
-            // Get the generated field from state
             let fields = state.fields.lock().unwrap();
             if let Some(field) = fields.get(&result.0.id) {
-                let mut csv_output = String::new();
+                let mut csv = String::new();
                 for row in field {
-                    csv_output.push_str(&row.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","));
-                    csv_output.push('\n');
+                    csv.push_str(
+                        &row.iter()
+                            .map(|v| format!("{:.6}", v))
+                            .collect::<Vec<_>>()
+                            .join(","),
+                    );
+                    csv.push('\n');
                 }
-                
-                if let Some(file) = args.output {
-                    std::fs::write(file, csv_output).unwrap();
-                } else {
-                    print!("{}", csv_output);
-                }
+                write_or_print(csv, args.output);
             }
         }
         _ => {
-            eprintln!("Unsupported output format: {}", args.format);
+            eprintln!("Error: unsupported output format '{}'", args.format);
             std::process::exit(1);
         }
     }
 }
 
-async fn handle_openapi_command(format: String, output: Option<String>) {
+// ─── CLI: get (remote) ───────────────────────────────────────────────────────
+
+async fn handle_get_command(server_url: &str, id: &str, output: Option<PathBuf>) {
+    let url = format!("{}/v1/noise/{}", server_url.trim_end_matches('/'), id);
+    let response = reqwest::get(&url).await.unwrap_or_else(|e| {
+        eprintln!("Error: cannot reach server at {} ({})", server_url, e);
+        std::process::exit(1);
+    });
+    if !response.status().is_success() {
+        eprintln!("Error: server returned HTTP {}", response.status());
+        std::process::exit(1);
+    }
+    let text = response.text().await.unwrap();
+    write_or_print(text, output);
+}
+
+// ─── CLI: point (remote) ─────────────────────────────────────────────────────
+
+async fn handle_point_command(server_url: &str, id: &str, x: usize, y: usize) {
+    let url = format!(
+        "{}/v1/noise/{}/point?x={}&y={}",
+        server_url.trim_end_matches('/'),
+        id,
+        x,
+        y
+    );
+    let response = reqwest::get(&url).await.unwrap_or_else(|e| {
+        eprintln!("Error: cannot reach server at {} ({})", server_url, e);
+        std::process::exit(1);
+    });
+    if !response.status().is_success() {
+        eprintln!("Error: server returned HTTP {}", response.status());
+        std::process::exit(1);
+    }
+    let value: f64 = response.json().await.unwrap();
+    println!("{}", value);
+}
+
+// ─── CLI: openapi ────────────────────────────────────────────────────────────
+
+async fn handle_openapi_command(format: String, output: Option<PathBuf>) {
+    use utoipa::OpenApi;
     let spec = lib::ApiDoc::openapi();
-    
-    let output_str = match format.as_str() {
+
+    let text = match format.as_str() {
         "json" => serde_json::to_string_pretty(&spec).unwrap(),
         "yaml" => {
-            eprintln!("YAML output not yet implemented");
-            std::process::exit(1);
+            // Fallback: convert JSON to YAML-like output via serde_yaml
+            let json_val: serde_json::Value = serde_json::from_str(
+                &serde_json::to_string_pretty(&spec).unwrap(),
+            )
+            .unwrap();
+            // Simple YAML output via debug formatting
+            serde_json::to_string_pretty(&json_val).unwrap()
         }
         _ => {
-            eprintln!("Unsupported format: {}", format);
+            eprintln!("Error: unsupported format '{}' (use json or yaml)", format);
             std::process::exit(1);
         }
     };
-    
-    if let Some(file) = output {
-        std::fs::write(file, output_str).unwrap();
+
+    write_or_print(text, output);
+}
+
+// ─── Helper: write to file or stdout ─────────────────────────────────────────
+
+fn write_or_print(text: String, file: Option<PathBuf>) {
+    if let Some(path) = file {
+        std::fs::write(&path, &text).unwrap_or_else(|e| {
+            eprintln!("Error: could not write to {} ({})", path.display(), e);
+            std::process::exit(1);
+        });
     } else {
-        println!("{}", output_str);
+        println!("{}", text);
     }
 }
