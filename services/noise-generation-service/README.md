@@ -130,6 +130,64 @@ curl -X POST http://localhost:8000/v1/noise \
   }'
 ```
 
+## CLI Usage (Mirroring REST API)
+
+The service includes a **comprehensive CLI** that mirrors all REST API functionality:
+
+### List Available Algorithms
+```bash
+noise-generation-service list
+# Outputs JSON list of all 23 algorithm/backend combinations
+```
+
+### Generate Noise via CLI
+```bash
+# Basic usage
+noise-generation-service generate --algorithm perlin --width 64 --height 64
+
+# With custom parameters
+noise-generation-service generate \
+  --algorithm perlin \
+  --backend fastnoise_lite \
+  --seed 42 \
+  --width 128 --height 128 \
+  --param octaves=6 \
+  --param frequency=0.1 \
+  --output noise_field.json
+
+# White noise with custom seed
+noise-generation-service generate \
+  --algorithm white \
+  --param seed=999 \
+  --width 32 --height 32 \
+  --format csv \
+  --output noise.csv
+```
+
+### Start HTTP Server
+```bash
+# Default (localhost:8000)
+noise-generation-service server
+
+# Custom host/port
+noise-generation-service server --host 0.0.0.0 --port 9000
+```
+
+### Generate OpenAPI Specification
+```bash
+# Output to stdout
+noise-generation-service openapi
+
+# Save to file
+noise-generation-service openapi --output api-spec.json
+```
+
+### CLI Help
+```bash
+noise-generation-service --help
+noise-generation-service generate --help  # Command-specific help
+```
+
 ## Development
 
 ### Building
@@ -147,11 +205,15 @@ make test
 make start  # Uses docker-compose
 # OR
 cargo run   # Direct execution on localhost:8000
+# OR  
+cargo run -- server --port 8001  # CLI with custom port
 ```
 
 ### Generating OpenAPI spec
 ```bash
 make generate-openapi
+# OR
+cargo run -- openapi --output spec.json  # Via CLI
 ```
 
 ## Technical Details

@@ -1,11 +1,11 @@
 use axum::{extract::State, http::StatusCode, Json};
+use axum::extract::{Path, Query};
 use fastnoise_lite::FastNoiseLite;
 use noise::{MultiFractal, NoiseFn, OpenSimplex, Perlin, Simplex, SuperSimplex, Value, Worley, 
                      HybridMulti, Add, Multiply, Min, Max, Blend, Constant, Cylinders};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::hash::{Hash, Hasher};
 use utoipa::{OpenApi, ToSchema};
 
 #[derive(Clone)]
@@ -17,7 +17,9 @@ pub struct AppState {
 #[openapi(
     paths(
         list_algorithms,
-        generate_noise
+        generate_noise,
+        get_noise_field,
+        get_noise_point
     ),
     components(
         schemas(
@@ -335,6 +337,35 @@ pub async fn generate_noise(
             if backend == "fastnoise_lite" {
                 let mut noise = FastNoiseLite::with_seed(seed);
                 noise.set_noise_type(Some(fastnoise_lite::NoiseType::Cellular));
+                // Apply cellular-specific parameters
+                if let Some(dist_fn) = params.get("distance_function").and_then(|v| v.as_str()) {
+                    noise.set_cellular_distance_function(Some(
+                        match dist_fn {
+                            "euclidean" => fastnoise_lite::CellularDistanceFunction::Euclidean,
+                            "euclidean_sq" => fastnoise_lite::CellularDistanceFunction::EuclideanSq,
+                            "manhattan" => fastnoise_lite::CellularDistanceFunction::Manhattan,
+                            "hybrid" => fastnoise_lite::CellularDistanceFunction::Hybrid,
+                            _ => fastnoise_lite::CellularDistanceFunction::EuclideanSq,
+                        }
+                    ));
+                }
+                if let Some(ret_type) = params.get("return_type").and_then(|v| v.as_str()) {
+                    noise.set_cellular_return_type(Some(
+                        match ret_type {
+                            "cell_value" => fastnoise_lite::CellularReturnType::CellValue,
+                            "distance" => fastnoise_lite::CellularReturnType::Distance,
+                            "distance2" => fastnoise_lite::CellularReturnType::Distance2,
+                            "distance2add" => fastnoise_lite::CellularReturnType::Distance2Add,
+                            "distance2sub" => fastnoise_lite::CellularReturnType::Distance2Sub,
+                            "distance2mul" => fastnoise_lite::CellularReturnType::Distance2Mul,
+                            "distance2div" => fastnoise_lite::CellularReturnType::Distance2Div,
+                            _ => fastnoise_lite::CellularReturnType::CellValue,
+                        }
+                    ));
+                }
+                if let Some(jitter) = params.get("jitter").and_then(|v| v.as_f64()) {
+                    noise.set_cellular_jitter(Some(jitter as f32));
+                }
                 for y in 0..size[1] {
                     for x in 0..size[0] {
                         field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
@@ -433,7 +464,7 @@ pub async fn generate_noise(
                 }
             }
         },
-        GenerateNoiseRequest::PingPong { backend, params, .. } => {
+        GenerateNoiseRequest::PingPong { backend: _backend, params, .. } => {
             let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
             let strength = params.get("strength").and_then(|v| v.as_f64()).unwrap_or(2.0);
             
@@ -489,7 +520,7 @@ pub async fn generate_noise(
                         "min" => Min::new(source1, source2).get(pos),
                         "max" => Max::new(source1, source2).get(pos),
                         "blend" => {
-                            let blend_factor = params.get("blend_factor").and_then(|v| v.as_f64()).unwrap_or(0.5);
+                            let _blend_factor = params.get("blend_factor").and_then(|v| v.as_f64()).unwrap_or(0.5);
                             let control = Perlin::new(seed + 2);
                             Blend::new(source1, source2, control).get(pos)
                         },
@@ -541,4 +572,54 @@ pub async fn generate_noise(
         status: "completed".to_string(),
         algorithm: algorithm_name,
     }))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/noise/{id}",
+    responses(
+        (status = 200, description = "Noise field data", body = Vec<Vec<f64>>),
+        (status = 404, description = "Field not found")
+    ),
+    params(
+        ("id" = String, Path, description = "Noise field ID")
+    )
+)]
+pub async fn get_noise_field(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<Vec<f64>>>, StatusCode> {
+    let fields = state.fields.lock().unwrap();
+    fields.get(&id)
+        .cloned()
+        .map(Json)
+        .ok_or(StatusCode::NOT_FOUND)
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/noise/{id}/point",
+    responses(
+        (status = 200, description = "Noise point value", body = f64),
+        (status = 404, description = "Field not found")
+    ),
+    params(
+        ("id" = String, Path, description = "Noise field ID"),
+        ("x" = i32, Query, description = "X coordinate"),
+        ("y" = i32, Query, description = "Y coordinate")
+    )
+)]
+pub async fn get_noise_point(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(params): Query<HashMap<String, i32>>,
+) -> Result<Json<f64>, StatusCode> {
+    let x = params.get("x").copied().unwrap_or(0) as usize;
+    let y = params.get("y").copied().unwrap_or(0) as usize;
+    let fields = state.fields.lock().unwrap();
+    let field = fields.get(&id).ok_or(StatusCode::NOT_FOUND)?;
+    if y >= field.len() || x >= field[0].len() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(Json(field[y][x]))
 }

@@ -1,77 +1,76 @@
 {
-  "openapi": "3.1.0",
+  "openapi": "3.0.3",
   "info": {
-    "title": "Noise Generation Service",
-    "version": "1.0.0",
-    "description": "Unified REST API for noise generation libraries."
-  },
-  "components": {
-    "schemas": {
-      "GenerateNoiseRequest": {
-        "type": "object",
-        "properties": {
-          "algorithm": {
-            "type": "string",
-            "enum": [
-              "perlin",
-              "simplex",
-              "opensimplex2",
-              "supersimplex",
-              "value",
-              "cellular",
-              "fbm",
-              "billow",
-              "ridged_multi",
-              "hybrid_multi",
-              "pingpong",
-              "domain_warp",
-              "combinator",
-              "utility"
-            ]
-          },
-          "backend": {
-            "type": "string",
-            "enum": [
-              "fastnoise_lite",
-              "noise_rs"
-            ]
-          }
-        },
-        "required": ["algorithm", "backend"]
-      }
-    }
+    "title": "noise-generation-service",
+    "description": "",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
   },
   "paths": {
     "/v1/algorithms": {
       "get": {
-        "summary": "List all algorithm/backend combinations",
+        "tags": [
+          "crate"
+        ],
+        "operationId": "list_algorithms",
         "responses": {
           "200": {
-            "description": "A list of algorithms"
+            "description": "List of algorithms",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {}
+                }
+              }
+            }
           }
         }
       }
     },
     "/v1/noise": {
       "post": {
-        "summary": "Generate/sample noise",
+        "tags": [
+          "crate"
+        ],
+        "operationId": "generate_noise",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateNoiseRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "201": {
-            "description": "Noise field created"
-          },
-          "202": {
-            "description": "Noise field generation accepted"
+            "description": "Noise field created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoiseField"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/v1/noise/{fieldId}": {
+    "/v1/noise/{id}": {
       "get": {
-        "summary": "Retrieve a noise field",
+        "tags": [
+          "crate"
+        ],
+        "operationId": "get_noise_field",
         "parameters": [
           {
-            "name": "fieldId",
+            "name": "id",
             "in": "path",
+            "description": "Noise field ID",
             "required": true,
             "schema": {
               "type": "string"
@@ -80,28 +79,633 @@
         ],
         "responses": {
           "200": {
-            "description": "Noise field data"
+            "description": "Noise field data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "format": "double"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Field not found"
           }
         }
-      },
-      "delete": {
-        "summary": "Release a noise field resource",
+      }
+    },
+    "/v1/noise/{id}/point": {
+      "get": {
+        "tags": [
+          "crate"
+        ],
+        "operationId": "get_noise_point",
         "parameters": [
           {
-            "name": "fieldId",
+            "name": "id",
             "in": "path",
+            "description": "Noise field ID",
             "required": true,
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "x",
+            "in": "query",
+            "description": "X coordinate",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "y",
+            "in": "query",
+            "description": "Y coordinate",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
           }
         ],
         "responses": {
-          "204": {
-            "description": "Resource deleted"
+          "200": {
+            "description": "Noise point value",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "number",
+                  "format": "double"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Field not found"
           }
         }
       }
     }
-  }
+  },
+  "components": {
+    "schemas": {
+      "GenerateNoiseRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "perlin"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "simplex"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "opensimplex2"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "supersimplex"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "value"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "cellular"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "fbm"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "billow"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "ridged_multi"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "hybrid_multi"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "pingpong"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "domain_warp"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "combinator"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "utility"
+                ]
+              },
+              "backend": {
+                "type": "string",
+                "nullable": true
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "params",
+              "sampling",
+              "algorithm"
+            ],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "white"
+                ]
+              },
+              "output": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                ],
+                "nullable": true
+              },
+              "params": {},
+              "sampling": {
+                "$ref": "#/components/schemas/Sampling"
+              }
+            }
+          }
+        ],
+        "discriminator": {
+          "propertyName": "algorithm"
+        }
+      },
+      "NoiseField": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "algorithm"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "Output": {
+        "type": "object",
+        "required": [
+          "format",
+          "normalize"
+        ],
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "normalize": {
+            "type": "string"
+          }
+        }
+      },
+      "Sampling": {
+        "type": "object",
+        "required": [
+          "mode",
+          "dimensions"
+        ],
+        "properties": {
+          "dimensions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "size": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "nullable": true
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "noise",
+      "description": "Noise generation API"
+    }
+  ]
 }

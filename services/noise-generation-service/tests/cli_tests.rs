@@ -7,9 +7,9 @@ use cli::{Cli, Commands};
 fn test_cli_parse_generate() {
     let cli = Cli::parse_from(["test", "generate", "--algorithm", "perlin"]);
     match cli.command {
-        Some(Commands::Generate { algorithm, backend }) => {
-            assert_eq!(algorithm, "perlin");
-            assert_eq!(backend, None);
+        Some(Commands::Generate(args)) => {
+            assert_eq!(args.algorithm, "perlin");
+            assert_eq!(args.backend, None);
         }
         _ => panic!("Expected Generate command"),
     }
@@ -19,9 +19,9 @@ fn test_cli_parse_generate() {
 fn test_cli_parse_generate_with_backend() {
     let cli = Cli::parse_from(["test", "generate", "--algorithm", "simplex", "--backend", "fastnoise_lite"]);
     match cli.command {
-        Some(Commands::Generate { algorithm, backend }) => {
-            assert_eq!(algorithm, "simplex");
-            assert_eq!(backend, Some("fastnoise_lite".to_string()));
+        Some(Commands::Generate(args)) => {
+            assert_eq!(args.algorithm, "simplex");
+            assert_eq!(args.backend, Some("fastnoise_lite".to_string()));
         }
         _ => panic!("Expected Generate command"),
     }
