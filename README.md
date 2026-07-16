@@ -5,7 +5,6 @@
 [![jsonpath-mapper-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-jsonpath-mapper-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-jsonpath-mapper-service.yml)
 [![sql-assessment-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-sql-assessment-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-sql-assessment-service.yml)
 [![fermentaladin-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-fermentaladin-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-fermentaladin-service.yml)
-[![noise-generation-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-noise-generation-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-noise-generation-service.yml)
 
 ## Services
 
