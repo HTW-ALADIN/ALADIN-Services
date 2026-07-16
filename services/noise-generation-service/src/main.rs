@@ -505,37 +505,67 @@ async fn generate_noise(
                 }
             }
         },
-        GenerateNoiseRequest::Combinator { backend, params, .. } => {
+        GenerateNoiseRequest::Combinator { params, .. } => {
             let op = params.get("op").and_then(|v| v.as_str()).unwrap_or("add");
+            
             let source1 = Perlin::new(1);
             let source2 = Simplex::new(2);
             
-            for y in 0..size[1] {
-                for x in 0..size[0] {
-                    let val1 = source1.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
-                    let val2 = source2.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
-                    field[y][x] = match op {
-                        "add" => val1 + val2,
-                        "multiply" => val1 * val2,
-                        _ => val1 + val2,
-                    };
+            match op {
+                "add" => {
+                    let combinator = noise::Add::new(source1, source2);
+                    for y in 0..size[1] {
+                        for x in 0..size[0] {
+                            field[y][x] = combinator.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                        }
+                    }
+                },
+                "multiply" => {
+                    let combinator = noise::Multiply::new(source1, source2);
+                    for y in 0..size[1] {
+                        for x in 0..size[0] {
+                            field[y][x] = combinator.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                        }
+                    }
+                },
+                _ => {
+                    let combinator = noise::Add::new(source1, source2);
+                    for y in 0..size[1] {
+                        for x in 0..size[0] {
+                            field[y][x] = combinator.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                        }
+                    }
                 }
             }
         },
-        GenerateNoiseRequest::Utility { backend, params, .. } => {
+        GenerateNoiseRequest::Utility { params, .. } => {
             let kind = params.get("kind").and_then(|v| v.as_str()).unwrap_or("constant");
             let value = params.get("value").and_then(|v| v.as_f64()).unwrap_or(0.5);
             
-            for y in 0..size[1] {
-                for x in 0..size[0] {
-                    field[y][x] = match kind {
-                        "constant" => value,
-                        "cylinders" => {
-                            let cylinders = noise::Cylinders::new();
-                            cylinders.get([x as f64 * 0.1, y as f64 * 0.1, 0.0])
-                        },
-                        _ => value,
-                    };
+            match kind {
+                "constant" => {
+                    let constant = noise::Constant::new(value);
+                    for y in 0..size[1] {
+                        for x in 0..size[0] {
+                            field[y][x] = constant.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                        }
+                    }
+                },
+                "cylinders" => {
+                    let cylinders = noise::Cylinders::new();
+                    for y in 0..size[1] {
+                        for x in 0..size[0] {
+                            field[y][x] = cylinders.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                        }
+                    }
+                },
+                _ => {
+                    let constant = noise::Constant::new(value);
+                    for y in 0..size[1] {
+                        for x in 0..size[0] {
+                            field[y][x] = constant.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                        }
+                    }
                 }
             }
         },
