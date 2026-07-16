@@ -23,7 +23,7 @@ docker-build:
 	docker build -t noise-generation-service .
 
 generate-openapi:
-	cargo test --test generate_openapi -- --ignored
+	cargo run -- openapi --output noise-generation-service.openapi.json
 
 dev:
 	docker-compose -f docker-compose.dev.yml up --build
