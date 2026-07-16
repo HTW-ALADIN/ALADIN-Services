@@ -15,25 +15,48 @@ use fastnoise_lite::FastNoiseLite;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use utoipa::{OpenApi, ToSchema};
+use utoipa_swagger_ui::SwaggerUi;
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        list_algorithms,
+        generate_noise
+    ),
+    components(
+        schemas(
+            GenerateNoiseRequest,
+            Sampling,
+            Output,
+            NoiseField
+        )
+    ),
+    tags(
+        (name = "noise", description = "Noise generation API")
+    )
+)]
+struct ApiDoc;
+
 #[derive(Clone)]
 struct AppState {
     fields: Arc<Mutex<HashMap<String, Vec<Vec<f64>>>>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 struct Sampling {
     mode: String,
     dimensions: i32,
     size: Option<Vec<usize>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 struct Output {
     format: String,
     normalize: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 #[serde(tag = "algorithm")]
 enum GenerateNoiseRequest {
     #[serde(rename = "perlin")]
@@ -142,7 +165,7 @@ enum GenerateNoiseRequest {
     },
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, ToSchema)]
 struct NoiseField {
     id: String,
     status: String,
@@ -166,6 +189,7 @@ async fn main() {
     };
 
     let app = Router::new()
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .route("/v1/algorithms", get(list_algorithms))
         .route("/v1/noise", post(generate_noise))
         .route("/v1/noise/:fieldId", get(get_noise))
