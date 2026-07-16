@@ -420,12 +420,12 @@ async fn generate_noise(
                 }
             }
         },
-        GenerateNoiseRequest::HybridMulti { backend, params, .. } => {
-            let hybrid = noise::HybridMulti::<Perlin>::new(1);
+        GenerateNoiseRequest::HybridMulti { params, .. } => {
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
             let octaves = params.get("octaves").and_then(|v| v.as_i64()).unwrap_or(6) as usize;
             let persistence = params.get("persistence").and_then(|v| v.as_f64()).unwrap_or(0.5) as f64;
             
-            let hybrid = hybrid.set_octaves(octaves).set_persistence(persistence);
+            let hybrid = noise::HybridMulti::<Perlin>::new(seed).set_octaves(octaves).set_persistence(persistence);
             
             for y in 0..size[1] {
                 for x in 0..size[0] {
@@ -435,8 +435,10 @@ async fn generate_noise(
         },
         GenerateNoiseRequest::RidgedMulti { backend, params, .. } => {
             let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
             if backend == "fastnoise_lite" {
-                let mut noise = FastNoiseLite::with_seed(1);
+                let mut noise = FastNoiseLite::new();
+                noise.set_seed(Some(seed));
                 noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
                 noise.set_fractal_type(Some(fastnoise_lite::FractalType::Ridged));
                 
@@ -454,7 +456,7 @@ async fn generate_noise(
                     }
                 }
             } else {
-                let ridged = noise::RidgedMulti::<Perlin>::new(1);
+                let ridged = noise::RidgedMulti::<Perlin>::new(seed as u32);
                 for y in 0..size[1] {
                     for x in 0..size[0] {
                         field[y][x] = ridged.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
