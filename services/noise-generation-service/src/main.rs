@@ -464,9 +464,16 @@ async fn generate_noise(
                 }
             }
         },
-        GenerateNoiseRequest::PingPong { backend, params, .. } => {
-            let mut noise = FastNoiseLite::with_seed(1);
-            noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
+        GenerateNoiseRequest::PingPong { params, .. } => {
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
+            let mut noise = FastNoiseLite::new();
+            noise.set_seed(Some(seed));
+            
+            let source = params.get("source").and_then(|v| v.as_str()).unwrap_or("perlin");
+            noise.set_noise_type(Some(match source {
+                "value" => fastnoise_lite::NoiseType::Value,
+                _ => fastnoise_lite::NoiseType::Perlin,
+            }));
             noise.set_fractal_type(Some(fastnoise_lite::FractalType::PingPong));
             
             let strength = params.get("strength").and_then(|v| v.as_f64()).unwrap_or(2.0) as f32;
@@ -478,8 +485,11 @@ async fn generate_noise(
                 }
             }
         },
-        GenerateNoiseRequest::DomainWarp { backend, params, .. } => {
-            let mut noise = FastNoiseLite::with_seed(1);
+        GenerateNoiseRequest::DomainWarp { params, .. } => {
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
+            let mut noise = FastNoiseLite::new();
+            noise.set_seed(Some(seed));
+            
             let warp_type = params.get("warp_type").and_then(|v| v.as_str()).unwrap_or("open_simplex2");
             let amplitude = params.get("amplitude").and_then(|v| v.as_f64()).unwrap_or(30.0) as f32;
             
