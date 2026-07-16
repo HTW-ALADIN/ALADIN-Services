@@ -78,14 +78,15 @@ The service supports 14 noise algorithm families with specific backend support:
 | `supersimplex` | SuperSimplex | SuperSimplex | `noise_rs` only | `SuperSimplex::new(seed).get(point)` |
 | `value` | Value noise (+cubic) | Value | `fastnoise_lite` (default) | `SetNoiseType(Value | ValueCubic)` + `GetNoise(x, y[, z])` |
 | `cellular` | Cellular / Worley / Voronoi | Cellular | `fastnoise_lite` (default) | `SetNoiseType(Cellular)`, `SetCellularDistanceFunction(...)`, `SetCellularReturnType(...)`, `SetCellularJitter(...)` + `GetNoise(x, y[, z])` |
-| `fbm` | Fractal Brownian Motion | Fractal | `fastnoise_lite` (default) | `SetFractalType(FBm)`, `SetFractalOctaves/Lacunarity/Gain(...)` wraps a `source` sub-field |
-| `billow` | Billow noise | Fractal | `noise_rs` only | `Billow::<Source>::new(seed).set_octaves/...(...).get(point)` |
-| `ridged_multi` | Ridged multifractal | Fractal | `fastnoise_lite` (default) | `SetFractalType(Ridged)` wraps a `source` sub-field |
-| `hybrid_multi` | HybridMulti fractal | Fractal | `noise_rs` only | `HybridMulti::<Source>::new(seed).set_octaves/...(...).get(point)` |
-| `pingpong` | PingPong fractal | Fractal | `fastnoise_lite` only | `SetFractalType(PingPong)`, `SetFractalPingPongStrength(...)` wraps a `source` sub-field |
-| `domain_warp` | Domain warping | Transform | `fastnoise_lite` only | `SetDomainWarpType(...)`, `SetDomainWarpAmp(...)` + `DomainWarp2D/3D(x, y[, z])` |
-| `combinator` | Generic combinators | Combinator | `noise_rs` only | `Add`/`Multiply`/`Min`/`Max`/`Blend`/`Turbulence`/`ScalePoint` (selected via `op` sub-field) |
+| `fbm` | Fractal Brownian Motion | Fractal | `fastnoise_lite` (default) | `SetFractalType(FBm)`, `SetFractalOctaves(octaves)`, `SetFractalLacunarity(lacunarity)`, `SetFractalGain(gain)` |
+| `billow` | Billow noise | Fractal | `noise_rs` only | `Billow::new(seed).set_octaves(octaves).set_persistence(persistence)` |
+| `ridged_multi` | Ridged multifractal | Fractal | `fastnoise_lite` (default) | `SetFractalType(Ridged)`, `SetFractalOctaves(octaves)`, `SetFractalLacunarity(lacunarity)`, `SetFractalGain(gain)` |
+| `hybrid_multi` | HybridMulti fractal | Fractal | `noise_rs` only | `HybridMulti::new(seed).set_octaves(octaves).set_persistence(persistence)` |
+| `pingpong` | PingPong fractal | Fractal | `fastnoise_lite` only | `SetFractalType(PingPong)`, `SetFractalPingPongStrength(strength)` |
+| `domain_warp` | Domain warping | Transform | `fastnoise_lite` only | `SetDomainWarpType(warp_type)`, `SetDomainWarpAmp(amplitude)` + `DomainWarp2D/3D(x, y[, z])` |
+| `combinator` | Generic combinators | Combinator | `noise_rs` only | `Add`/`Multiply`/`Min`/`Max`/`Blend`/`Turbulence`/`ScalePoint` (selected via `op` sub-field, wrapping `source1`, `source2`) |
 | `utility` | Utility / deterministic generators | Utility | `noise_rs` only | `Constant::new(value)` / `Cylinders::new()` (selected via `kind` sub-field) |
+| `white` | White noise | Native | `native` | `seeded_prng(seed, x, y, z, w).next_f32() * 2.0 - 1.0` — uncorrelated per-cell/per-point noise, no interpolation |
 
 ## Usage
 
