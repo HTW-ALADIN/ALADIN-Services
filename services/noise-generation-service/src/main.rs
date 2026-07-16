@@ -407,12 +407,12 @@ async fn generate_noise(
                 }
             }
         },
-        GenerateNoiseRequest::Billow { backend, params, .. } => {
-            let billow = Billow::<Perlin>::new(1);
+        GenerateNoiseRequest::Billow { params, .. } => {
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
             let octaves = params.get("octaves").and_then(|v| v.as_i64()).unwrap_or(6) as usize;
             let persistence = params.get("persistence").and_then(|v| v.as_f64()).unwrap_or(0.5) as f64;
             
-            let billow = billow.set_octaves(octaves).set_persistence(persistence);
+            let billow = Billow::<Perlin>::new(seed).set_octaves(octaves).set_persistence(persistence);
             
             for y in 0..size[1] {
                 for x in 0..size[0] {
