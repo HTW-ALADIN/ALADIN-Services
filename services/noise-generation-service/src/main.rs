@@ -4,19 +4,20 @@ mod cli;
 mod lib;
 
 use axum::{
+    response::IntoResponse,
     routing::{get, post},
-    Router, response::IntoResponse, Json,
+    Json, Router,
 };
-use tokio::net::TcpListener;
-use utoipa::OpenApi;
 use clap::Parser;
 use cli::{Cli, Commands, GenerateArgs};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use tokio::net::TcpListener;
+use utoipa::OpenApi;
 
-use lib::{AppState, list_algorithms, generate_noise, get_noise_field, get_noise_point};
+use lib::{generate_noise, get_noise_field, get_noise_point, list_algorithms, AppState};
 
 #[tokio::main]
 async fn main() {
@@ -68,9 +69,10 @@ async fn start_server(bind_addr: String) {
         .route("/v1/noise", post(generate_noise))
         .route("/v1/noise/:id", get(get_noise_field))
         .route("/v1/noise/:id/point", get(get_noise_point))
-        .route("/api-docs/openapi.json", get(|| async {
-            Json(lib::ApiDoc::openapi()).into_response()
-        }))
+        .route(
+            "/api-docs/openapi.json",
+            get(|| async { Json(lib::ApiDoc::openapi()).into_response() }),
+        )
         .with_state(state);
 
     let listener = TcpListener::bind(&bind_addr).await.unwrap();
@@ -112,7 +114,10 @@ fn build_sampling(width: usize, height: usize) -> lib::Sampling {
 
 fn build_params(seed: u64, extra: Vec<(String, Value)>) -> HashMap<String, Value> {
     let mut params = HashMap::new();
-    params.insert("seed".to_string(), Value::Number(serde_json::Number::from(seed)));
+    params.insert(
+        "seed".to_string(),
+        Value::Number(serde_json::Number::from(seed)),
+    );
     for (key, value) in extra {
         params.insert(key, value);
     }
@@ -229,10 +234,8 @@ async fn handle_generate_command(args: GenerateArgs) {
         fields: Arc::new(Mutex::new(HashMap::new())),
     };
 
-    let (status, result) = lib::generate_noise(
-        axum::extract::State(state.clone()),
-        axum::Json(request),
-    ).await;
+    let (status, result) =
+        lib::generate_noise(axum::extract::State(state.clone()), axum::Json(request)).await;
 
     // Output
     match args.format.as_str() {
@@ -315,10 +318,8 @@ async fn handle_openapi_command(format: String, output: Option<PathBuf>) {
         "json" => serde_json::to_string_pretty(&spec).unwrap(),
         "yaml" => {
             // Fallback: convert JSON to YAML-like output via serde_yaml
-            let json_val: serde_json::Value = serde_json::from_str(
-                &serde_json::to_string_pretty(&spec).unwrap(),
-            )
-            .unwrap();
+            let json_val: serde_json::Value =
+                serde_json::from_str(&serde_json::to_string_pretty(&spec).unwrap()).unwrap();
             // Simple YAML output via debug formatting
             serde_json::to_string_pretty(&json_val).unwrap()
         }

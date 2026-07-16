@@ -21,7 +21,7 @@ async fn test_perlin_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 201);
 }
 
@@ -47,9 +47,9 @@ async fn test_simplex_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 201);
-    
+
     let noise_field: serde_json::Value = response.json().await.unwrap();
     let field_id = noise_field["id"].as_str().unwrap();
 
@@ -59,7 +59,7 @@ async fn test_simplex_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(get_response.status(), 200);
     let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
     assert_eq!(field_data.len(), 5);
@@ -88,9 +88,9 @@ async fn test_opensimplex2_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 201);
-    
+
     let noise_field: serde_json::Value = response.json().await.unwrap();
     let field_id = noise_field["id"].as_str().unwrap();
 
@@ -100,7 +100,7 @@ async fn test_opensimplex2_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(get_response.status(), 200);
     let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
     assert_eq!(field_data.len(), 5);
@@ -129,9 +129,9 @@ async fn test_supersimplex_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 201);
-    
+
     let noise_field: serde_json::Value = response.json().await.unwrap();
     let field_id = noise_field["id"].as_str().unwrap();
 
@@ -141,7 +141,7 @@ async fn test_supersimplex_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(get_response.status(), 200);
     let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
     assert_eq!(field_data.len(), 5);
@@ -170,9 +170,9 @@ async fn test_value_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 201);
-    
+
     let noise_field: serde_json::Value = response.json().await.unwrap();
     let field_id = noise_field["id"].as_str().unwrap();
 
@@ -182,7 +182,7 @@ async fn test_value_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(get_response.status(), 200);
     let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
     assert_eq!(field_data.len(), 5);
@@ -192,7 +192,7 @@ async fn test_value_generation() {
 #[tokio::test]
 async fn test_cellular_parameters() {
     let client = reqwest::Client::new();
-    
+
     // Generate field 1: Euclidean, CellValue, Jitter 0.45
     let resp1 = client.post("http://localhost:8000/v1/noise")
         .json(&json!({
@@ -203,11 +203,22 @@ async fn test_cellular_parameters() {
             "output": {"format": "json", "normalize": "none"}
         }))
         .send().await.unwrap();
-    let id1 = resp1.json::<serde_json::Value>().await.unwrap()["id"].as_str().unwrap().to_string();
-    let field1: Vec<Vec<f64>> = client.get(format!("http://localhost:8000/v1/noise/{}", id1)).send().await.unwrap().json().await.unwrap();
+    let id1 = resp1.json::<serde_json::Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let field1: Vec<Vec<f64>> = client
+        .get(format!("http://localhost:8000/v1/noise/{}", id1))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
 
     // Generate field 2: Manhattan, Distance, Jitter 0.9
-    let resp2 = client.post("http://localhost:8000/v1/noise")
+    let resp2 = client
+        .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "cellular",
             "backend": "fastnoise_lite",
@@ -215,9 +226,21 @@ async fn test_cellular_parameters() {
             "sampling": {"mode": "grid", "dimensions": 2, "size": [5, 5]},
             "output": {"format": "json", "normalize": "none"}
         }))
-        .send().await.unwrap();
-    let id2 = resp2.json::<serde_json::Value>().await.unwrap()["id"].as_str().unwrap().to_string();
-    let field2: Vec<Vec<f64>> = client.get(format!("http://localhost:8000/v1/noise/{}", id2)).send().await.unwrap().json().await.unwrap();
+        .send()
+        .await
+        .unwrap();
+    let id2 = resp2.json::<serde_json::Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let field2: Vec<Vec<f64>> = client
+        .get(format!("http://localhost:8000/v1/noise/{}", id2))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
 
     // Assert fields are different
     assert_ne!(field1, field2);
@@ -226,11 +249,12 @@ async fn test_cellular_parameters() {
 #[tokio::test]
 async fn test_fbm_seed_parameter() {
     let client = reqwest::Client::new();
-    
+
     // Generate field 1: Seed 1
     let params1 = json!({"seed": 1, "octaves": 3});
     println!("Params1: {}", params1);
-    let resp1 = client.post("http://localhost:8000/v1/noise")
+    let resp1 = client
+        .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "fbm",
             "backend": "fastnoise_lite",
@@ -238,14 +262,27 @@ async fn test_fbm_seed_parameter() {
             "sampling": {"mode": "grid", "dimensions": 2, "size": [20, 20]},
             "output": {"format": "json", "normalize": "none"}
         }))
-        .send().await.unwrap();
-    let id1 = resp1.json::<serde_json::Value>().await.unwrap()["id"].as_str().unwrap().to_string();
-    let field1: Vec<Vec<f64>> = client.get(format!("http://localhost:8000/v1/noise/{}", id1)).send().await.unwrap().json().await.unwrap();
+        .send()
+        .await
+        .unwrap();
+    let id1 = resp1.json::<serde_json::Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let field1: Vec<Vec<f64>> = client
+        .get(format!("http://localhost:8000/v1/noise/{}", id1))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
 
     // Generate field 2: Seed 2
     let params2 = json!({"seed": 2, "octaves": 4});
     println!("Params2: {}", params2);
-    let resp2 = client.post("http://localhost:8000/v1/noise")
+    let resp2 = client
+        .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "fbm",
             "backend": "fastnoise_lite",
@@ -253,9 +290,21 @@ async fn test_fbm_seed_parameter() {
             "sampling": {"mode": "grid", "dimensions": 2, "size": [20, 20]},
             "output": {"format": "json", "normalize": "none"}
         }))
-        .send().await.unwrap();
-    let id2 = resp2.json::<serde_json::Value>().await.unwrap()["id"].as_str().unwrap().to_string();
-    let field2: Vec<Vec<f64>> = client.get(format!("http://localhost:8000/v1/noise/{}", id2)).send().await.unwrap().json().await.unwrap();
+        .send()
+        .await
+        .unwrap();
+    let id2 = resp2.json::<serde_json::Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let field2: Vec<Vec<f64>> = client
+        .get(format!("http://localhost:8000/v1/noise/{}", id2))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
 
     // Assert fields are significantly different
     let mut diff = 0.0;
@@ -265,7 +314,11 @@ async fn test_fbm_seed_parameter() {
         }
     }
     let mean_diff = diff / (20.0 * 20.0);
-    assert!(mean_diff > 0.01, "Fields should be significantly different, mean_diff: {}", mean_diff);
+    assert!(
+        mean_diff > 0.01,
+        "Fields should be significantly different, mean_diff: {}",
+        mean_diff
+    );
 }
 
 #[tokio::test]
@@ -290,7 +343,7 @@ async fn test_billow_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 201);
 }
 
@@ -316,7 +369,7 @@ async fn test_ridged_multi_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 201);
 }
 
@@ -342,7 +395,7 @@ async fn test_hybrid_multi_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 201);
 }
 
@@ -368,7 +421,7 @@ async fn test_pingpong_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 201);
 }
 
@@ -394,7 +447,7 @@ async fn test_domain_warp_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 201);
 }
 
@@ -420,9 +473,9 @@ async fn test_combinator_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 201);
-    
+
     let noise_field: serde_json::Value = response.json().await.unwrap();
     let field_id = noise_field["id"].as_str().unwrap();
 
@@ -432,7 +485,7 @@ async fn test_combinator_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(get_response.status(), 200);
     let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
     assert_eq!(field_data.len(), 5);
@@ -461,9 +514,9 @@ async fn test_utility_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 201);
-    
+
     let noise_field: serde_json::Value = response.json().await.unwrap();
     let field_id = noise_field["id"].as_str().unwrap();
 
@@ -473,7 +526,7 @@ async fn test_utility_generation() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(get_response.status(), 200);
     let field_data: Vec<Vec<f64>> = get_response.json().await.unwrap();
     assert_eq!(field_data.len(), 5);
@@ -484,7 +537,7 @@ async fn test_utility_generation() {
 #[tokio::test]
 async fn test_get_noise_point() {
     let client = reqwest::Client::new();
-    
+
     // 1. Generate a field
     let gen_response = client
         .post("http://localhost:8000/v1/noise")
@@ -505,19 +558,22 @@ async fn test_get_noise_point() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(gen_response.status(), 201);
-    
+
     let noise_field: serde_json::Value = gen_response.json().await.unwrap();
     let field_id = noise_field["id"].as_str().unwrap();
 
     // 2. Query a specific point
     let response = client
-        .get(format!("http://localhost:8000/v1/noise/{}/point?x=1&y=2", field_id))
+        .get(format!(
+            "http://localhost:8000/v1/noise/{}/point?x=1&y=2",
+            field_id
+        ))
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 200);
     let point_value: f64 = response.json().await.unwrap();
     // Just check if it's a valid number
@@ -526,32 +582,58 @@ async fn test_get_noise_point() {
 #[tokio::test]
 async fn test_white_noise_seed_parameter() {
     let client = reqwest::Client::new();
-    
+
     // Generate field 1: Seed 1
     let params1 = json!({"seed": 1});
-    let resp1 = client.post("http://localhost:8000/v1/noise")
+    let resp1 = client
+        .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "white",
             "params": params1,
             "sampling": {"mode": "grid", "dimensions": 2, "size": [20, 20]},
             "output": {"format": "json", "normalize": "none"}
         }))
-        .send().await.unwrap();
-    let id1 = resp1.json::<serde_json::Value>().await.unwrap()["id"].as_str().unwrap().to_string();
-    let field1: Vec<Vec<f64>> = client.get(format!("http://localhost:8000/v1/noise/{}", id1)).send().await.unwrap().json().await.unwrap();
+        .send()
+        .await
+        .unwrap();
+    let id1 = resp1.json::<serde_json::Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let field1: Vec<Vec<f64>> = client
+        .get(format!("http://localhost:8000/v1/noise/{}", id1))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
 
     // Generate field 2: Seed 2
     let params2 = json!({"seed": 2});
-    let resp2 = client.post("http://localhost:8000/v1/noise")
+    let resp2 = client
+        .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "white",
             "params": params2,
             "sampling": {"mode": "grid", "dimensions": 2, "size": [20, 20]},
             "output": {"format": "json", "normalize": "none"}
         }))
-        .send().await.unwrap();
-    let id2 = resp2.json::<serde_json::Value>().await.unwrap()["id"].as_str().unwrap().to_string();
-    let field2: Vec<Vec<f64>> = client.get(format!("http://localhost:8000/v1/noise/{}", id2)).send().await.unwrap().json().await.unwrap();
+        .send()
+        .await
+        .unwrap();
+    let id2 = resp2.json::<serde_json::Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let field2: Vec<Vec<f64>> = client
+        .get(format!("http://localhost:8000/v1/noise/{}", id2))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
 
     // Assert fields are significantly different
     let mut diff = 0.0;
@@ -561,5 +643,9 @@ async fn test_white_noise_seed_parameter() {
         }
     }
     let mean_diff = diff / (20.0 * 20.0);
-    assert!(mean_diff > 0.01, "Fields should be significantly different, mean_diff: {}", mean_diff);
+    assert!(
+        mean_diff > 0.01,
+        "Fields should be significantly different, mean_diff: {}",
+        mean_diff
+    );
 }

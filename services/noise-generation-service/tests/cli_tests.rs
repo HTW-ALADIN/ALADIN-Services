@@ -17,7 +17,14 @@ fn test_cli_parse_generate() {
 
 #[test]
 fn test_cli_parse_generate_with_backend() {
-    let cli = Cli::parse_from(["test", "generate", "--algorithm", "simplex", "--backend", "fastnoise_lite"]);
+    let cli = Cli::parse_from([
+        "test",
+        "generate",
+        "--algorithm",
+        "simplex",
+        "--backend",
+        "fastnoise_lite",
+    ]);
     match cli.command {
         Some(Commands::Generate(args)) => {
             assert_eq!(args.algorithm, "simplex");

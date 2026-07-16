@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, Args};
+use clap::{Args, Parser, Subcommand};
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -8,7 +8,12 @@ use std::path::PathBuf;
 #[command(about = "Unified CLI for noise generation algorithms")]
 pub struct Cli {
     /// Server URL (for remote operations)
-    #[arg(short = 'U', long, default_value = "http://localhost:8000", global = true)]
+    #[arg(
+        short = 'U',
+        long,
+        default_value = "http://localhost:8000",
+        global = true
+    )]
     pub server_url: String,
 
     #[command(subcommand)]
@@ -118,8 +123,11 @@ pub struct GenerateArgs {
     pub normalize: bool,
 }
 
-fn parse_key_val(s: &str) -> Result<(String, Value), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    let pos = s.find('=')
+fn parse_key_val(
+    s: &str,
+) -> Result<(String, Value), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    let pos = s
+        .find('=')
         .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{}`", s))?;
 
     let key = s[..pos].to_string();
