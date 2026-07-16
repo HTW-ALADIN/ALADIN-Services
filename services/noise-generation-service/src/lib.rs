@@ -1,3 +1,6 @@
+// Range loops and casts are clearer for noise generation — keep them explicit
+#![allow(clippy::needless_range_loop, clippy::unnecessary_cast)]
+
 use axum::{extract::State, http::StatusCode, Json};
 use axum::extract::{Path, Query};
 use fastnoise_lite::FastNoiseLite;
