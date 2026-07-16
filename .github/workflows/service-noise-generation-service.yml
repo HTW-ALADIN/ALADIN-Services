@@ -1,4 +1,67 @@
 name: noise-generation-service
+
+on:
+  push:
+    branches: ["master"]
+    paths:
+      - "services/noise-generation-service/**"
+  pull_request:
+    branches: ["master"]
+    paths:
+      - "services/noise-generation-service/**"
+
+defaults:
+  run:
+    working-directory: services/noise-generation-service
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/noise-generation-service
+      - run: make lint
+
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/noise-generation-service
+      - run: make test
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: services/noise-generation-service/coverage/lcov.info
+          flags: noise-generation-service
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+        if: always()
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/noise-generation-service
+      - run: make build
 on:
   push:
     branches: ["master"]

@@ -1,5 +1,169 @@
 # Noise Generation Service
 
+Unified REST API for multiple noise generation libraries and algorithms.
+
+## Features
+
+### Supported Algorithms
+
+| Algorithm | Backend Options | Description | Parameters |
+|-----------|----------------|-------------|------------|
+| `perlin` | `fastnoise_lite` (default), `noise_rs` | Classic Perlin noise with smooth gradients | `seed` |
+| `simplex` | `noise_rs` (only) | Improved noise with lower computational complexity | `seed` |
+| `opensimplex2` | `fastnoise_lite` (default), `noise_rs` | Modern variant with better visual quality | `seed` |
+| `supersimplex` | `noise_rs` (only) | Higher-dimensional noise variant | `seed` |
+| `value` | `fastnoise_lite` (default), `noise_rs` | Grid-based value noise (+cubic interpolation) | `seed` |
+| `cellular` | `fastnoise_lite` (default), `noise_rs` (Worley) | Cell-based patterns (Worley/Voronoi) | `seed` |
+| `fbm` | `noise_rs` (only) | Fractal Brownian Motion (multi-octave) | `seed`, `octaves`, `frequency`, `lacunarity`, `persistence` |
+| `billow` | `noise_rs` (only) | Billow noise (absolute value of Perlin) | `seed`, `octaves`, `frequency`, `lacunarity`, `persistence` |
+| `ridged_multi` | `fastnoise_lite` (default), `noise_rs` | Ridge-like fractal patterns | `seed`, `octaves`, `frequency`, `lacunarity` |
+| `hybrid_multi` | `noise_rs` (only) | HybridMulti fractal noise | `seed`, `octaves`, `frequency`, `lacunarity` |
+| `pingpong` | `fastnoise_lite` (only) | PingPong fractal with wrapping | `seed`, `strength` |
+| `domain_warp` | `fastnoise_lite` (only) | Domain warping transformation | `seed`, `amplitude` |
+| `combinator` | `noise_rs` (only) | Generic combinators (Add/Multiply/Min/Max/Blend) | `seed`, `op` (`add`/`multiply`/`min`/`max`/`blend`) |
+| `utility` | `noise_rs` (only) | Utility generators (Constant/Cylinders) | `kind` (`constant`/`cylinders`), `value` (for constant) |
+| `white` | `native` | Pure random white noise | `seed` |
+
+**Total: 14 unique algorithms with 20+ backend/parameter combinations**
+
+### API Endpoints
+
+- `GET /v1/algorithms` - List all available algorithms and backends
+- `POST /v1/noise` - Generate noise field with specified algorithm
+- `GET /api-docs/openapi.json` - OpenAPI specification
+
+### Example Requests
+
+#### List Available Algorithms
+```bash
+curl http://localhost:8000/v1/algorithms
+```
+
+#### Generate Perlin Noise
+```bash
+curl -X POST http://localhost:8000/v1/noise \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "perlin",
+    "backend": "fastnoise_lite",
+    "params": {"seed": 42},
+    "sampling": {
+      "mode": "2d",
+      "dimensions": 2,
+      "size": [64, 64]
+    }
+  }'
+```
+
+#### Generate Fractal Brownian Motion
+```bash
+curl -X POST http://localhost:8000/v1/noise \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "fbm",
+    "params": {
+      "seed": 123,
+      "octaves": 6,
+      "frequency": 0.1,
+      "lacunarity": 2.0,
+      "persistence": 0.5
+    },
+    "sampling": {
+      "mode": "2d", 
+      "dimensions": 2,
+      "size": [128, 128]
+    }
+  }'
+```
+
+#### Generate Domain-Warped Noise
+```bash
+curl -X POST http://localhost:8000/v1/noise \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "domain_warp",
+    "params": {
+      "seed": 999,
+      "amplitude": 2.0
+    },
+    "sampling": {
+      "mode": "2d",
+      "dimensions": 2,
+      "size": [64, 64]
+    }
+  }'
+```
+
+#### Generate Combinator Noise (Add two Perlin sources)
+```bash
+curl -X POST http://localhost:8000/v1/noise \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "combinator",
+    "params": {
+      "seed": 555,
+      "op": "add"
+    },
+    "sampling": {
+      "mode": "2d",
+      "dimensions": 2, 
+      "size": [32, 32]
+    }
+  }'
+```
+
+#### Generate Utility Noise (Constant field)
+```bash
+curl -X POST http://localhost:8000/v1/noise \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "utility",
+    "params": {
+      "kind": "constant",
+      "value": 0.5
+    },
+    "sampling": {
+      "mode": "2d",
+      "dimensions": 2,
+      "size": [16, 16]
+    }
+  }'
+```
+
+## Development
+
+### Building
+```bash
+make build
+```
+
+### Testing  
+```bash
+make test
+```
+
+### Running locally
+```bash
+make start  # Uses docker-compose
+# OR
+cargo run   # Direct execution on localhost:8000
+```
+
+### Generating OpenAPI spec
+```bash
+make generate-openapi
+```
+
+## Technical Details
+
+- **Language**: Rust (Edition 2021)
+- **Web Framework**: Axum 0.7
+- **Noise Libraries**: 
+  - `fastnoise-lite` v1.1.1 (FastNoiseLite C++ port)
+  - `noise` v0.9 (Pure Rust implementations)
+- **OpenAPI**: Auto-generated via `utoipa` v4
+- **Port**: 8000 (configurable via Docker)
+
 A unified REST API for noise generation libraries, supporting multiple noise algorithms and backends.
 
 ## Prerequisites
