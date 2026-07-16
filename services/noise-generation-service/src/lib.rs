@@ -31,7 +31,8 @@ pub struct AppState {
             GenerateNoiseRequest,
             Sampling,
             Output,
-            NoiseField
+            NoiseField,
+            AlgorithmEntry
         )
     ),
     tags(
@@ -169,11 +170,18 @@ pub struct NoiseField {
     pub algorithm: String,
 }
 
+#[derive(Serialize, Debug, ToSchema)]
+pub struct AlgorithmEntry {
+    pub algorithm: String,
+    pub backend: String,
+}
+
 #[utoipa::path(
     get,
     path = "/v1/algorithms",
+    tag = "noise",
     responses(
-        (status = 200, description = "List of algorithms", body = Vec<serde_json::Value>)
+        (status = 200, description = "List of algorithms", body = Vec<AlgorithmEntry>)
     )
 )]
 pub async fn list_algorithms() -> Json<serde_json::Value> {
@@ -207,6 +215,7 @@ pub async fn list_algorithms() -> Json<serde_json::Value> {
 #[utoipa::path(
     post,
     path = "/v1/noise",
+    tag = "noise",
     request_body = GenerateNoiseRequest,
     responses(
         (status = 201, description = "Noise field created", body = NoiseField)
@@ -671,6 +680,7 @@ pub async fn generate_noise(
 #[utoipa::path(
     get,
     path = "/v1/noise/{id}",
+    tag = "noise",
     responses(
         (status = 200, description = "Noise field data", body = Vec<Vec<f64>>),
         (status = 404, description = "Field not found")
@@ -694,8 +704,10 @@ pub async fn get_noise_field(
 #[utoipa::path(
     get,
     path = "/v1/noise/{id}/point",
+    tag = "noise",
     responses(
-        (status = 200, description = "Noise point value", body = f64),
+        (status = 200, description = "Noise point value", content_type = "application/json", body = f64),
+        (status = 400, description = "Coordinates out of bounds"),
         (status = 404, description = "Field not found")
     ),
     params(
