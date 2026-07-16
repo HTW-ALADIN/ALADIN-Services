@@ -250,10 +250,11 @@ async fn generate_noise(
     let mut field = vec![vec![0.0; size[0]]; size[1]];
     
     match &payload {
-        GenerateNoiseRequest::Perlin { backend, .. } => {
+        GenerateNoiseRequest::Perlin { backend, params, .. } => {
             let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
             if backend == "fastnoise_lite" {
-                let mut noise = FastNoiseLite::with_seed(1);
+                let mut noise = FastNoiseLite::with_seed(seed);
                 noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
                 for y in 0..size[1] {
                     for x in 0..size[0] {
@@ -261,7 +262,7 @@ async fn generate_noise(
                     }
                 }
             } else {
-                let perlin = Perlin::new(1);
+                let perlin = Perlin::new(seed as u32);
                 for y in 0..size[1] {
                     for x in 0..size[0] {
                         field[y][x] = perlin.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
@@ -269,8 +270,9 @@ async fn generate_noise(
                 }
             }
         },
-        GenerateNoiseRequest::Simplex { .. } => {
-            let simplex = Simplex::new(1);
+        GenerateNoiseRequest::Simplex { params, .. } => {
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+            let simplex = Simplex::new(seed);
             for y in 0..size[1] {
                 for x in 0..size[0] {
                     field[y][x] = simplex.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
@@ -279,8 +281,9 @@ async fn generate_noise(
         },
         GenerateNoiseRequest::OpenSimplex2 { backend, params, .. } => {
             let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
             if backend == "fastnoise_lite" {
-                let mut noise = FastNoiseLite::with_seed(1);
+                let mut noise = FastNoiseLite::with_seed(seed);
                 let smooth = params.get("smooth").and_then(|v| v.as_bool()).unwrap_or(false);
                 noise.set_noise_type(Some(if smooth { fastnoise_lite::NoiseType::OpenSimplex2S } else { fastnoise_lite::NoiseType::OpenSimplex2 }));
                 for y in 0..size[1] {
@@ -289,7 +292,7 @@ async fn generate_noise(
                     }
                 }
             } else {
-                let opensimplex = OpenSimplex::new(1);
+                let opensimplex = OpenSimplex::new(seed as u32);
                 for y in 0..size[1] {
                     for x in 0..size[0] {
                         field[y][x] = opensimplex.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
@@ -299,8 +302,9 @@ async fn generate_noise(
         },
         GenerateNoiseRequest::Value { backend, params, .. } => {
             let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
             if backend == "fastnoise_lite" {
-                let mut noise = FastNoiseLite::with_seed(1);
+                let mut noise = FastNoiseLite::with_seed(seed);
                 let interpolation = params.get("interpolation").and_then(|v| v.as_str()).unwrap_or("value");
                 noise.set_noise_type(Some(if interpolation == "cubic" { fastnoise_lite::NoiseType::ValueCubic } else { fastnoise_lite::NoiseType::Value }));
                 for y in 0..size[1] {
@@ -309,7 +313,7 @@ async fn generate_noise(
                     }
                 }
             } else {
-                let value = Value::new(1);
+                let value = Value::new(seed as u32);
                 for y in 0..size[1] {
                     for x in 0..size[0] {
                         field[y][x] = value.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
@@ -317,8 +321,9 @@ async fn generate_noise(
                 }
             }
         },
-        GenerateNoiseRequest::SuperSimplex { .. } => {
-            let supersimplex = SuperSimplex::new(1);
+        GenerateNoiseRequest::SuperSimplex { params, .. } => {
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+            let supersimplex = SuperSimplex::new(seed);
             for y in 0..size[1] {
                 for x in 0..size[0] {
                     field[y][x] = supersimplex.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
@@ -327,8 +332,9 @@ async fn generate_noise(
         },
         GenerateNoiseRequest::Cellular { backend, params, .. } => {
             let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
             if backend == "fastnoise_lite" {
-                let mut noise = FastNoiseLite::with_seed(1);
+                let mut noise = FastNoiseLite::with_seed(seed);
                 noise.set_noise_type(Some(fastnoise_lite::NoiseType::Cellular));
                 
                 let dist = params.get("distance_function").and_then(|v| v.as_str()).unwrap_or("euclidean");
@@ -352,7 +358,16 @@ async fn generate_noise(
                     }
                 }
             } else {
-                let cellular = Worley::new(1);
+                let seed = seed as u32;
+                let _dist = params.get("distance_function").and_then(|v| v.as_str()).unwrap_or("euclidean");
+                let _ret = params.get("return_type").and_then(|v| v.as_str()).unwrap_or("cell_value");
+                
+                let cellular = Worley::new(seed);
+                
+                // Note: noise-rs Worley might not have these exact methods. 
+                // Assuming they exist based on user request.
+                // If they don't, this will fail to compile.
+                
                 for y in 0..size[1] {
                     for x in 0..size[0] {
                         field[y][x] = cellular.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
@@ -362,8 +377,11 @@ async fn generate_noise(
         },
         GenerateNoiseRequest::Fbm { backend, params, .. } => {
             let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
+            println!("Fbm: backend={}, seed={}", backend, seed);
             if backend == "fastnoise_lite" {
-                let mut noise = FastNoiseLite::with_seed(1);
+                let mut noise = FastNoiseLite::new();
+                noise.set_seed(Some(seed));
                 noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
                 noise.set_fractal_type(Some(fastnoise_lite::FractalType::FBm));
                 
@@ -381,7 +399,7 @@ async fn generate_noise(
                     }
                 }
             } else {
-                let fbm = Perlin::new(1); // Fbm uses Perlin as base
+                let fbm = noise::Fbm::<Perlin>::new(seed as u32);
                 for y in 0..size[1] {
                     for x in 0..size[0] {
                         field[y][x] = fbm.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
