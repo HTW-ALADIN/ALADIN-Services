@@ -554,3 +554,44 @@ async fn test_get_noise_point() {
     // Just check if it's a valid number
     assert!(point_value.is_finite());
 }
+#[tokio::test]
+async fn test_white_noise_generation() {
+    let client = reqwest::Client::new();
+    let response = client
+        .post("http://localhost:8000/v1/noise")
+        .json(&json!({
+            "algorithm": "white",
+            "params": {
+                "seed": 123
+            },
+            "sampling": {
+                "mode": "grid",
+                "dimensions": 2,
+                "size": [5, 5]
+            },
+            "output": {
+                "format": "json",
+                "normalize": "none"
+            }
+        }))
+        .send()
+        .await
+        .unwrap();
+    
+    assert_eq!(response.status(), 201);
+    
+    let noise_field: serde_json::Value = response.json().await.unwrap();
+    let field_id = noise_field["id"].as_str().unwrap();
+    
+    // Verify we can retrieve the field
+    let get_response = client
+        .get(format!("http://localhost:8000/v1/noise/{}", field_id))
+        .send()
+        .await
+        .unwrap();
+        
+    assert_eq!(get_response.status(), 200);
+    let field: Vec<Vec<f64>> = get_response.json().await.unwrap();
+    assert_eq!(field.len(), 5);
+    assert_eq!(field[0].len(), 5);
+}

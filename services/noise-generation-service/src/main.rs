@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use clap::Parser;
 use cli::{Cli, Commands};
-use noise::{NoiseFn, Perlin, Simplex, SuperSimplex, OpenSimplex, Worley, Value, Billow, MultiFractal, RidgedMulti};
+use noise::{NoiseFn, Perlin, Simplex, SuperSimplex, OpenSimplex, Worley, Value, Billow, MultiFractal};
 use fastnoise_lite::FastNoiseLite;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -134,6 +134,12 @@ enum GenerateNoiseRequest {
         sampling: Sampling,
         output: Option<Output>,
     },
+    #[serde(rename = "white")]
+    White {
+        params: serde_json::Value,
+        sampling: Sampling,
+        output: Option<Output>,
+    },
 }
 
 #[derive(Serialize, Debug)]
@@ -194,7 +200,8 @@ async fn list_algorithms() -> Json<serde_json::Value> {
         {"algorithm": "domain_warp", "backend": "fastnoise_lite"},
         {"algorithm": "domain_warp", "backend": "noise_rs"},
         {"algorithm": "combinator", "backend": "noise_rs"},
-        {"algorithm": "utility", "backend": "noise_rs"}
+        {"algorithm": "utility", "backend": "noise_rs"},
+        {"algorithm": "white", "backend": "native"}
     ]))
 }
 
@@ -217,6 +224,7 @@ async fn generate_noise(
         GenerateNoiseRequest::DomainWarp { .. } => "domain_warp".to_string(),
         GenerateNoiseRequest::Combinator { .. } => "combinator".to_string(),
         GenerateNoiseRequest::Utility { .. } => "utility".to_string(),
+        GenerateNoiseRequest::White { .. } => "white".to_string(),
     };
 
     let field_id = format!("nsf_{}", uuid::Uuid::new_v4());
@@ -236,6 +244,7 @@ async fn generate_noise(
         GenerateNoiseRequest::DomainWarp { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
         GenerateNoiseRequest::Combinator { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
         GenerateNoiseRequest::Utility { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
+        GenerateNoiseRequest::White { sampling, .. } => sampling.size.clone().unwrap_or(vec![10, 10]),
     };
     
     let mut field = vec![vec![0.0; size[0]]; size[1]];
@@ -483,15 +492,37 @@ async fn generate_noise(
                 }
             }
         },
-        _ => {
-            // Default to Perlin for now if not implemented
-            let perlin = Perlin::new(1);
+        GenerateNoiseRequest::Utility { backend, params, .. } => {
+            let kind = params.get("kind").and_then(|v| v.as_str()).unwrap_or("constant");
+            let value = params.get("value").and_then(|v| v.as_f64()).unwrap_or(0.5);
+            
             for y in 0..size[1] {
                 for x in 0..size[0] {
-                    field[y][x] = perlin.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
+                    field[y][x] = match kind {
+                        "constant" => value,
+                        "cylinders" => {
+                            let cylinders = noise::Cylinders::new();
+                            cylinders.get([x as f64 * 0.1, y as f64 * 0.1, 0.0])
+                        },
+                        _ => value,
+                    };
                 }
             }
-        }
+        },
+        GenerateNoiseRequest::White { params, .. } => {
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as u64;
+            use std::hash::{Hash, Hasher};
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    seed.hash(&mut hasher);
+                    x.hash(&mut hasher);
+                    y.hash(&mut hasher);
+                    let hash = hasher.finish();
+                    field[y][x] = (hash as f64 / u64::MAX as f64) * 2.0 - 1.0;
+                }
+            }
+        },
     }
 
     state.fields.lock().unwrap().insert(field_id.clone(), field);
