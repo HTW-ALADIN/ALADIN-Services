@@ -46,7 +46,29 @@ jobs:
         with:
           workspaces: services/noise-generation-service
       - name: Run tests
-        run: cargo test
+        run: |
+          # Start server in background for integration tests
+          cargo run -- server &
+          SERVER_PID=$!
+
+          # Wait for server to be ready
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8000/v1/algorithms > /dev/null 2>&1; then
+              echo "Server is ready"
+              break
+            fi
+            echo "Waiting for server... ($i/30)"
+            sleep 1
+          done
+
+          # Run all tests
+          cargo test || EXIT_CODE=$?
+
+          # Stop the server
+          kill $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
+
+          exit ${EXIT_CODE:-0}
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
