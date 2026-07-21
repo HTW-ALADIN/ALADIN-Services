@@ -1,0 +1,12 @@
+services:
+  edit-distance-service:
+    container_name: edit-distance-service
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - LOG_LEVEL=debug
+    stdin_open: true
+    tty: true

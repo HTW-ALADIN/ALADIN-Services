@@ -1,0 +1,287 @@
+"""FastAPI application for the Edit Distance Service."""
+
+from __future__ import annotations
+
+import time
+import uuid
+from typing import Any, Optional
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
+from .models import (
+    AlgorithmEntry,
+    AlignmentResult,
+    EditScriptResult,
+    GedAStarRequest,
+    GedGreedyRequest,
+    GedHausdorffRequest,
+    GedHeuristicRequest,
+    GedPairResult,
+    GedResultResponse,
+    PhoneticCodeResult,
+    ScalarDistanceResult,
+    SequenceResult,
+    TextCompareResponse,
+)
+from .text import ALGORITHM_CATALOG as TEXT_ALGORITHM_CATALOG
+from .text import compute_text
+from .graph import GED_ALGORITHM_CATALOG
+from .graph import compute_ged
+
+app = FastAPI(
+    title="Edit Distance Service",
+    version="0.1.0",
+    description="""Unified microservice for text edit distance and graph edit distance algorithms.
+
+Provides a single compute endpoint per domain with a discriminated-union request body.
+Supports multiple backends per algorithm family (RapidFuzz, textdistance, jellyfish, edlib,
+diff-match-patch for text; NetworkX, GEDLIB, GMatch4py for graphs).
+
+## Spec A (Tier 1) — Text ED: RapidFuzz + textdistance + jellyfish (87% family coverage)
+## Spec B (Tier 2) — Text ED: + edlib + diff-match-patch (100% family coverage)
+## Spec A (Tier 1) — Graph ED: NetworkX + GEDLIB (80% family coverage)
+## Spec B (Tier 2) — Graph ED: + GMatch4py (100% family coverage)
+""",
+)
+
+
+# ─── In-memory result store for GED (async resource pattern) ──────────────────
+
+_ged_results: dict[str, GedResultResponse] = {}
+
+
+# ─── Error Handler ────────────────────────────────────────────────────────────
+
+class ProblemDetail(BaseModel):
+    type: str = "about:blank"
+    title: str
+    status: int
+    detail: str
+    invalid_params: list[dict[str, str]] = []
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ProblemDetail(
+            title=exc.detail or str(exc.status_code),
+            status=exc.status_code,
+            detail=exc.detail or "",
+        ).model_dump(),
+    )
+
+
+# ─── PART A: Text Edit Distance ───────────────────────────────────────────────
+
+@app.get("/v1/text/algorithms")
+async def list_text_algorithms() -> list[dict]:
+    """Discovery: list all algorithm/backend combinations with metadata."""
+    return TEXT_ALGORITHM_CATALOG
+
+
+@app.post("/v1/text/compare")
+async def text_compare(request: dict[str, Any]) -> TextCompareResponse:
+    """Compute a distance/similarity/transform for one pair or a batch of pairs.
+
+    The request body is a discriminated union keyed by 'algorithm'.
+    See the /v1/text/algorithms endpoint for the full catalog of supported
+    algorithm/backend combinations and their parameter schemas.
+    """
+    algorithm = request.get("algorithm")
+    if not algorithm:
+        raise HTTPException(status_code=400, detail="Missing required field: 'algorithm'")
+
+    backend = request.get("backend", _get_default_backend(algorithm))
+    params = request.get("params", {})
+    raw_inputs = request.get("inputs", [])
+
+    if not raw_inputs:
+        raise HTTPException(status_code=400, detail="Missing required field: 'inputs'")
+
+    # Handle phonetic encoding separately (different input shape)
+    if algorithm == "phonetic_encoding":
+        from .models import InputPhonetic
+        inputs = [InputPhonetic(**inp) for inp in raw_inputs]
+    else:
+        from .models import InputPair
+        inputs = [InputPair(**inp) for inp in raw_inputs]
+
+    try:
+        results, result_type, compute_ms = compute_text(algorithm, backend, inputs, params)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Computation error: {str(e)}")
+
+    return TextCompareResponse(
+        algorithm=algorithm,
+        backend=backend,
+        result_type=result_type,
+        results=[r.model_dump() if hasattr(r, 'model_dump') else r for r in results],
+        meta={"compute_time_ms": round(compute_ms, 2)},
+    )
+
+
+def _get_default_backend(algorithm: str) -> str:
+    """Return the default backend for a given algorithm."""
+    defaults = {
+        "levenshtein": "rapidfuzz",
+        "damerau_levenshtein": "rapidfuzz",
+        "hamming": "rapidfuzz",
+        "jaro_winkler": "rapidfuzz",
+        "osa": "rapidfuzz",
+        "indel": "rapidfuzz",
+        "lcs": "textdistance",
+        "needleman_wunsch": "textdistance",
+        "gotoh": "textdistance",
+        "smith_waterman": "textdistance",
+        "token_set_similarity": "textdistance",
+        "ncd": "textdistance",
+        "phonetic_encoding": "jellyfish",
+        "long_sequence_alignment": "edlib",
+        "diff_patch": "diff_match_patch",
+    }
+    return defaults.get(algorithm, "rapidfuzz")
+
+
+# ─── PART B: Graph Edit Distance ──────────────────────────────────────────────
+
+@app.get("/v1/graphs/ged/algorithms")
+async def list_ged_algorithms() -> list[dict]:
+    """Discovery: list all GED algorithm/backend/method combinations."""
+    return GED_ALGORITHM_CATALOG
+
+
+@app.post("/v1/graphs/ged/compute")
+async def ged_compute(request: dict[str, Any]) -> JSONResponse:
+    """Compute the edit distance between one pair (or a batch of pairs) of graphs.
+
+    Returns 202 Accepted (async, with Location header) for expensive computations,
+    or 201 Created with the result inline for fast ones.
+    """
+    algorithm = request.get("algorithm")
+    if not algorithm:
+        raise HTTPException(status_code=400, detail="Missing required field: 'algorithm'")
+
+    backend = request.get("backend", "networkx")
+    params = request.get("params", {})
+    raw_graphs = request.get("graphs", [])
+    output_opts = request.get("output", {})
+
+    if not raw_graphs:
+        raise HTTPException(status_code=400, detail="Missing required field: 'graphs'")
+
+    from .models import GraphPair
+    graphs = [GraphPair(**g) for g in raw_graphs]
+
+    try:
+        results = compute_ged(algorithm, backend, graphs, params)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Computation error: {str(e)}")
+
+    result_id = f"ged_{uuid.uuid4().hex[:12]}"
+    response = GedResultResponse(
+        id=result_id,
+        status="completed",
+        algorithm=algorithm,
+        backend=backend,
+        params=params,
+        results=results,
+        _links={
+            "self": f"/v1/graphs/ged/{result_id}",
+        },
+    )
+
+    # Store for retrieval
+    _ged_results[result_id] = response
+
+    # Always return 201 for simplicity (this is a synchronous implementation)
+    # In production, expensive computations would return 202
+    return JSONResponse(
+        status_code=201,
+        content=response.model_dump(),
+        headers={"Location": f"/v1/graphs/ged/{result_id}"},
+    )
+
+
+@app.get("/v1/graphs/ged/{result_id}")
+async def get_ged_result(result_id: str, include: Optional[str] = None):
+    """Retrieve a previously computed GED result."""
+    result = _ged_results.get(result_id)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Result {result_id} not found")
+
+    data = result.model_dump()
+    if include == "nodeMap" and result.results:
+        # Include full node maps if available
+        pass
+    return data
+
+
+@app.delete("/v1/graphs/ged/{result_id}")
+async def delete_ged_result(result_id: str):
+    """Release a stored GED result resource."""
+    if result_id in _ged_results:
+        del _ged_results[result_id]
+        return {"status": "deleted", "id": result_id}
+    raise HTTPException(status_code=404, detail=f"Result {result_id} not found")
+
+
+# ─── Health Check ─────────────────────────────────────────────────────────────
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "edit-distance-service"}
+
+
+# ─── CLI entry point helper ───────────────────────────────────────────────────
+
+def run_cli():
+    """CLI entry point for the edit-distance-service."""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        print("Usage: edit-distance-service <command>")
+        print("Commands: serve, list-text, list-ged, openapi")
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    if command == "serve":
+        import uvicorn
+        port = int(sys.argv[2]) if len(sys.argv) > 2 else 8000
+        uvicorn.run(app, host="0.0.0.0", port=port)
+    elif command == "list-text":
+        print(json.dumps(TEXT_ALGORITHM_CATALOG, indent=2))
+    elif command == "list-ged":
+        print(json.dumps(GED_ALGORITHM_CATALOG, indent=2))
+    elif command == "openapi":
+        from fastapi.openapi.utils import get_openapi
+        spec = get_openapi(
+            title=app.title,
+            version=app.version,
+            openapi_version=app.openapi_version,
+            description=app.description,
+            routes=app.routes,
+        )
+        output_file = sys.argv[2] if len(sys.argv) > 2 else None
+        text = json.dumps(spec, indent=2)
+        if output_file:
+            with open(output_file, "w") as f:
+                f.write(text)
+            print(f"OpenAPI spec written to {output_file}")
+        else:
+            print(text)
+    else:
+        print(f"Unknown command: {command}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    run_cli()
