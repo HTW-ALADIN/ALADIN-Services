@@ -5,6 +5,7 @@
 [![jsonpath-mapper-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-jsonpath-mapper-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-jsonpath-mapper-service.yml)
 [![sql-assessment-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-sql-assessment-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-sql-assessment-service.yml)
 [![fermentaladin-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-fermentaladin-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-fermentaladin-service.yml)
+[![llm-gateway-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-llm-gateway-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-llm-gateway-service.yml)
 
 ## Services
 
@@ -14,6 +15,7 @@
 | [jsonpath-mapper-service](services/jsonpath-mapper-service/README.md) | TypeScript | [![CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-jsonpath-mapper-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-jsonpath-mapper-service.yml) | [![codecov](https://codecov.io/gh/HTW-ALADIN/ALADIN-Services/graph/badge.svg?flag=jsonpath-mapper-service)](https://codecov.io/gh/HTW-ALADIN/ALADIN-Services?flags[0]=jsonpath-mapper-service) | JSONPath Mapper — JSON-to-JSON transformation utility exposed as a Fastify HTTP API |
 | [sql-assessment-service](services/sql-assessment-service/README.md) | TypeScript | [![CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-sql-assessment-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-sql-assessment-service.yml) | [![codecov](https://codecov.io/gh/HTW-ALADIN/ALADIN-Services/graph/badge.svg?flag=sql-assessment-service)](https://codecov.io/gh/HTW-ALADIN/ALADIN-Services?flags[0]=sql-assessment-service) | SQL Assessment — schema analysis, SQL task generation, and query grading |
 | [fermentaladin-service](services/fermentaladin-service/README.md) | Python | [![CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-fermentaladin-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-fermentaladin-service.yml) | — | Bioreactor fermentation simulation — ODE-based multi-phase kinetic model exposed as a FastAPI HTTP service |
+| [llm-gateway-service](services/llm-gateway-service/README.md) | TypeScript | [![CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-llm-gateway-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-llm-gateway-service.yml) | [![codecov](https://codecov.io/gh/HTW-ALADIN/ALADIN-Services/graph/badge.svg?flag=llm-gateway-service)](https://codecov.io/gh/HTW-ALADIN/ALADIN-Services?flags[0]=llm-gateway-service) | HTTP/CLI wrapper around a self-hosted LLM Gateway instance, using the Vercel AI SDK |
 
 ## For Developers:
 

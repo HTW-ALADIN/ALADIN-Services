@@ -1,20 +1,18 @@
-name: openai-wrapper-service
+name: llm-gateway-service
 
 on:
   push:
     branches: ["master"]
     paths:
-      - "services/openai-wrapper-service/**"
-      - ".github/workflows/service-openai-wrapper-service.yml"
+      - "services/llm-gateway-service/**"
   pull_request:
     branches: ["master"]
     paths:
-      - "services/openai-wrapper-service/**"
-      - ".github/workflows/service-openai-wrapper-service.yml"
+      - "services/llm-gateway-service/**"
 
 defaults:
   run:
-    working-directory: services/openai-wrapper-service
+    working-directory: services/llm-gateway-service
 
 jobs:
   lint:
@@ -22,14 +20,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
-      - uses: astral-sh/setup-uv@v5
+          node-version: "22.x"
+          cache: "npm"
+          cache-dependency-path: services/llm-gateway-service/package-lock.json
       - name: Install dependencies
-        run: uv sync
+        run: npm ci
       - name: Lint
-        run: make lint
+        run: npm run lint
 
   test:
     name: Test
@@ -37,19 +36,22 @@ jobs:
     needs: lint
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
-      - uses: astral-sh/setup-uv@v5
+          node-version: "22.x"
+          cache: "npm"
+          cache-dependency-path: services/llm-gateway-service/package-lock.json
       - name: Install dependencies
-        run: uv sync
+        run: npm ci
+      - name: Type-check
+        run: npm run build
       - name: Run tests
-        run: make test
+        run: npm run test:coverage
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: services/openai-wrapper-service/coverage.xml
-          flags: openai-wrapper-service
+          files: services/llm-gateway-service/coverage/lcov.info
+          flags: llm-gateway-service
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
         if: always()
@@ -60,19 +62,20 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
-      - uses: astral-sh/setup-uv@v5
+          node-version: "22.x"
+          cache: "npm"
+          cache-dependency-path: services/llm-gateway-service/package-lock.json
       - name: Install dependencies
-        run: uv sync
+        run: npm ci
       - name: Generate OpenAPI spec
-        run: make generate-openapi
+        run: npm run generate:openapi
       - name: Upload OpenAPI spec
         uses: actions/upload-artifact@v4
         with:
-          name: openapi-spec-openai-wrapper-service
-          path: services/openai-wrapper-service/openai-wrapper-service.openapi.json
+          name: openapi-spec-llm-gateway-service
+          path: services/llm-gateway-service/llm-gateway-service.openapi.json
 
   build:
     name: Build & Push Docker Image
@@ -94,14 +97,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/openai-wrapper-service
+          images: ghcr.io/${{ github.repository_owner }}/llm-gateway-service
           tags: |
             type=sha,prefix=sha-
             type=raw,value=latest
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: services/openai-wrapper-service
+          context: services/llm-gateway-service
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

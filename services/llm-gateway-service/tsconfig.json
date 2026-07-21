@@ -1,0 +1,20 @@
+{
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "esnext",
+		"removeComments": true,
+		"noEmit": true,
+
+		"strict": true,
+		"noImplicitAny": false,
+
+		"moduleResolution": "Bundler",
+		"esModuleInterop": true,
+		"resolveJsonModule": true,
+
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true
+	},
+	"include": ["src", "test", "scripts"],
+	"exclude": ["node_modules", "dist"]
+}
