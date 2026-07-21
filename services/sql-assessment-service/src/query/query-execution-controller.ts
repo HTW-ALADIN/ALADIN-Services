@@ -9,7 +9,10 @@ import {
 	isDatabaseRegistered,
 	validateConnectionInfo,
 } from '../shared/utils/validation';
-import { IRequestQueryOptions } from '../shared/interfaces/http';
+import {
+	IRequestQueryOptions,
+	PGliteConnectionInfo,
+} from '../shared/interfaces/http';
 import {
 	QueryExecutionError,
 	QueryExecutionService,
@@ -143,25 +146,18 @@ export class QueryExecutionController {
 		// ---------------------------------------------------------------------
 
 		// ---- PGlite branch ------------------------------------------------
-		if ((options.connectionInfo as any)?.type === 'pglite') {
-			return this.executeQueryOnPGlite(
-				options.connectionInfo as any,
-				options.query,
-				lang,
-				res,
-			);
+		const connectionInfo = options.connectionInfo;
+		if (connectionInfo.type === 'pglite') {
+			return this.executeQueryOnPGlite(connectionInfo, options.query, lang, res);
 		}
 		// -------------------------------------------------------------------
 
-		const validationError = validateConnectionInfo(
-			options.connectionInfo,
-			lang,
-		);
+		const validationError = validateConnectionInfo(connectionInfo, lang);
 		if (validationError) {
 			return res.status(400).json({ message: validationError });
 		}
 
-		const { host, port, schema } = options.connectionInfo;
+		const { host, port, schema } = connectionInfo;
 		const databaseKey = generateDatabaseKey(host!, port!, schema!);
 
 		if (!isDatabaseRegistered(databaseKey)) {
@@ -173,7 +169,7 @@ export class QueryExecutionController {
 		let dataSource: DataSource;
 		let isConnected: boolean;
 		try {
-			dataSource = new DataSource(options.connectionInfo);
+			dataSource = new DataSource(connectionInfo);
 			isConnected = await connectToDatabase(dataSource);
 		} catch {
 			return res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
@@ -219,7 +215,7 @@ export class QueryExecutionController {
 	// -------------------------------------------------------------------------
 
 	private async executeQueryOnPGlite(
-		connectionInfo: any,
+		connectionInfo: PGliteConnectionInfo,
 		query: string,
 		lang: SupportedLanguage,
 		res: Response,

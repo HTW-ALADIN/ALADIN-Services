@@ -18,10 +18,12 @@ import { pgliteInstances } from '../database/internal-memory';
 import { SQLQueryGradingService } from './query-grading-service';
 import {
 	ComparisonResult,
+	ConnectionInfo,
 	GenerationOptions,
 	GptOptions,
 	IRequestGradingOptions,
 	IRequestComparisonOptions,
+	PGliteConnectionInfo,
 	ReferenceQuery,
 } from '../shared/interfaces/index';
 import { TaskDescriptionGenerationService } from '../generation/description/task-description-generation-service';
@@ -308,12 +310,13 @@ export class GradingController {
 		// ---------------------------------------------------------------------
 
 		// ---- PGlite branch --------------------------------------------------
-		if ((body.connectionInfo as any)?.type === 'pglite') {
-			return this.resolvePGliteConnection(body.connectionInfo as any, lang, res);
+		const connectionInfo = body.connectionInfo;
+		if (connectionInfo.type === 'pglite') {
+			return this.resolvePGliteConnection(connectionInfo, lang, res);
 		}
 		// ---------------------------------------------------------------------
 
-		return this.resolvePostgresConnection(body.connectionInfo, lang, res);
+		return this.resolvePostgresConnection(connectionInfo, lang, res);
 	}
 
 	// =========================================================================
@@ -330,7 +333,7 @@ export class GradingController {
 	 * shared and long-lived, so it must never be closed here.
 	 */
 	private resolvePGliteConnection(
-		connectionInfo: any,
+		connectionInfo: PGliteConnectionInfo,
 		lang: SupportedLanguage,
 		res: Response,
 	): ValidatedConnection | null {
@@ -450,7 +453,7 @@ export class GradingController {
 
 	async gradeQuery(req: Request, res: Response): Promise<Response> {
 		let gradingRequestOptions: IRequestGradingOptions;
-		let connectionInfo: PostgresConnectionOptions;
+		let connectionInfo: ConnectionInfo;
 
 		try {
 			gradingRequestOptions = req.body;
@@ -489,9 +492,9 @@ export class GradingController {
 		let cleanup: () => Promise<void>;
 		let schema: string;
 
-		if ((connectionInfo as any)?.type === 'pglite') {
+		if (connectionInfo.type === 'pglite') {
 			const validated = this.resolvePGliteConnection(
-				connectionInfo as any,
+				connectionInfo,
 				lang,
 				res,
 			);

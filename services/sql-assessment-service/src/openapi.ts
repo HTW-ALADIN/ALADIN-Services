@@ -71,6 +71,45 @@ import path from 'path';
  *           type: string
  *           example: public
  *
+ *     PGliteConnectionInfo:
+ *       type: object
+ *       description: >
+ *         Connection info for an in-process PGlite database. The instance is
+ *         registered out-of-band (via /analyze-database or a configured
+ *         init-SQL file) and referenced afterwards by databaseId.
+ *       required:
+ *         - type
+ *         - databaseId
+ *       properties:
+ *         type:
+ *           type: string
+ *           enum: [pglite]
+ *           example: pglite
+ *         databaseId:
+ *           type: string
+ *           description: Stable identifier of a registered PGlite instance.
+ *           example: my-database
+ *         sqlContent:
+ *           type: string
+ *           description: >
+ *             SQL used to (re-)initialise the instance. Required by
+ *             /analyze-database; optional on downstream calls, which reuse the
+ *             already-registered instance.
+ *
+ *     ConnectionInfo:
+ *       description: >
+ *         Backend-agnostic connection info. Discriminated on the `type` field:
+ *         `postgres` selects PostgresConnectionInfo, `pglite` selects
+ *         PGliteConnectionInfo.
+ *       oneOf:
+ *         - $ref: '#/components/schemas/PostgresConnectionInfo'
+ *         - $ref: '#/components/schemas/PGliteConnectionInfo'
+ *       discriminator:
+ *         propertyName: type
+ *         mapping:
+ *           postgres: '#/components/schemas/PostgresConnectionInfo'
+ *           pglite: '#/components/schemas/PGliteConnectionInfo'
+ *
  *     AliasMap:
  *       type: object
  *       description: >
@@ -103,7 +142,7 @@ import path from 'path';
  *         - connectionInfo
  *       properties:
  *         connectionInfo:
- *           $ref: '#/components/schemas/PostgresConnectionInfo'
+ *           $ref: '#/components/schemas/ConnectionInfo'
  *         aliasMap:
  *           $ref: '#/components/schemas/AliasMap'
  *         languageCode:
@@ -170,7 +209,7 @@ import path from 'path';
  *         - taskConfiguration
  *       properties:
  *         connectionInfo:
- *           $ref: '#/components/schemas/PostgresConnectionInfo'
+ *           $ref: '#/components/schemas/ConnectionInfo'
  *         taskConfiguration:
  *           $ref: '#/components/schemas/TaskConfiguration'
  *         languageCode:
@@ -217,7 +256,7 @@ import path from 'path';
  *         - query
  *       properties:
  *         connectionInfo:
- *           $ref: '#/components/schemas/PostgresConnectionInfo'
+ *           $ref: '#/components/schemas/ConnectionInfo'
  *         query:
  *           type: string
  *           description: Raw SQL query string to describe.
@@ -274,7 +313,7 @@ import path from 'path';
  *         - gradingRequest
  *       properties:
  *         connectionInfo:
- *           $ref: '#/components/schemas/PostgresConnectionInfo'
+ *           $ref: '#/components/schemas/ConnectionInfo'
  *         gradingRequest:
  *           type: object
  *           required:
@@ -338,7 +377,7 @@ import path from 'path';
  *         - studentQuery
  *       properties:
  *         connectionInfo:
- *           $ref: '#/components/schemas/PostgresConnectionInfo'
+ *           $ref: '#/components/schemas/ConnectionInfo'
  *         referenceQuery:
  *           type: string
  *           deprecated: true
@@ -411,7 +450,7 @@ import path from 'path';
  *         - query
  *       properties:
  *         connectionInfo:
- *           $ref: '#/components/schemas/PostgresConnectionInfo'
+ *           $ref: '#/components/schemas/ConnectionInfo'
  *         query:
  *           type: string
  *           description: Raw SQL SELECT query to execute.
