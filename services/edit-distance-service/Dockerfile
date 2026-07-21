@@ -11,9 +11,11 @@ WORKDIR /app
 COPY pyproject.toml .
 COPY src/ src/
 
-# Install dependencies
+# Install dependencies and build wheel (non-editable)
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e ".[dev]"
+    pip install --no-cache-dir build && \
+    python -m build --wheel && \
+    pip install --no-cache-dir dist/*.whl
 
 # Stage 2: Runtime
 FROM python:3.12-slim
