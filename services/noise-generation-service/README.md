@@ -148,14 +148,14 @@ noise-generation-service list --format table
 
 ### Generate Noise Locally (all 14 algorithms)
 ```bash
-# Basic usage
+# Basic usage (seed defaults to 42 via --param)
 noise-generation-service generate --algorithm perlin --width 64 --height 64
 
 # With custom parameters (all algorithms supported)
 noise-generation-service generate \
   --algorithm fbm \
-  --seed 42 \
   --width 128 --height 128 \
+  --param seed=42 \
   --param octaves=6 \
   --param frequency=0.1 \
   --param lacunarity=2.0 \
@@ -173,6 +173,7 @@ noise-generation-service generate \
 # Combinator noise with blend operation
 noise-generation-service generate \
   --algorithm combinator \
+  --param seed=555 \
   --param op=blend \
   --param blend_factor=0.5 \
   --width 32 --height 32

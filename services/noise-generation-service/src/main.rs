@@ -112,12 +112,8 @@ fn build_sampling(width: usize, height: usize) -> lib::Sampling {
     }
 }
 
-fn build_params(seed: u64, extra: Vec<(String, Value)>) -> HashMap<String, Value> {
+fn build_params(extra: Vec<(String, Value)>) -> HashMap<String, Value> {
     let mut params = HashMap::new();
-    params.insert(
-        "seed".to_string(),
-        Value::Number(serde_json::Number::from(seed)),
-    );
     for (key, value) in extra {
         params.insert(key, value);
     }
@@ -128,7 +124,7 @@ async fn handle_generate_command(args: GenerateArgs) {
     use lib::GenerateNoiseRequest;
 
     let sampling = build_sampling(args.width, args.height);
-    let params_map = build_params(args.seed, args.params);
+    let params_map = build_params(args.params);
     let params = Value::Object(params_map.into_iter().collect());
 
     // Build the request — supports all 14 algorithm families

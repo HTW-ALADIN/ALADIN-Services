@@ -94,10 +94,6 @@ pub struct GenerateArgs {
     #[arg(short, long)]
     pub backend: Option<String>,
 
-    /// Seed value for reproducible noise
-    #[arg(short, long, default_value = "42")]
-    pub seed: u64,
-
     /// Width of noise field
     #[arg(short = 'W', long, default_value = "64")]
     pub width: usize,
