@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 import uuid
 from typing import Any, Optional
 
@@ -11,18 +10,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .models import (
-    AlgorithmEntry,
-    AlignmentResult,
-    EditScriptResult,
-    GedAStarRequest,
-    GedGreedyRequest,
-    GedHausdorffRequest,
-    GedHeuristicRequest,
-    GedPairResult,
     GedResultResponse,
-    PhoneticCodeResult,
-    ScalarDistanceResult,
-    SequenceResult,
     TextCompareResponse,
 )
 from .text import ALGORITHM_CATALOG as TEXT_ALGORITHM_CATALOG
@@ -169,7 +157,6 @@ async def ged_compute(request: dict[str, Any]) -> JSONResponse:
     backend = request.get("backend", "networkx")
     params = request.get("params", {})
     raw_graphs = request.get("graphs", [])
-    output_opts = request.get("output", {})
 
     if not raw_graphs:
         raise HTTPException(status_code=400, detail="Missing required field: 'graphs'")
@@ -192,7 +179,7 @@ async def ged_compute(request: dict[str, Any]) -> JSONResponse:
         backend=backend,
         params=params,
         results=results,
-        _links={
+        links={
             "self": f"/v1/graphs/ged/{result_id}",
         },
     )
@@ -204,7 +191,7 @@ async def ged_compute(request: dict[str, Any]) -> JSONResponse:
     # In production, expensive computations would return 202
     return JSONResponse(
         status_code=201,
-        content=response.model_dump(),
+        content=response.model_dump(by_alias=True),
         headers={"Location": f"/v1/graphs/ged/{result_id}"},
     )
 

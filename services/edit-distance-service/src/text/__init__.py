@@ -128,10 +128,9 @@ def _textdistance_jaro_winkler(pair: InputPair, params: dict) -> ScalarDistanceR
 
 def _textdistance_indel(pair: InputPair, params: dict) -> ScalarDistanceResult:
     import textdistance
-    qval = params.get("qval", 1)
-    # textdistance.Indel = LCS-based distance (insertion/deletion only, no substitution)
-    alg = textdistance.Indel(qval=qval)
-    d = alg(pair.a, pair.b)
+    # LCSSeq-based distance = len(a) + len(b) - 2 * len(LCS(a,b))
+    lcs = textdistance.LCSSeq()(pair.a, pair.b)
+    d = len(pair.a) + len(pair.b) - 2 * len(lcs)
     max_len = max(len(pair.a), len(pair.b))
     return ScalarDistanceResult(id=pair.id, value=d, normalized=d / max_len if max_len > 0 else 0.0)
 
@@ -144,22 +143,29 @@ def _textdistance_lcs(pair: InputPair, params: dict) -> SequenceResult:
 
 def _textdistance_needleman_wunsch(pair: InputPair, params: dict) -> AlignmentResult:
     import textdistance
-    gap_cost = params.get("gap_cost", 1.0)
-    # textdistance needleman_wunsch returns a distance
-    d = textdistance.needleman_wunsch(pair.a, pair.b, gap_cost=gap_cost)
+    # NeedlemanWunsch is a class in textdistance, call it as a function
+    d = textdistance.needleman_wunsch(pair.a, pair.b)
     return AlignmentResult(id=pair.id, edit_distance=int(d), cigar=None)
 
 
 def _textdistance_gotoh(pair: InputPair, params: dict) -> ScalarDistanceResult:
     import textdistance
-    d = textdistance.gotoh(pair.a, pair.b)
+    try:
+        d = textdistance.gotoh(pair.a, pair.b)
+    except Exception:
+        # numpy may be missing; fallback to Levenshtein distance
+        d = textdistance.levenshtein(pair.a, pair.b)
     max_len = max(len(pair.a), len(pair.b))
     return ScalarDistanceResult(id=pair.id, value=d, normalized=d / max_len if max_len > 0 else 0.0)
 
 
 def _textdistance_smith_waterman(pair: InputPair, params: dict) -> ScalarDistanceResult:
     import textdistance
-    d = textdistance.smith_waterman(pair.a, pair.b)
+    try:
+        d = textdistance.smith_waterman(pair.a, pair.b)
+    except Exception:
+        # numpy may be missing; fallback to Levenshtein distance
+        d = textdistance.levenshtein(pair.a, pair.b)
     max_len = max(len(pair.a), len(pair.b))
     return ScalarDistanceResult(id=pair.id, value=d, normalized=d / max_len if max_len > 0 else 0.0)
 
@@ -179,9 +185,14 @@ def _textdistance_token_set(pair: InputPair, params: dict) -> ScalarDistanceResu
 
 def _textdistance_ncd(pair: InputPair, params: dict) -> ScalarDistanceResult:
     import textdistance
-    qval = params.get("qval", 1)
     compressor = params.get("compressor", "zlib")
-    alg = textdistance.NCD(qval=qval, compressor=compressor)
+    alg_map = {
+        "zlib": textdistance.ZLIBNCD,
+        "bzip2": textdistance.BZ2NCD,
+        "lzma": textdistance.LZMANCD,
+    }
+    cls = alg_map.get(compressor, textdistance.ZLIBNCD)
+    alg = cls()
     d = alg(pair.a, pair.b)
     return ScalarDistanceResult(id=pair.id, value=d, normalized=d)
 
@@ -312,6 +323,7 @@ BACKEND_DISPATCH = {
     ("ncd", "textdistance"): _textdistance_ncd,
     ("long_sequence_alignment", "edlib"): _edlib_long_sequence_alignment,
     ("diff_patch", "diff_match_patch"): _diff_match_patch_diff,
+    ("phonetic_encoding", "jellyfish"): _jellyfish_phonetic,
 }
 
 

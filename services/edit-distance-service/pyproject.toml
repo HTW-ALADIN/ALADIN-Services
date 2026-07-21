@@ -3,7 +3,7 @@ name = "edit-distance-service"
 version = "0.1.0"
 description = "Unified microservice for text edit distance and graph edit distance algorithms"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
@@ -15,9 +15,8 @@ dependencies = [
     "edlib>=1.3.9",
     "diff-match-patch>=20230430",
     "networkx>=3.6.0",
-    "gedlibpy>=0.3.0",
-    "gmatch4py>=0.4.0",
-    "orjson>=3.10.0",
+    "numpy>=1.26.0",
+    "scipy>=1.12.0",
 ]
 
 [project.optional-dependencies]
@@ -26,6 +25,10 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "httpx>=0.27.0",
     "requests>=2.31.0",
+]
+graph = [
+    "gedlibpy>=0.3.0",
+    "gmatch4py>=0.4.0",
 ]
 
 [build-system]

@@ -340,7 +340,7 @@ class GedResultResponse(BaseModel):
     backend: str
     params: dict[str, Any] = Field(default_factory=dict)
     results: list[GedPairResult]
-    _links: dict[str, str] = Field(default_factory=dict)
+    links: dict[str, str] = Field(default_factory=dict, alias="_links")
 
 
 # ─── Algorithm Discovery ──────────────────────────────────────────────────────

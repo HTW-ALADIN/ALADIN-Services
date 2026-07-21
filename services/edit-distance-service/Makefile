@@ -1,10 +1,10 @@
 .PHONY: prep build test lint start clean docker-build generate-openapi dev prod
 
 prep:
-	pip install -e ".[dev]"
+	pip install -e ".[dev,graph]"
 
 build:
-	pip install -e .
+	pip install -e ".[graph]"
 
 test:
 	pytest -v

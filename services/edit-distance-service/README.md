@@ -1,22 +1,22 @@
 # Edit Distance Service
 
-Unified microservice for **text edit distance** and **graph edit distance (GED)** algorithms, following the same architecture as the noise-generation-service.
+Unified microservice for **text edit distance** and **graph edit distance (GED)** algorithms, following the same architecture as the `noise-generation-service`.
 
 ## Library Selection
 
 ### Text Edit Distance (15 algorithm families)
 
-| Tier | Libraries | Coverage | 
-|------|-----------|----------|
-| **Tier 1** (core) | **RapidFuzz** + **textdistance** + **jellyfish** | **13/15 (87%)** |
-| **Tier 2** (full) | + **edlib** + **diff-match-patch** | **15/15 (100%)** |
+| Libraries | Coverage |
+|-----------|----------|
+| **RapidFuzz** + **textdistance** + **jellyfish** | **13/15 (87%)** |
+| + **edlib** + **diff-match-patch** | **15/15 (100%)** |
 
 ### Graph Edit Distance (10 algorithm families)
 
-| Tier | Libraries | Coverage |
-|------|-----------|----------|
-| **Tier 1** (core) | **NetworkX** + **GEDLIB** (via gedlibpy) | **8/10 (80%)** |
-| **Tier 2** (full) | + **GMatch4py** | **10/10 (100%)** |
+| Libraries | Coverage |
+|-----------|----------|
+| **NetworkX** + **GEDLIB** (via gedlibpy) | **8/10 (80%)** |
+| + **GMatch4py** | **10/10 (100%)** |
 
 ## API Endpoints
 
@@ -60,53 +60,223 @@ Unified microservice for **text edit distance** and **graph edit distance (GED)*
 
 | Algorithm Tag | Backend Options | Families | Result |
 |---------------|----------------|----------|--------|
-| `ged_astar` | networkx, gedlib | Exact GED, anytime approx, edit-path retrieval | (upper/lower bound, node map) |
-| `ged_heuristic` | gedlib, gmatch4py | Bipartite, IPFP, REFINE, lower bounds | (upper/lower bound) |
-| `ged_hausdorff` | gmatch4py | Hausdorff Edit Distance | (distance) |
-| `ged_greedy` | gmatch4py | Greedy edit distance | (distance) |
+| `ged_astar` | networkx, gedlib | Exact GED, anytime approx, edit-path retrieval | upper/lower bound, node_map |
+| `ged_heuristic` | gedlib, gmatch4py | Bipartite, IPFP, REFINE, lower bounds | upper/lower bound |
+| `ged_hausdorff` | gmatch4py | Hausdorff Edit Distance | distance |
+| `ged_greedy` | gmatch4py | Greedy edit distance | distance |
 
-## Quick Start
+## Request/Response Examples
+
+### Levenshtein (RapidFuzz)
 
 ```bash
-# Install
-pip install -e ".[dev]"
-
-# Start server
-uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
-
-# Send a request
 curl -X POST http://localhost:8000/v1/text/compare \
   -H "Content-Type: application/json" \
-  -d '{"algorithm":"levenshtein","backend":"rapidfuzz","params":{},"inputs":[{"id":"p1","a":"kitten","b":"sitting"}]}'
-
-# List all text algorithms
-curl http://localhost:8000/v1/text/algorithms | jq .
+  -d '{
+    "algorithm": "levenshtein",
+    "backend": "rapidfuzz",
+    "params": {},
+    "inputs": [
+      {"id": "pair-1", "a": "kitten", "b": "sitting"}
+    ]
+  }'
 ```
+
+Response:
+
+```json
+{
+  "algorithm": "levenshtein",
+  "backend": "rapidfuzz",
+  "result_type": "scalar_distance",
+  "results": [
+    { "id": "pair-1", "value": 3.0, "normalized": 0.4286 }
+  ],
+  "meta": { "compute_time_ms": 5.1 }
+}
+```
+
+### Jaro-Winkler (RapidFuzz)
+
+```bash
+curl -X POST http://localhost:8000/v1/text/compare \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "jaro_winkler",
+    "backend": "rapidfuzz",
+    "params": {},
+    "inputs": [
+      {"id": "pair-1", "a": "MARTHA", "b": "MARHTA"}
+    ]
+  }'
+```
+
+Response:
+
+```json
+{
+  "algorithm": "jaro_winkler",
+  "backend": "rapidfuzz",
+  "result_type": "scalar_distance",
+  "results": [
+    { "id": "pair-1", "value": 0.9611, "normalized": 0.9611 }
+  ],
+  "meta": { "compute_time_ms": 2.3 }
+}
+```
+
+### Batch text comparison
+
+```bash
+curl -X POST http://localhost:8000/v1/text/compare \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "levenshtein",
+    "backend": "rapidfuzz",
+    "params": {},
+    "inputs": [
+      {"id": "p1", "a": "kitten", "b": "sitting"},
+      {"id": "p2", "a": "flaw", "b": "lawn"},
+      {"id": "p3", "a": "hello", "b": "world"}
+    ]
+  }'
+```
+
+### Phonetic encoding
+
+```bash
+curl -X POST http://localhost:8000/v1/text/compare \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "phonetic_encoding",
+    "backend": "jellyfish",
+    "params": {"scheme": "soundex"},
+    "inputs": [
+      {"id": "w1", "text": "Jellyfish"}
+    ]
+  }'
+```
+
+Response:
+
+```json
+{
+  "algorithm": "phonetic_encoding",
+  "backend": "jellyfish",
+  "result_type": "phonetic_code",
+  "results": [
+    { "id": "w1", "codes": { "soundex": "J412" } }
+  ],
+  "meta": { "compute_time_ms": 0.5 }
+}
+```
+
+### Diff/Patch
+
+```bash
+curl -X POST http://localhost:8000/v1/text/compare \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "diff_patch",
+    "backend": "diff_match_patch",
+    "params": {},
+    "inputs": [
+      {"id": "p1", "a": "The quick brown fox", "b": "The slow brown fox"}
+    ]
+  }'
+```
+
+### GED — exact mode (NetworkX)
+
+```bash
+curl -X POST http://localhost:8000/v1/graphs/ged/compute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "ged_astar",
+    "backend": "networkx",
+    "params": { "mode": "exact", "timeout_ms": 5000 },
+    "graphs": [
+      {
+        "id": "pair-1",
+        "g1": {
+          "nodes": [{"id": "A"}, {"id": "B"}],
+          "edges": [{"source": "A", "target": "B"}]
+        },
+        "g2": {
+          "nodes": [{"id": "A"}, {"id": "B"}, {"id": "C"}],
+          "edges": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"}]
+        }
+      }
+    ]
+  }'
+```
+
+## Result Types
+
+| result_type | Description | Example fields |
+|-------------|-------------|----------------|
+| `scalar_distance` | Numeric distance or similarity | value, normalized |
+| `sequence` | Extracted subsequence (e.g. LCS) | value, length |
+| `phonetic_code` | Phonetic encoding result | codes (dict per scheme) |
+| `edit_script` | Line/character-level diff with operations | diffs, levenshtein |
+| `alignment` | Sequence alignment with CIGAR | edit_distance, cigar |
 
 ## Development
 
 ```bash
-make prep     # Install dev dependencies
-make test     # Run tests
-make lint     # Lint code
-make start    # Start dev server with hot reload
+make prep              # Install dev dependencies
+make test              # Run all tests (pytest -v)
+make lint              # Lint code (ruff)
+make start             # Start dev server with hot reload
 make generate-openapi  # Generate OpenAPI spec
 make docker-build      # Build Docker image
+```
+
+### Run specific tests
+
+```bash
+pytest -v tests/test_text_compare.py      # Text algorithm tests only
+pytest -v tests/test_graph_compare.py     # Graph algorithm tests only
+pytest -v tests/test_integration.py       # HTTP layer tests only
+pytest -v -k "test_jaro_winkler"          # Single test
+pytest -v -k "TestNetworkXGedAStar"       # Single test class
 ```
 
 ## Docker
 
 ```bash
-# Development
-docker-compose -f docker-compose.dev.yml up --build
+docker-compose -f docker-compose.dev.yml up --build   # Development
+docker-compose -f docker-compose.prod.yml up --build  # Production
+```
 
-# Production
-docker-compose -f docker-compose.prod.yml up --build
+## Quick Start
+
+```bash
+# 1. Install
+cd services/edit-distance-service
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+
+# 2. Run tests
+pytest -v
+
+# 3. Start server
+uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 4. Send a request (in another terminal)
+curl http://localhost:8000/v1/text/algorithms
+curl -X POST http://localhost:8000/v1/text/compare \
+  -H "Content-Type: application/json" \
+  -d '{"algorithm":"levenshtein","backend":"rapidfuzz","params":{},"inputs":[{"id":"p1","a":"kitten","b":"sitting"}]}'
+
+# 5. Smoke test
+bash tests/test_smoke.sh http://localhost:8000
 ```
 
 ## Architecture
 
-The service follows the same patterns as the noise-generation-service:
+The service follows the same patterns as the `noise-generation-service`:
 
 - **Discriminated union request body** — one `POST` endpoint per domain, algorithm selected via `algorithm` field
 - **Backend is explicit** — different libraries can produce numerically different results for the same named algorithm
@@ -116,16 +286,55 @@ The service follows the same patterns as the noise-generation-service:
 
 ### Algorithm/Backend Selection Rationale
 
-See [edit-distance-libraries-comparison.md](./docs/edit-distance-libraries-comparison.md) for the full weighted maximum-coverage analysis.
+The library set is derived from a **weighted maximum-coverage analysis** — a greedy approximation that minimizes the number of libraries while maximizing distinct algorithm-family coverage:
 
-**Text ED** — Greedy approximation solving the weighted maximum coverage problem:
-1. textdistance (11 families, Q=0.810)
-2. RapidFuzz (1 new family: OSA, Q=1.000)
-3. jellyfish (1 new family: phonetic, Q=0.765)
-4. edlib (1 new family: long-sequence, Q=0.303)
-5. diff-match-patch (1 new family: diff/patch, Q=0.275)
+**Text ED** (15 families):
+1. **textdistance** — 11 families, broadest coverage (Needleman-Wunsch, Gotoh, Smith-Waterman, token measures, NCD, LCS)
+2. **RapidFuzz** — adds OSA, highest quality weight (C++ core, optimal for hot path)
+3. **jellyfish** — adds phonetic encoding (Soundex, Metaphone, NYSIIS)
+4. **edlib** — adds long-sequence banded alignment with CIGAR
+5. **diff-match-patch** — adds Myers diff/patch edit-script output
 
-**Graph ED** — Same approach:
-1. NetworkX (3 families, Q=1.000)
-2. GEDLIB (5 new families, Q=0.260)
-3. GMatch4py (2 new families, Q=0.360)
+**Graph ED** (10 families):
+1. **NetworkX** — exact A* GED, anytime approximation, pure Python
+2. **GEDLIB** — adds bipartite, IPFP, REFINE, lower-bound heuristics, MIP exact (C++ core)
+3. **GMatch4py** — adds Hausdorff Edit Distance and Greedy ED (Cython, native networkx.Graph)
+
+## Project Structure
+
+```
+services/edit-distance-service/
+├── pyproject.toml           # Project config & dependencies
+├── Dockerfile               # Multi-stage Docker build
+├── Makefile                 # Build/test/run commands
+├── README.md                # This file
+├── docker-compose.dev.yml   # Dev Docker Compose
+├── docker-compose.prod.yml  # Prod Docker Compose
+├── .gitignore
+├── src/
+│   ├── main.py              # FastAPI app & HTTP endpoints
+│   ├── models.py            # Pydantic request/response models
+│   ├── cli.py               # Click CLI (serve, list, compare, openapi)
+│   ├── text/
+│   │   └── __init__.py      # Text ED implementations (dispatcher pattern)
+│   └── graph/
+│       └── __init__.py      # Graph ED implementations (dispatcher pattern)
+├── tests/
+│   ├── test_text_compare.py     # Unit tests — all 15 text algorithms
+│   ├── test_graph_compare.py    # Unit tests — all 4 GED algorithm tags
+│   ├── test_integration.py      # Integration tests — HTTP layer
+│   └── test_smoke.sh            # Bash smoke test script
+└── http-tests/
+    ├── text_algorithms.http     # VS Code REST Client examples
+    ├── graph_algorithms.http
+    └── health.http
+```
+
+## GitHub Actions CI
+
+A CI pipeline is defined in `.github/workflows/service-edit-distance-service.yml`:
+
+1. **lint** — `ruff check src/` (Python 3.12)
+2. **test** — `pytest -v` + smoke test with running server
+3. **generate-openapi** — auto-generates OpenAPI 3.1 spec
+4. **build** — builds & pushes Docker image to `ghcr.io` (master only)

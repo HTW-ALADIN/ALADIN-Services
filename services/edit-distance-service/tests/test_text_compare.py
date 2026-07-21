@@ -30,6 +30,7 @@ class TestLevenshtein:
         assert results[0].value == 3
 
     def test_edlib(self):
+        pytest.importorskip("edlib")
         inputs = [InputPair(id="p1", a="kitten", b="sitting")]
         results, _, _ = compute_text("levenshtein", "edlib", inputs, {})
         assert results[0].value == 3
@@ -172,10 +173,12 @@ class TestPhoneticEncoding:
         results, result_type, _ = compute_text("phonetic_encoding", "jellyfish", inputs, {"scheme": "soundex"})
         assert result_type == "phonetic_code"
         assert "soundex" in results[0].codes
+        assert results[0].codes["soundex"] == "J412"
 
 
 class TestLongSequenceAlignment:
     def test_basic(self):
+        pytest.importorskip("edlib")
         inputs = [InputPair(id="p1", a="kitten", b="sitting")]
         results, result_type, _ = compute_text("long_sequence_alignment", "edlib", inputs, {"mode": "NW", "task": "distance"})
         assert result_type == "alignment"

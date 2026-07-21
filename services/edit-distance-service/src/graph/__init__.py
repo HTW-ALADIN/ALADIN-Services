@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-import uuid
 from typing import Any
 
 from ..models import (
@@ -204,8 +203,8 @@ def _gedlib_ged_astar(pair: GraphPair, params: dict) -> GedPairResult:
     t0 = time.perf_counter()
     try:
         env = gedlibpy.GEDEnv()
-        id1 = env.add_graph(G1)
-        id2 = env.add_graph(G2)
+        _ = env.add_graph(G1)
+        _ = env.add_graph(G2)
         env.init()
 
         method = params.get("method", "F2")
@@ -230,7 +229,7 @@ def _gedlib_ged_astar(pair: GraphPair, params: dict) -> GedPairResult:
             node_map=node_map,
             runtime_ms=elapsed,
         )
-    except Exception as e:
+    except Exception:
         elapsed = (time.perf_counter() - t0) * 1000
         return GedPairResult(
             id=pair.id,
@@ -257,8 +256,8 @@ def _gedlib_ged_heuristic(pair: GraphPair, params: dict) -> GedPairResult:
     t0 = time.perf_counter()
     try:
         env = gedlibpy.GEDEnv()
-        id1 = env.add_graph(G1)
-        id2 = env.add_graph(G2)
+        _ = env.add_graph(G1)
+        _ = env.add_graph(G2)
         env.init()
 
         method = params.get("method", "BIPARTITE")
@@ -283,7 +282,7 @@ def _gedlib_ged_heuristic(pair: GraphPair, params: dict) -> GedPairResult:
             node_map=node_map,
             runtime_ms=elapsed,
         )
-    except Exception as e:
+    except Exception:
         elapsed = (time.perf_counter() - t0) * 1000
         return GedPairResult(
             id=pair.id,
@@ -305,8 +304,6 @@ def _gmatch4py_ged_heuristic(pair: GraphPair, params: dict) -> GedPairResult:
             id=pair.id, upper_bound=float("inf"), lower_bound=0.0,
             exact=False, runtime_ms=0.0,
         )
-
-    import networkx as nx
 
     G1 = _graph_ref_to_nx(pair.g1)
     G2 = _graph_ref_to_nx(pair.g2)
@@ -332,7 +329,7 @@ def _gmatch4py_ged_heuristic(pair: GraphPair, params: dict) -> GedPairResult:
             exact=False,
             runtime_ms=elapsed,
         )
-    except Exception as e:
+    except Exception:
         elapsed = (time.perf_counter() - t0) * 1000
         return GedPairResult(
             id=pair.id,
@@ -376,7 +373,7 @@ def _gmatch4py_ged_hausdorff(pair: GraphPair, params: dict) -> GedPairResult:
             exact=False,
             runtime_ms=elapsed,
         )
-    except Exception as e:
+    except Exception:
         elapsed = (time.perf_counter() - t0) * 1000
         return GedPairResult(
             id=pair.id,
@@ -420,7 +417,7 @@ def _gmatch4py_ged_greedy(pair: GraphPair, params: dict) -> GedPairResult:
             exact=False,
             runtime_ms=elapsed,
         )
-    except Exception as e:
+    except Exception:
         elapsed = (time.perf_counter() - t0) * 1000
         return GedPairResult(
             id=pair.id,
