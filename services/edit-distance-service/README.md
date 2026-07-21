@@ -36,6 +36,171 @@ Unified microservice for **text edit distance** and **graph edit distance (GED)*
 | `GET` | `/v1/graphs/ged/{resultId}` | Retrieve a stored result |
 | `DELETE` | `/v1/graphs/ged/{resultId}` | Release a stored result |
 
+## Input Data Formats
+
+### Text ED — `POST /v1/text/compare`
+
+Das Feld `inputs` akzeptiert ein **Array**. Du kannst entweder **ein einzelnes Paar** oder **mehrere Paare** auf einmal übergeben (Batching).
+
+#### Einfache Strings (Standard)
+
+```json
+{
+  "algorithm": "levenshtein",
+  "backend": "rapidfuzz",
+  "params": {},
+  "inputs": [
+    { "id": "pair-1", "a": "kitten", "b": "sitting" }
+  ]
+}
+```
+
+| Feld | Typ | Beschreibung |
+|------|-----|-------------|
+| `id` | string | Beliebige ID zur Identifikation des Paares in der Response |
+| `a` | string | Erster Text |
+| `b` | string | Zweiter Text |
+
+#### Phonetic Encoding (abweichendes Format)
+
+Für `algorithm: "phonetic_encoding"` hat jedes Input-Objekt nur **ein** Feld `text` (kein Paar, da hier einzelne Wörter kodiert werden):
+
+```json
+{
+  "algorithm": "phonetic_encoding",
+  "backend": "jellyfish",
+  "params": { "scheme": "soundex" },
+  "inputs": [
+    { "id": "w1", "text": "Jellyfish" },
+    { "id": "w2", "text": "Robert" }
+  ]
+}
+```
+
+| Feld | Typ | Beschreibung |
+|------|-----|-------------|
+| `id` | string | Beliebige ID |
+| `text` | string | Ein einzelner Text zur phonetischen Kodierung |
+
+#### Batch-Verarbeitung
+
+Du kannst beliebig viele Paare in einem Request verarbeiten — der Service berechnet alle parallel (seriell, aber im gleichen Durchlauf):
+
+```json
+{
+  "algorithm": "levenshtein",
+  "backend": "rapidfuzz",
+  "params": {},
+  "inputs": [
+    { "id": "p1", "a": "kitten", "b": "sitting" },
+    { "id": "p2", "a": "flaw",   "b": "lawn" },
+    { "id": "p3", "a": "Hello",  "b": "World" }
+  ]
+}
+```
+
+### Graph ED — `POST /v1/graphs/ged/compute`
+
+Das Feld `graphs` akzeptiert ein **Array von Graph-Paaren**. Jeder Graph kann **inline** (mit `nodes`/`edges`) oder **als Referenz** (mit `graphRef`) angegeben werden.
+
+#### Inline-Graphen (JSON-Struktur)
+
+```json
+{
+  "algorithm": "ged_astar",
+  "backend": "networkx",
+  "params": { "mode": "exact", "timeout_ms": 5000 },
+  "graphs": [
+    {
+      "id": "pair-1",
+      "g1": {
+        "nodes": [
+          { "id": "A", "label": "Person" },
+          { "id": "B", "label": "Person" }
+        ],
+        "edges": [
+          { "source": "A", "target": "B", "weight": 1.0 }
+        ]
+      },
+      "g2": {
+        "nodes": [
+          { "id": "X", "label": "Person" },
+          { "id": "Y", "label": "Person" }
+        ],
+        "edges": [
+          { "source": "X", "target": "Y", "weight": 1.0 }
+        ]
+      }
+    }
+  ]
+}
+```
+
+**Node-Format:**
+
+| Feld | Typ | Beschreibung |
+|------|-----|-------------|
+| `id` | string | **Pflicht.** Eindeutige Knoten-ID im Graphen |
+| `label` | string (optional) | Knotenlabel (wird beim Edit-Cost-Vergleich genutzt) |
+| `...` | any | Beliebige weitere Attribute |
+
+**Edge-Format:**
+
+| Feld | Typ | Beschreibung |
+|------|-----|-------------|
+| `source` | string | **Pflicht.** ID des Quellknotens |
+| `target` | string | **Pflicht.** ID des Zielknotens |
+| `weight` | number (optional) | Kantengewicht |
+| `label` | string (optional) | Kantenlabel |
+| `...` | any | Beliebige weitere Attribute |
+
+#### Graph per Referenz (für Service-Komposition)
+
+```json
+{
+  "algorithm": "ged_astar",
+  "backend": "networkx",
+  "params": { "mode": "exact", "timeout_ms": 5000 },
+  "graphs": [
+    {
+      "id": "pair-1",
+      "g1": { "graphRef": "/v1/graphs/grf_9f1c2e..." },
+      "g2": { "graphRef": "/v1/graphs/grf_a02b7f..." }
+    }
+  ]
+}
+```
+
+> **Hinweis**: Die `graphRef`-Auflösung ist für die Integration mit einem companion Graph-Generation-Service vorgesehen. Derzeit wird nur das **inline-Format** (nodes/edges) unterstützt.
+
+#### Batch für Graphen
+
+Auch hier können mehrere Paare auf einmal übergeben werden:
+
+```json
+{
+  "algorithm": "ged_astar",
+  "backend": "networkx",
+  "params": { "mode": "exact", "timeout_ms": 5000 },
+  "graphs": [
+    { "id": "pair-1", "g1": { "nodes": [...] }, "g2": { "nodes": [...] } },
+    { "id": "pair-2", "g1": { "nodes": [...] }, "g2": { "nodes": [...] } }
+  ]
+}
+```
+
+### Output-Format (GED)
+
+```json
+{
+  "output": {
+    "includeNodeMap": true
+  }
+}
+```
+
+Mit `includeNodeMap: true` wird im Ergebnis der optimale Node-Mapping-Pfad zurückgegeben (unterstützt von NetworkX `mode: "path"` und GEDLIB).
+
 ## Text Algorithms
 
 | Algorithm Tag | Backend Options | Families | Result Type |
