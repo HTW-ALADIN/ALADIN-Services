@@ -647,7 +647,9 @@ pub async fn generate_noise(
                 for x in 0..size[0] {
                     // Deterministic LCG (Lehmer random number generator)
                     // Stable across all platforms and Rust versions
-                    let mut state = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                    let mut state = seed
+                        .wrapping_mul(6364136223846793005)
+                        .wrapping_add(1442695040888963407);
                     state ^= (x as u64).wrapping_mul(374761393);
                     state ^= (y as u64).wrapping_mul(668265263);
                     state = state.wrapping_mul(12741261754838537793);

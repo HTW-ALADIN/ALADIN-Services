@@ -203,10 +203,9 @@ async fn test_fbm_seed_parameter() {
         .send()
         .await
         .unwrap();
-    let field1: Vec<Vec<f64>> = serde_json::from_value(
-        resp1.json::<serde_json::Value>().await.unwrap()["data"].clone(),
-    )
-    .unwrap();
+    let field1: Vec<Vec<f64>> =
+        serde_json::from_value(resp1.json::<serde_json::Value>().await.unwrap()["data"].clone())
+            .unwrap();
 
     let params2 = json!({"seed": 2, "octaves": 4});
     let resp2 = client
@@ -221,10 +220,9 @@ async fn test_fbm_seed_parameter() {
         .send()
         .await
         .unwrap();
-    let field2: Vec<Vec<f64>> = serde_json::from_value(
-        resp2.json::<serde_json::Value>().await.unwrap()["data"].clone(),
-    )
-    .unwrap();
+    let field2: Vec<Vec<f64>> =
+        serde_json::from_value(resp2.json::<serde_json::Value>().await.unwrap()["data"].clone())
+            .unwrap();
 
     let mut diff = 0.0;
     for y in 0..20 {
@@ -449,10 +447,9 @@ async fn test_white_noise_seed_parameter() {
         .send()
         .await
         .unwrap();
-    let field1: Vec<Vec<f64>> = serde_json::from_value(
-        resp1.json::<serde_json::Value>().await.unwrap()["data"].clone(),
-    )
-    .unwrap();
+    let field1: Vec<Vec<f64>> =
+        serde_json::from_value(resp1.json::<serde_json::Value>().await.unwrap()["data"].clone())
+            .unwrap();
 
     let params2 = json!({"seed": 2});
     let resp2 = client
@@ -466,10 +463,9 @@ async fn test_white_noise_seed_parameter() {
         .send()
         .await
         .unwrap();
-    let field2: Vec<Vec<f64>> = serde_json::from_value(
-        resp2.json::<serde_json::Value>().await.unwrap()["data"].clone(),
-    )
-    .unwrap();
+    let field2: Vec<Vec<f64>> =
+        serde_json::from_value(resp2.json::<serde_json::Value>().await.unwrap()["data"].clone())
+            .unwrap();
 
     let mut diff = 0.0;
     for y in 0..20 {
