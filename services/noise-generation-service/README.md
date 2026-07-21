@@ -266,7 +266,7 @@ cargo run -- openapi --output spec.json  # Via CLI
 All rows use `POST /v1/noise` with the given `algorithm` tag (and optional `backend` discriminator);
 retrieval is always via `GET /v1/noise/{fieldId}`.
 
-### Core Noise Algorithms (Tier 1)
+### Core Noise Algorithms
 
 | `algorithm` tag | Canonical family | Backend options | Underlying function |
 |----------------|------------------|-----------------|---------------------|
@@ -281,7 +281,7 @@ retrieval is always via `GET /v1/noise/{fieldId}`.
 | `cellular` | Cellular / Worley / Voronoi | `fastnoise_lite` (default) | `SetNoiseType(Cellular)`, `SetCellularDistanceFunction(...)`, `SetCellularReturnType(...)`, `SetCellularJitter(...)` + `GetNoise(x, y[, z])` |
 | | | `noise_rs` | `Worley::new(seed).set_distance_function(...).set_return_type(...).get(point)` |
 
-### Fractal Algorithms (Tier 1)
+### Fractal Algorithms
 
 | `algorithm` tag | Canonical family | Backend options | Underlying function |
 |----------------|------------------|-----------------|---------------------|
@@ -293,7 +293,7 @@ retrieval is always via `GET /v1/noise/{fieldId}`.
 | `hybrid_multi` | HybridMulti fractal | `noise_rs` (only) | `HybridMulti::<Source>::new(seed).set_octaves/...(...).get(point)` |
 | `pingpong` | PingPong fractal | `fastnoise_lite` (only) | `SetFractalType(PingPong)`, `SetFractalPingPongStrength(...)` wraps a `source` sub-field |
 
-### Advanced Algorithms (Tier 1)
+### Advanced Algorithms
 
 | `algorithm` tag | Canonical family | Backend options | Underlying function |
 |----------------|------------------|-----------------|---------------------|
@@ -301,7 +301,7 @@ retrieval is always via `GET /v1/noise/{fieldId}`.
 | `combinator` | Generic combinators | `noise_rs` (only) | `Add`/`Multiply`/`Min`/`Max`/`Blend`/`Turbulence`/`ScalePoint` (selected via `op` sub-field, each wrapping 1–2 `source` sub-fields) |
 | `utility` | Utility / deterministic generators | `noise_rs` (only) | `Constant::new(value)` / `Cylinders::new()` (selected via `kind` sub-field) |
 
-### Native White Noise (Tier 2 — no external library)
+### Native White Noise
 
 White noise requires no coherence/interpolation logic and is implemented natively
 rather than via an external library. Because it is inherently uncorrelated, its
