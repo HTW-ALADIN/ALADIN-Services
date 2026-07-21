@@ -29,9 +29,7 @@ Unified REST API for multiple noise generation libraries and algorithms.
 ### API Endpoints
 
 - `GET /v1/algorithms` — List all available algorithms and backends
-- `POST /v1/noise` — Generate noise field with specified algorithm
-- `GET /v1/noise/{id}` — Retrieve a generated noise field by ID
-- `GET /v1/noise/{id}/point?x=...&y=...` — Query a single point from a noise field
+- `POST /v1/noise` — Generate noise field and return the full result (including data grid)
 - `GET /api-docs/openapi.json` — OpenAPI specification
 
 ### Example Requests
@@ -43,7 +41,7 @@ curl http://localhost:8000/v1/algorithms
 
 #### Generate Perlin Noise
 ```bash
-curl -X POST http://localhost:8000/v1/noise \
+curl -s -X POST http://localhost:8000/v1/noise \
   -H "Content-Type: application/json" \
   -d '{
     "algorithm": "perlin",
@@ -52,9 +50,19 @@ curl -X POST http://localhost:8000/v1/noise \
     "sampling": {
       "mode": "2d",
       "dimensions": 2,
-      "size": [64, 64]
+      "size": [4, 4]
     }
-  }'
+  }' | jq .
+```
+Response:
+```json
+{
+  "id": "nsf_abc123...",
+  "status": "completed",
+  "algorithm": "perlin",
+  "data": [[0.23, -0.45, ...], ...],
+  "size": [4, 4]
+}
 ```
 
 #### Generate Fractal Brownian Motion
@@ -135,7 +143,6 @@ curl -X POST http://localhost:8000/v1/noise \
 ## CLI Usage (Mirroring REST API)
 
 The service includes a **comprehensive CLI** that mirrors **all REST API functionality**.
-Use `-U` / `--server-url` to target a remote server for `get` and `point` commands.
 
 ### List Available Algorithms
 ```bash
@@ -179,23 +186,6 @@ noise-generation-service generate \
   --width 32 --height 32
 ```
 
-### Get Noise Field from Server (remote)
-```bash
-# Fetch field by ID (stdout)
-noise-generation-service get nsf_abc123...
-
-# Save to file
-noise-generation-service get nsf_abc123... --output field.json
-
-# Custom server URL
-noise-generation-service -U http://other-server:8000 get nsf_abc123...
-```
-
-### Query Single Point from Server (remote)
-```bash
-noise-generation-service point nsf_abc123... --x 10 --y 25
-```
-
 ### Start HTTP Server
 ```bash
 # Default (localhost:8000)
@@ -221,8 +211,6 @@ noise-generation-service openapi --format json
 ```bash
 noise-generation-service --help           # All commands
 noise-generation-service generate --help  # Command-specific help
-noise-generation-service get --help
-noise-generation-service point --help
 ```
 
 ## Development
@@ -265,7 +253,13 @@ cargo run -- openapi --output spec.json  # Via CLI
 ## Algorithms Reference
 
 All rows use `POST /v1/noise` with the given `algorithm` tag (and optional `backend` discriminator);
-retrieval is always via `GET /v1/noise/{fieldId}`.
+the response includes the full noise field data grid in the `data` field.
+
+> **⚠️ Performance Note:** For large grids (e.g., 1024×1024 or larger), the noise generation will
+> take longer and the response payload may become very large (several MB). Consider using smaller
+> grid sizes for interactive use, or use the CLI's `generate` command for local generation without
+> network overhead. A future enhancement may add HTTP streaming (e.g., `Transfer-Encoding: chunked`)
+> for large grid responses.
 
 ### Core Noise Algorithms
 

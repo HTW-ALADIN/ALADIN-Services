@@ -1,37 +1,27 @@
 // Range loops and casts are clearer for noise generation — keep them explicit
 #![allow(clippy::needless_range_loop, clippy::unnecessary_cast)]
 
-use axum::extract::{Path, Query};
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{http::StatusCode, Json};
 use fastnoise_lite::FastNoiseLite;
 use noise::{
     Add, Blend, Constant, Cylinders, HybridMulti, Max, Min, MultiFractal, Multiply, NoiseFn,
     OpenSimplex, Perlin, Simplex, SuperSimplex, Value, Worley,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use utoipa::{OpenApi, ToSchema};
-
-#[derive(Clone)]
-pub struct AppState {
-    pub fields: Arc<Mutex<HashMap<String, Vec<Vec<f64>>>>>,
-}
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
         list_algorithms,
-        generate_noise,
-        get_noise_field,
-        get_noise_point
+        generate_noise
     ),
     components(
         schemas(
             GenerateNoiseRequest,
             Sampling,
             Output,
-            NoiseField,
+            NoiseFieldResult,
             AlgorithmEntry
         )
     ),
@@ -164,10 +154,12 @@ pub enum GenerateNoiseRequest {
 }
 
 #[derive(Serialize, Debug, ToSchema)]
-pub struct NoiseField {
+pub struct NoiseFieldResult {
     pub id: String,
     pub status: String,
     pub algorithm: String,
+    pub data: Vec<Vec<f64>>,
+    pub size: Vec<usize>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
@@ -218,13 +210,12 @@ pub async fn list_algorithms() -> Json<serde_json::Value> {
     tag = "noise",
     request_body = GenerateNoiseRequest,
     responses(
-        (status = 201, description = "Noise field created", body = NoiseField)
+        (status = 201, description = "Noise field created", body = NoiseFieldResult)
     )
 )]
 pub async fn generate_noise(
-    State(state): State<AppState>,
     Json(payload): Json<GenerateNoiseRequest>,
-) -> (StatusCode, Json<NoiseField>) {
+) -> (StatusCode, Json<NoiseFieldResult>) {
     let algorithm_name = match &payload {
         GenerateNoiseRequest::Perlin { .. } => "perlin".to_string(),
         GenerateNoiseRequest::Simplex { .. } => "simplex".to_string(),
@@ -665,68 +656,14 @@ pub async fn generate_noise(
         }
     }
 
-    state.fields.lock().unwrap().insert(field_id.clone(), field);
-
     (
         StatusCode::CREATED,
-        Json(NoiseField {
+        Json(NoiseFieldResult {
             id: field_id,
             status: "completed".to_string(),
             algorithm: algorithm_name,
+            data: field,
+            size,
         }),
     )
-}
-
-#[utoipa::path(
-    get,
-    path = "/v1/noise/{id}",
-    tag = "noise",
-    responses(
-        (status = 200, description = "Noise field data", body = Vec<Vec<f64>>),
-        (status = 404, description = "Field not found")
-    ),
-    params(
-        ("id" = String, Path, description = "Noise field ID")
-    )
-)]
-pub async fn get_noise_field(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<Vec<Vec<f64>>>, StatusCode> {
-    let fields = state.fields.lock().unwrap();
-    fields
-        .get(&id)
-        .cloned()
-        .map(Json)
-        .ok_or(StatusCode::NOT_FOUND)
-}
-
-#[utoipa::path(
-    get,
-    path = "/v1/noise/{id}/point",
-    tag = "noise",
-    responses(
-        (status = 200, description = "Noise point value", content_type = "application/json", body = f64),
-        (status = 400, description = "Coordinates out of bounds"),
-        (status = 404, description = "Field not found")
-    ),
-    params(
-        ("id" = String, Path, description = "Noise field ID"),
-        ("x" = i32, Query, description = "X coordinate"),
-        ("y" = i32, Query, description = "Y coordinate")
-    )
-)]
-pub async fn get_noise_point(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-    Query(params): Query<HashMap<String, i32>>,
-) -> Result<Json<f64>, StatusCode> {
-    let x = params.get("x").copied().unwrap_or(0) as usize;
-    let y = params.get("y").copied().unwrap_or(0) as usize;
-    let fields = state.fields.lock().unwrap();
-    let field = fields.get(&id).ok_or(StatusCode::NOT_FOUND)?;
-    if y >= field.len() || x >= field[0].len() {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    Ok(Json(field[y][x]))
 }

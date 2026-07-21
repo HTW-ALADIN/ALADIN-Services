@@ -7,15 +7,6 @@ use std::path::PathBuf;
 #[command(name = "noise-generation-service")]
 #[command(about = "Unified CLI for noise generation algorithms")]
 pub struct Cli {
-    /// Server URL (for remote operations)
-    #[arg(
-        short = 'U',
-        long,
-        default_value = "http://localhost:8000",
-        global = true
-    )]
-    pub server_url: String,
-
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -33,31 +24,6 @@ pub enum Commands {
     /// Generate noise using specified algorithm (local)
     #[command(alias = "gen")]
     Generate(GenerateArgs),
-
-    /// Get a generated noise field by ID (from server)
-    #[command(alias = "get-field")]
-    Get {
-        /// Noise field ID (e.g., nsf_...)
-        id: String,
-
-        /// Output file (stdout if not specified)
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-    },
-
-    /// Query a single point from a noise field (from server)
-    Point {
-        /// Noise field ID (e.g., nsf_...)
-        id: String,
-
-        /// X coordinate
-        #[arg(short, long)]
-        x: usize,
-
-        /// Y coordinate
-        #[arg(short, long)]
-        y: usize,
-    },
 
     /// Start the HTTP server
     #[command(alias = "serve")]

@@ -13,11 +13,10 @@ use cli::{Cli, Commands, GenerateArgs};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use utoipa::OpenApi;
 
-use lib::{generate_noise, get_noise_field, get_noise_point, list_algorithms, AppState};
+use lib::{generate_noise, list_algorithms};
 
 #[tokio::main]
 async fn main() {
@@ -30,14 +29,6 @@ async fn main() {
             }
             Commands::Generate(args) => {
                 handle_generate_command(args).await;
-                return;
-            }
-            Commands::Get { id, output } => {
-                handle_get_command(&cli.server_url, &id, output).await;
-                return;
-            }
-            Commands::Point { id, x, y } => {
-                handle_point_command(&cli.server_url, &id, x, y).await;
                 return;
             }
             Commands::OpenApi { format, output } => {
@@ -60,20 +51,13 @@ async fn main() {
 // ─── Server ──────────────────────────────────────────────────────────────────
 
 async fn start_server(bind_addr: String) {
-    let state = AppState {
-        fields: Arc::new(Mutex::new(HashMap::new())),
-    };
-
-    let app = Router::<AppState>::new()
+    let app = Router::new()
         .route("/v1/algorithms", get(list_algorithms))
         .route("/v1/noise", post(generate_noise))
-        .route("/v1/noise/:id", get(get_noise_field))
-        .route("/v1/noise/:id/point", get(get_noise_point))
         .route(
             "/api-docs/openapi.json",
             get(|| async { Json(lib::ApiDoc::openapi()).into_response() }),
-        )
-        .with_state(state);
+        );
 
     let listener = TcpListener::bind(&bind_addr).await.unwrap();
     println!("Listening on {}", bind_addr);
@@ -225,13 +209,8 @@ async fn handle_generate_command(args: GenerateArgs) {
         }
     };
 
-    // Create temporary state and generate
-    let state = AppState {
-        fields: Arc::new(Mutex::new(HashMap::new())),
-    };
-
-    let (status, result) =
-        lib::generate_noise(axum::extract::State(state.clone()), axum::Json(request)).await;
+    // Generate noise (no state needed)
+    let (status, result) = lib::generate_noise(axum::Json(request)).await;
 
     // Output
     match args.format.as_str() {
@@ -244,64 +223,23 @@ async fn handle_generate_command(args: GenerateArgs) {
             write_or_print(text, args.output);
         }
         "csv" => {
-            let fields = state.fields.lock().unwrap();
-            if let Some(field) = fields.get(&result.0.id) {
-                let mut csv = String::new();
-                for row in field {
-                    csv.push_str(
-                        &row.iter()
-                            .map(|v| format!("{:.6}", v))
-                            .collect::<Vec<_>>()
-                            .join(","),
-                    );
-                    csv.push('\n');
-                }
-                write_or_print(csv, args.output);
+            let mut csv = String::new();
+            for row in &result.0.data {
+                csv.push_str(
+                    &row.iter()
+                        .map(|v| format!("{:.6}", v))
+                        .collect::<Vec<_>>()
+                        .join(","),
+                );
+                csv.push('\n');
             }
+            write_or_print(csv, args.output);
         }
         _ => {
             eprintln!("Error: unsupported output format '{}'", args.format);
             std::process::exit(1);
         }
     }
-}
-
-// ─── CLI: get (remote) ───────────────────────────────────────────────────────
-
-async fn handle_get_command(server_url: &str, id: &str, output: Option<PathBuf>) {
-    let url = format!("{}/v1/noise/{}", server_url.trim_end_matches('/'), id);
-    let response = reqwest::get(&url).await.unwrap_or_else(|e| {
-        eprintln!("Error: cannot reach server at {} ({})", server_url, e);
-        std::process::exit(1);
-    });
-    if !response.status().is_success() {
-        eprintln!("Error: server returned HTTP {}", response.status());
-        std::process::exit(1);
-    }
-    let text = response.text().await.unwrap();
-    write_or_print(text, output);
-}
-
-// ─── CLI: point (remote) ─────────────────────────────────────────────────────
-
-async fn handle_point_command(server_url: &str, id: &str, x: usize, y: usize) {
-    let url = format!(
-        "{}/v1/noise/{}/point?x={}&y={}",
-        server_url.trim_end_matches('/'),
-        id,
-        x,
-        y
-    );
-    let response = reqwest::get(&url).await.unwrap_or_else(|e| {
-        eprintln!("Error: cannot reach server at {} ({})", server_url, e);
-        std::process::exit(1);
-    });
-    if !response.status().is_success() {
-        eprintln!("Error: server returned HTTP {}", response.status());
-        std::process::exit(1);
-    }
-    let value: f64 = response.json().await.unwrap();
-    println!("{}", value);
 }
 
 // ─── CLI: openapi ────────────────────────────────────────────────────────────
