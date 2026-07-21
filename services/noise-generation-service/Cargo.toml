@@ -12,7 +12,6 @@ clap = { version = "4", features = ["derive"] }
 noise = "0.9"
 fastnoise-lite = "1.1.1"
 uuid = { version = "1.10", features = ["v4"] }
-rand = "0.8"
 utoipa = { version = "4", features = ["axum_extras"] }
 utoipa-swagger-ui = { version = "4", features = ["axum"] }
 

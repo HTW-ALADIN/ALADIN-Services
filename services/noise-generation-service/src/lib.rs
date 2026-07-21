@@ -641,15 +641,17 @@ pub async fn generate_noise(
             }
         }
         GenerateNoiseRequest::White { params, .. } => {
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as u64;
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
+            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1);
 
             for y in 0..size[1] {
                 for x in 0..size[0] {
-                    let mut hasher = DefaultHasher::new();
-                    (x, y, seed).hash(&mut hasher);
-                    let hash = hasher.finish();
+                    // Deterministic LCG (Lehmer random number generator)
+                    // Stable across all platforms and Rust versions
+                    let mut state = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                    state ^= (x as u64).wrapping_mul(374761393);
+                    state ^= (y as u64).wrapping_mul(668265263);
+                    state = state.wrapping_mul(12741261754838537793);
+                    let hash = state ^ (state >> 31);
                     field[y][x] = (hash as f64 / u64::MAX as f64) * 2.0 - 1.0;
                 }
             }
