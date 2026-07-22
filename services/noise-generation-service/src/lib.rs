@@ -166,7 +166,6 @@ pub struct Output {
 pub enum GenerateNoiseRequest {
     #[serde(rename = "perlin")]
     Perlin {
-        backend: Option<String>,
         #[serde(default)]
         params: SeedParams,
         sampling: Sampling,
@@ -174,7 +173,6 @@ pub enum GenerateNoiseRequest {
     },
     #[serde(rename = "simplex")]
     Simplex {
-        backend: Option<String>,
         #[serde(default)]
         params: SeedParams,
         sampling: Sampling,
@@ -182,7 +180,6 @@ pub enum GenerateNoiseRequest {
     },
     #[serde(rename = "opensimplex2")]
     OpenSimplex2 {
-        backend: Option<String>,
         #[serde(default)]
         params: SeedParams,
         sampling: Sampling,
@@ -190,7 +187,6 @@ pub enum GenerateNoiseRequest {
     },
     #[serde(rename = "supersimplex")]
     SuperSimplex {
-        backend: Option<String>,
         #[serde(default)]
         params: SeedParams,
         sampling: Sampling,
@@ -198,7 +194,6 @@ pub enum GenerateNoiseRequest {
     },
     #[serde(rename = "value")]
     Value {
-        backend: Option<String>,
         #[serde(default)]
         params: SeedParams,
         sampling: Sampling,
@@ -206,7 +201,6 @@ pub enum GenerateNoiseRequest {
     },
     #[serde(rename = "cellular")]
     Cellular {
-        backend: Option<String>,
         #[serde(default)]
         params: CellularParams,
         sampling: Sampling,
@@ -214,7 +208,6 @@ pub enum GenerateNoiseRequest {
     },
     #[serde(rename = "fbm")]
     Fbm {
-        backend: Option<String>,
         #[serde(default)]
         params: FractalParams,
         sampling: Sampling,
@@ -222,7 +215,6 @@ pub enum GenerateNoiseRequest {
     },
     #[serde(rename = "billow")]
     Billow {
-        backend: Option<String>,
         #[serde(default)]
         params: FractalParams,
         sampling: Sampling,
@@ -230,7 +222,6 @@ pub enum GenerateNoiseRequest {
     },
     #[serde(rename = "ridged_multi")]
     RidgedMulti {
-        backend: Option<String>,
         #[serde(default)]
         params: RidgedMultiParams,
         sampling: Sampling,
@@ -238,7 +229,6 @@ pub enum GenerateNoiseRequest {
     },
     #[serde(rename = "hybrid_multi")]
     HybridMulti {
-        backend: Option<String>,
         #[serde(default)]
         params: RidgedMultiParams,
         sampling: Sampling,
@@ -246,7 +236,6 @@ pub enum GenerateNoiseRequest {
     },
     #[serde(rename = "pingpong")]
     PingPong {
-        backend: Option<String>,
         #[serde(default)]
         params: PingPongParams,
         sampling: Sampling,
@@ -254,7 +243,6 @@ pub enum GenerateNoiseRequest {
     },
     #[serde(rename = "domain_warp")]
     DomainWarp {
-        backend: Option<String>,
         #[serde(default)]
         params: DomainWarpParams,
         sampling: Sampling,
@@ -262,7 +250,6 @@ pub enum GenerateNoiseRequest {
     },
     #[serde(rename = "combinator")]
     Combinator {
-        backend: Option<String>,
         #[serde(default)]
         params: CombinatorParams,
         sampling: Sampling,
@@ -270,7 +257,6 @@ pub enum GenerateNoiseRequest {
     },
     #[serde(rename = "utility")]
     Utility {
-        backend: Option<String>,
         #[serde(default)]
         params: UtilityParams,
         sampling: Sampling,
@@ -305,31 +291,26 @@ pub struct AlgorithmEntry {
     path = "/v1/algorithms",
     tag = "noise",
     responses(
-        (status = 200, description = "List of algorithms", body = Vec<AlgorithmEntry>)
+        (status = 200, description = "List of algorithms", body = Vec<String>)
     )
 )]
 pub async fn list_algorithms() -> Json<serde_json::Value> {
     Json(serde_json::json!([
-        {"algorithm": "perlin", "backend": "fastnoise_lite"},
-        {"algorithm": "perlin", "backend": "noise_rs"},
-        {"algorithm": "simplex", "backend": "noise_rs"},
-        {"algorithm": "opensimplex2", "backend": "fastnoise_lite"},
-        {"algorithm": "opensimplex2", "backend": "noise_rs"},
-        {"algorithm": "supersimplex", "backend": "noise_rs"},
-        {"algorithm": "value", "backend": "fastnoise_lite"},
-        {"algorithm": "value", "backend": "noise_rs"},
-        {"algorithm": "cellular", "backend": "fastnoise_lite"},
-        {"algorithm": "cellular", "backend": "noise_rs"},
-        {"algorithm": "fbm", "backend": "noise_rs"},
-        {"algorithm": "billow", "backend": "noise_rs"},
-        {"algorithm": "ridged_multi", "backend": "fastnoise_lite"},
-        {"algorithm": "ridged_multi", "backend": "noise_rs"},
-        {"algorithm": "hybrid_multi", "backend": "noise_rs"},
-        {"algorithm": "pingpong", "backend": "fastnoise_lite"},
-        {"algorithm": "domain_warp", "backend": "fastnoise_lite"},
-        {"algorithm": "combinator", "backend": "noise_rs"},
-        {"algorithm": "utility", "backend": "noise_rs"},
-        {"algorithm": "white", "backend": "native"}
+        "perlin",
+        "simplex",
+        "opensimplex2",
+        "supersimplex",
+        "value",
+        "cellular",
+        "fbm",
+        "billow",
+        "ridged_multi",
+        "hybrid_multi",
+        "pingpong",
+        "domain_warp",
+        "combinator",
+        "utility",
+        "white"
     ]))
 }
 

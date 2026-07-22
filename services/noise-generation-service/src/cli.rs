@@ -56,10 +56,6 @@ pub struct GenerateArgs {
     #[arg(short, long)]
     pub algorithm: String,
 
-    /// Backend to use (if applicable)
-    #[arg(short, long)]
-    pub backend: Option<String>,
-
     /// Width of noise field
     #[arg(short = 'W', long, default_value = "64")]
     pub width: usize,
@@ -107,3 +103,4 @@ fn parse_key_val(
 
     Ok((key, value))
 }
+
