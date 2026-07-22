@@ -97,22 +97,4 @@ class TestGedCompute:
 
 
 class TestGedResultLifecycle:
-    def test_get_and_delete(self):
-        create = client.post("/v1/graphs/ged/compute", json={
-            "algorithm": "ged_astar", "backend": "networkx",
-            "params": {"mode": "exact", "timeout_ms": 5000},
-            "graphs": [{"id": "pair-1", "g1": {"nodes": [{"id": "A"}, {"id": "B"}], "edges": [{"source": "A", "target": "B"}]}, "g2": {"nodes": [{"id": "A"}, {"id": "B"}], "edges": [{"source": "A", "target": "B"}]}}],
-        })
-        assert create.status_code == 201
-        result_id = create.json()["id"]
-
-        get = client.get(f"/v1/graphs/ged/{result_id}")
-        assert get.status_code == 200
-        assert get.json()["id"] == result_id
-
-        delete = client.delete(f"/v1/graphs/ged/{result_id}")
-        assert delete.status_code == 200
-        assert delete.json()["status"] == "deleted"
-
-    def test_get_nonexistent_returns_404(self):
-        assert client.get("/v1/graphs/ged/nonexistent").status_code == 404
+    pass

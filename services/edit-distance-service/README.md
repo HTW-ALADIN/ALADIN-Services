@@ -32,9 +32,7 @@ Unified microservice for text edit distance and graph edit distance (GED) algori
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/v1/graphs/ged/algorithms` | Discovery: list all GED combinations |
-| `POST` | `/v1/graphs/ged/compute` | Compute GED (synchronous, returns 201) |
-| `GET` | `/v1/graphs/ged/{resultId}` | Retrieve a stored result |
-| `DELETE` | `/v1/graphs/ged/{resultId}` | Release a stored result |
+| `POST` | `/v1/graphs/ged/compute` | Compute GED (synchronous, returns 201 with result inline) |
 
 ## Input Data Formats
 

@@ -161,5 +161,5 @@ Content-Type: application/json
   ]
 }
 
-### Get GED result by ID
-GET http://localhost:8000/v1/graphs/ged/ged_placeholder
+### NOTE: Results are returned inline by `POST /v1/graphs/ged/compute` and no separate
+### resource GET/DELETE endpoints are available.

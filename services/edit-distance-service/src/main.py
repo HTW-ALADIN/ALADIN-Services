@@ -171,6 +171,8 @@ async def ged_compute(request: dict[str, Any]) -> JSONResponse:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Computation error: {str(e)}")
 
+    # Build result object and return inline. No separate resource is created
+    # (GET/DELETE by result id are intentionally not exposed).
     result_id = f"ged_{uuid.uuid4().hex[:12]}"
     response = GedResultResponse(
         id=result_id,
@@ -179,44 +181,19 @@ async def ged_compute(request: dict[str, Any]) -> JSONResponse:
         backend=backend,
         params=params,
         results=results,
-        links={
-            "self": f"/v1/graphs/ged/{result_id}",
-        },
+        links={},
     )
 
-    # Store for retrieval
-    _ged_results[result_id] = response
-
-    # Always return 201 for simplicity (this is a synchronous implementation)
-    # In production, expensive computations would return 202
+    # Synchronous implementation: always return 201 with the result inline.
     return JSONResponse(
         status_code=201,
         content=response.model_dump(by_alias=True),
-        headers={"Location": f"/v1/graphs/ged/{result_id}"},
     )
 
 
-@app.get("/v1/graphs/ged/{result_id}")
-async def get_ged_result(result_id: str, include: Optional[str] = None):
-    """Retrieve a previously computed GED result."""
-    result = _ged_results.get(result_id)
-    if not result:
-        raise HTTPException(status_code=404, detail=f"Result {result_id} not found")
-
-    data = result.model_dump()
-    if include == "nodeMap" and result.results:
-        # Include full node maps if available
-        pass
-    return data
-
-
-@app.delete("/v1/graphs/ged/{result_id}")
-async def delete_ged_result(result_id: str):
-    """Release a stored GED result resource."""
-    if result_id in _ged_results:
-        del _ged_results[result_id]
-        return {"status": "deleted", "id": result_id}
-    raise HTTPException(status_code=404, detail=f"Result {result_id} not found")
+# Note: GET/DELETE by result id have been removed. Results are returned
+# inline by `POST /v1/graphs/ged/compute` and not stored as retrievable
+# server-side resources.
 
 
 # ─── Health Check ─────────────────────────────────────────────────────────────
