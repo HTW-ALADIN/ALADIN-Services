@@ -7,7 +7,6 @@ async fn test_perlin_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "perlin",
-            "backend": "fastnoise_lite",
             "params": {},
             "sampling": {
                 "mode": "grid",
@@ -32,7 +31,6 @@ async fn test_simplex_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "simplex",
-            "backend": "noise_rs",
             "params": {},
             "sampling": {
                 "mode": "grid",
@@ -68,7 +66,6 @@ async fn test_opensimplex2_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "opensimplex2",
-            "backend": "fastnoise_lite",
             "params": {},
             "sampling": {
                 "mode": "grid",
@@ -99,7 +96,6 @@ async fn test_supersimplex_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "supersimplex",
-            "backend": "noise_rs",
             "params": {},
             "sampling": {
                 "mode": "grid",
@@ -130,7 +126,6 @@ async fn test_value_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "value",
-            "backend": "fastnoise_lite",
             "params": {},
             "sampling": {
                 "mode": "grid",
@@ -161,7 +156,6 @@ async fn test_cellular_parameters() {
     let resp1 = client.post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "cellular",
-            "backend": "fastnoise_lite",
             "params": {"distance_function": "euclidean", "return_type": "cell_value", "jitter": 0.45},
             "sampling": {"mode": "grid", "dimensions": 2, "size": [5, 5]},
             "output": {"format": "json", "normalize": "none"}
@@ -173,7 +167,6 @@ async fn test_cellular_parameters() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "cellular",
-            "backend": "fastnoise_lite",
             "params": {"distance_function": "manhattan", "return_type": "distance", "jitter": 0.9},
             "sampling": {"mode": "grid", "dimensions": 2, "size": [5, 5]},
             "output": {"format": "json", "normalize": "none"}
@@ -195,7 +188,6 @@ async fn test_fbm_seed_parameter() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "fbm",
-            "backend": "fastnoise_lite",
             "params": params1,
             "sampling": {"mode": "grid", "dimensions": 2, "size": [20, 20]},
             "output": {"format": "json", "normalize": "none"}
@@ -212,7 +204,6 @@ async fn test_fbm_seed_parameter() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "fbm",
-            "backend": "fastnoise_lite",
             "params": params2,
             "sampling": {"mode": "grid", "dimensions": 2, "size": [20, 20]},
             "output": {"format": "json", "normalize": "none"}
@@ -245,7 +236,6 @@ async fn test_billow_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "billow",
-            "backend": "noise_rs",
             "params": {"seed": 1, "octaves": 3, "persistence": 0.5},
             "sampling": {
                 "mode": "grid",
@@ -271,7 +261,6 @@ async fn test_ridged_multi_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "ridged_multi",
-            "backend": "fastnoise_lite",
             "params": {"seed": 1, "octaves": 3, "lacunarity": 2.0, "gain": 0.5},
             "sampling": {
                 "mode": "grid",
@@ -297,7 +286,6 @@ async fn test_hybrid_multi_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "hybrid_multi",
-            "backend": "noise_rs",
             "params": {"seed": 1, "octaves": 3, "persistence": 0.5},
             "sampling": {
                 "mode": "grid",
@@ -323,7 +311,6 @@ async fn test_pingpong_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "pingpong",
-            "backend": "fastnoise_lite",
             "params": {"seed": 1, "strength": 2.0},
             "sampling": {
                 "mode": "grid",
@@ -349,7 +336,6 @@ async fn test_domain_warp_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "domain_warp",
-            "backend": "fastnoise_lite",
             "params": {"seed": 1, "warp_type": "open_simplex2", "amplitude": 30.0},
             "sampling": {
                 "mode": "grid",
@@ -375,7 +361,6 @@ async fn test_combinator_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "combinator",
-            "backend": "noise_rs",
             "params": {"op": "add"},
             "sampling": {
                 "mode": "grid",
@@ -406,7 +391,6 @@ async fn test_utility_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "utility",
-            "backend": "noise_rs",
             "params": {"kind": "constant", "value": 0.5},
             "sampling": {
                 "mode": "grid",
@@ -492,7 +476,6 @@ async fn test_performance_medium_grid() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "perlin",
-            "backend": "fastnoise_lite",
             "params": {"seed": 42},
             "sampling": {
                 "mode": "2d",
@@ -530,7 +513,6 @@ async fn test_performance_large_grid() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "perlin",
-            "backend": "fastnoise_lite",
             "params": {"seed": 42},
             "sampling": {
                 "mode": "2d",

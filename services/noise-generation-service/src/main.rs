@@ -68,17 +68,15 @@ async fn start_server(bind_addr: String) {
 
 async fn handle_list_command(format: String) {
     let algorithms = lib::list_algorithms().await;
-    let data: Vec<serde_json::Value> = serde_json::from_value(algorithms.0).unwrap();
+    let data: Vec<String> = serde_json::from_value(algorithms.0).unwrap();
     match format.as_str() {
         "table" => {
-            println!("{:<20} {:<20}", "Algorithm", "Backend");
-            println!("{:-<20} {:-<20}", "", "");
-            for entry in &data {
-                let alg = entry["algorithm"].as_str().unwrap_or("");
-                let backend = entry["backend"].as_str().unwrap_or("");
-                println!("{:<20} {:<20}", alg, backend);
+            println!("{:<20}", "Algorithm");
+            println!("{:-<20}", "");
+            for alg in &data {
+                println!("{:<20}", alg);
             }
-            println!("\nTotal: {} algorithm/backend combinations", data.len());
+            println!("\nTotal: {} algorithms", data.len());
         }
         _ => {
             println!("{}", serde_json::to_string_pretty(&data).unwrap());
@@ -115,88 +113,74 @@ async fn handle_generate_command(args: GenerateArgs) {
 
     let sampling = build_sampling(args.width, args.height);
 
-    // Build the request — supports all 14 algorithm families
+    // Build the request — supports all 15 algorithm families
     let request = match args.algorithm.as_str() {
         "perlin" => GenerateNoiseRequest::Perlin {
-            backend: args.backend,
             params: parse_typed_params::<lib::SeedParams>(args.params),
             sampling,
             output: None,
         },
         "simplex" => GenerateNoiseRequest::Simplex {
-            backend: args.backend,
             params: parse_typed_params::<lib::SeedParams>(args.params),
             sampling,
             output: None,
         },
         "opensimplex2" => GenerateNoiseRequest::OpenSimplex2 {
-            backend: args.backend,
             params: parse_typed_params::<lib::SeedParams>(args.params),
             sampling,
             output: None,
         },
         "supersimplex" => GenerateNoiseRequest::SuperSimplex {
-            backend: args.backend,
             params: parse_typed_params::<lib::SeedParams>(args.params),
             sampling,
             output: None,
         },
         "value" => GenerateNoiseRequest::Value {
-            backend: args.backend,
             params: parse_typed_params::<lib::SeedParams>(args.params),
             sampling,
             output: None,
         },
         "cellular" => GenerateNoiseRequest::Cellular {
-            backend: args.backend,
             params: parse_typed_params::<lib::CellularParams>(args.params),
             sampling,
             output: None,
         },
         "fbm" => GenerateNoiseRequest::Fbm {
-            backend: args.backend,
             params: parse_typed_params::<lib::FractalParams>(args.params),
             sampling,
             output: None,
         },
         "billow" => GenerateNoiseRequest::Billow {
-            backend: args.backend,
             params: parse_typed_params::<lib::FractalParams>(args.params),
             sampling,
             output: None,
         },
         "ridged_multi" => GenerateNoiseRequest::RidgedMulti {
-            backend: args.backend,
             params: parse_typed_params::<lib::RidgedMultiParams>(args.params),
             sampling,
             output: None,
         },
         "hybrid_multi" => GenerateNoiseRequest::HybridMulti {
-            backend: args.backend,
             params: parse_typed_params::<lib::RidgedMultiParams>(args.params),
             sampling,
             output: None,
         },
         "pingpong" => GenerateNoiseRequest::PingPong {
-            backend: args.backend,
             params: parse_typed_params::<lib::PingPongParams>(args.params),
             sampling,
             output: None,
         },
         "domain_warp" => GenerateNoiseRequest::DomainWarp {
-            backend: args.backend,
             params: parse_typed_params::<lib::DomainWarpParams>(args.params),
             sampling,
             output: None,
         },
         "combinator" => GenerateNoiseRequest::Combinator {
-            backend: args.backend,
             params: parse_typed_params::<lib::CombinatorParams>(args.params),
             sampling,
             output: None,
         },
         "utility" => GenerateNoiseRequest::Utility {
-            backend: args.backend,
             params: parse_typed_params::<lib::UtilityParams>(args.params),
             sampling,
             output: None,

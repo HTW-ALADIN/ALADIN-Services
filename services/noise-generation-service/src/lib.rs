@@ -5,7 +5,7 @@ use axum::{http::StatusCode, Json};
 use fastnoise_lite::FastNoiseLite;
 use noise::{
     Add, Blend, Constant, Cylinders, HybridMulti, Max, Min, MultiFractal, Multiply, NoiseFn,
-    OpenSimplex, Perlin, Simplex, SuperSimplex, Value, Worley,
+    Perlin, Simplex, SuperSimplex,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
@@ -127,7 +127,6 @@ impl Default for UtilityKind {
             Sampling,
             Output,
             NoiseFieldResult,
-            AlgorithmEntry,
             SeedParams,
             CellularParams,
             CellularDistanceFunction,
@@ -280,12 +279,6 @@ pub struct NoiseFieldResult {
     pub size: Vec<usize>,
 }
 
-#[derive(Serialize, Debug, ToSchema)]
-pub struct AlgorithmEntry {
-    pub algorithm: String,
-    pub backend: String,
-}
-
 #[utoipa::path(
     get,
     path = "/v1/algorithms",
@@ -395,32 +388,17 @@ pub async fn generate_noise(
     let mut field = vec![vec![0.0; size[0]]; size[1]];
 
     match &payload {
-        GenerateNoiseRequest::Perlin {
-            backend, params, ..
-        } => {
-            let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+        GenerateNoiseRequest::Perlin { params, .. } => {
             let seed = params.seed.unwrap_or(1) as i32;
-            if backend == "fastnoise_lite" {
-                let mut noise = FastNoiseLite::with_seed(seed);
-                noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
-                for y in 0..size[1] {
-                    for x in 0..size[0] {
-                        field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
-                    }
-                }
-            } else {
-                let perlin = Perlin::new(seed as u32);
-                for y in 0..size[1] {
-                    for x in 0..size[0] {
-                        field[y][x] = perlin.get([x as f64 * 0.1, y as f64 * 0.1, 0.0]);
-                    }
+            let mut noise = FastNoiseLite::with_seed(seed);
+            noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
                 }
             }
         }
-        GenerateNoiseRequest::Simplex {
-            backend, params, ..
-        } => {
-            let _backend = backend.as_deref().unwrap_or("noise_rs");
+        GenerateNoiseRequest::Simplex { params, .. } => {
             let seed = params.seed.unwrap_or(1) as u32;
             let simplex = Simplex::new(seed);
             for y in 0..size[1] {
@@ -429,31 +407,17 @@ pub async fn generate_noise(
                 }
             }
         }
-        GenerateNoiseRequest::OpenSimplex2 {
-            backend, params, ..
-        } => {
-            let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+        GenerateNoiseRequest::OpenSimplex2 { params, .. } => {
             let seed = params.seed.unwrap_or(1) as i32;
-            if backend == "fastnoise_lite" {
-                let mut noise = FastNoiseLite::with_seed(seed);
-                noise.set_noise_type(Some(fastnoise_lite::NoiseType::OpenSimplex2));
-                for y in 0..size[1] {
-                    for x in 0..size[0] {
-                        field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
-                    }
-                }
-            } else {
-                let opensimplex = OpenSimplex::new(seed as u32);
-                for y in 0..size[1] {
-                    for x in 0..size[0] {
-                        field[y][x] = opensimplex.get([x as f64 * 0.1, y as f64 * 0.1]);
-                    }
+            let mut noise = FastNoiseLite::with_seed(seed);
+            noise.set_noise_type(Some(fastnoise_lite::NoiseType::OpenSimplex2));
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
                 }
             }
         }
-        GenerateNoiseRequest::SuperSimplex {
-            backend: _, params, ..
-        } => {
+        GenerateNoiseRequest::SuperSimplex { params, .. } => {
             let seed = params.seed.unwrap_or(1) as u32;
             let supersimplex = SuperSimplex::new(seed);
             for y in 0..size[1] {
@@ -462,97 +426,71 @@ pub async fn generate_noise(
                 }
             }
         }
-        GenerateNoiseRequest::Value {
-            backend, params, ..
-        } => {
-            let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+        GenerateNoiseRequest::Value { params, .. } => {
             let seed = params.seed.unwrap_or(1) as i32;
-            if backend == "fastnoise_lite" {
-                let mut noise = FastNoiseLite::with_seed(seed);
-                noise.set_noise_type(Some(fastnoise_lite::NoiseType::Value));
-                for y in 0..size[1] {
-                    for x in 0..size[0] {
-                        field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
-                    }
-                }
-            } else {
-                let value = Value::new(seed as u32);
-                for y in 0..size[1] {
-                    for x in 0..size[0] {
-                        field[y][x] = value.get([x as f64 * 0.1, y as f64 * 0.1]);
-                    }
+            let mut noise = FastNoiseLite::with_seed(seed);
+            noise.set_noise_type(Some(fastnoise_lite::NoiseType::Value));
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
                 }
             }
         }
-        GenerateNoiseRequest::Cellular {
-            backend, params, ..
-        } => {
-            let backend = backend.as_deref().unwrap_or("fastnoise_lite");
+        GenerateNoiseRequest::Cellular { params, .. } => {
             let seed = params.seed.unwrap_or(1) as i32;
-            if backend == "fastnoise_lite" {
-                let mut noise = FastNoiseLite::with_seed(seed);
-                noise.set_noise_type(Some(fastnoise_lite::NoiseType::Cellular));
-                if let Some(dist_fn) = &params.distance_function {
-                    noise.set_cellular_distance_function(Some(match dist_fn {
-                        CellularDistanceFunction::Euclidean => {
-                            fastnoise_lite::CellularDistanceFunction::Euclidean
-                        }
-                        CellularDistanceFunction::EuclideanSq => {
-                            fastnoise_lite::CellularDistanceFunction::EuclideanSq
-                        }
-                        CellularDistanceFunction::Manhattan => {
-                            fastnoise_lite::CellularDistanceFunction::Manhattan
-                        }
-                        CellularDistanceFunction::Hybrid => {
-                            fastnoise_lite::CellularDistanceFunction::Hybrid
-                        }
-                    }));
-                }
-                if let Some(ret_type) = &params.return_type {
-                    noise.set_cellular_return_type(Some(match ret_type {
-                        CellularReturnType::CellValue => {
-                            fastnoise_lite::CellularReturnType::CellValue
-                        }
-                        CellularReturnType::Distance => {
-                            fastnoise_lite::CellularReturnType::Distance
-                        }
-                        CellularReturnType::Distance2 => {
-                            fastnoise_lite::CellularReturnType::Distance2
-                        }
-                        CellularReturnType::Distance2Add => {
-                            fastnoise_lite::CellularReturnType::Distance2Add
-                        }
-                        CellularReturnType::Distance2Sub => {
-                            fastnoise_lite::CellularReturnType::Distance2Sub
-                        }
-                        CellularReturnType::Distance2Mul => {
-                            fastnoise_lite::CellularReturnType::Distance2Mul
-                        }
-                        CellularReturnType::Distance2Div => {
-                            fastnoise_lite::CellularReturnType::Distance2Div
-                        }
-                    }));
-                }
-                if let Some(jitter) = params.jitter {
-                    noise.set_cellular_jitter(Some(jitter as f32));
-                }
-                for y in 0..size[1] {
-                    for x in 0..size[0] {
-                        field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
+            let mut noise = FastNoiseLite::with_seed(seed);
+            noise.set_noise_type(Some(fastnoise_lite::NoiseType::Cellular));
+            if let Some(dist_fn) = &params.distance_function {
+                noise.set_cellular_distance_function(Some(match dist_fn {
+                    CellularDistanceFunction::Euclidean => {
+                        fastnoise_lite::CellularDistanceFunction::Euclidean
                     }
-                }
-            } else {
-                let worley = Worley::new(seed as u32);
-                for y in 0..size[1] {
-                    for x in 0..size[0] {
-                        field[y][x] = worley.get([x as f64 * 0.1, y as f64 * 0.1]);
+                    CellularDistanceFunction::EuclideanSq => {
+                        fastnoise_lite::CellularDistanceFunction::EuclideanSq
                     }
+                    CellularDistanceFunction::Manhattan => {
+                        fastnoise_lite::CellularDistanceFunction::Manhattan
+                    }
+                    CellularDistanceFunction::Hybrid => {
+                        fastnoise_lite::CellularDistanceFunction::Hybrid
+                    }
+                }));
+            }
+            if let Some(ret_type) = &params.return_type {
+                noise.set_cellular_return_type(Some(match ret_type {
+                    CellularReturnType::CellValue => {
+                        fastnoise_lite::CellularReturnType::CellValue
+                    }
+                    CellularReturnType::Distance => {
+                        fastnoise_lite::CellularReturnType::Distance
+                    }
+                    CellularReturnType::Distance2 => {
+                        fastnoise_lite::CellularReturnType::Distance2
+                    }
+                    CellularReturnType::Distance2Add => {
+                        fastnoise_lite::CellularReturnType::Distance2Add
+                    }
+                    CellularReturnType::Distance2Sub => {
+                        fastnoise_lite::CellularReturnType::Distance2Sub
+                    }
+                    CellularReturnType::Distance2Mul => {
+                        fastnoise_lite::CellularReturnType::Distance2Mul
+                    }
+                    CellularReturnType::Distance2Div => {
+                        fastnoise_lite::CellularReturnType::Distance2Div
+                    }
+                }));
+            }
+            if let Some(jitter) = params.jitter {
+                noise.set_cellular_jitter(Some(jitter as f32));
+            }
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
                 }
             }
         }
-        GenerateNoiseRequest::Fbm {
-            backend: _, params, ..
-        } => {
+        GenerateNoiseRequest::Fbm { params, .. } => {
             let seed = params.seed.unwrap_or(1) as u32;
             let octaves = params.octaves.unwrap_or(4);
             let frequency = params.frequency.unwrap_or(0.1);
@@ -571,9 +509,7 @@ pub async fn generate_noise(
                 }
             }
         }
-        GenerateNoiseRequest::Billow {
-            backend: _, params, ..
-        } => {
+        GenerateNoiseRequest::Billow { params, .. } => {
             let seed = params.seed.unwrap_or(1) as u32;
             let octaves = params.octaves.unwrap_or(4);
             let frequency = params.frequency.unwrap_or(0.1);
@@ -592,34 +528,20 @@ pub async fn generate_noise(
                 }
             }
         }
-        GenerateNoiseRequest::RidgedMulti {
-            backend, params, ..
-        } => {
-            let backend = backend.as_deref().unwrap_or("noise_rs");
-            let seed = params.seed.unwrap_or(1) as i32;
-            if backend == "fastnoise_lite" {
-                let mut noise = FastNoiseLite::with_seed(seed);
-                noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
-                noise.set_fractal_type(Some(fastnoise_lite::FractalType::Ridged));
-                for y in 0..size[1] {
-                    for x in 0..size[0] {
-                        field[y][x] = noise.get_noise_2d(x as f32, y as f32) as f64;
-                    }
-                }
-            } else {
-                let octaves = params.octaves.unwrap_or(4);
-                let frequency = params.frequency.unwrap_or(0.1);
-                let lacunarity = params.lacunarity.unwrap_or(2.0);
+        GenerateNoiseRequest::RidgedMulti { params, .. } => {
+            let seed = params.seed.unwrap_or(1) as u32;
+            let octaves = params.octaves.unwrap_or(4);
+            let frequency = params.frequency.unwrap_or(0.1);
+            let lacunarity = params.lacunarity.unwrap_or(2.0);
 
-                let ridged = noise::RidgedMulti::<Perlin>::new(seed as u32)
-                    .set_octaves(octaves)
-                    .set_frequency(frequency)
-                    .set_lacunarity(lacunarity);
+            let ridged = noise::RidgedMulti::<Perlin>::new(seed)
+                .set_octaves(octaves)
+                .set_frequency(frequency)
+                .set_lacunarity(lacunarity);
 
-                for y in 0..size[1] {
-                    for x in 0..size[0] {
-                        field[y][x] = ridged.get([x as f64 * 0.1, y as f64 * 0.1]);
-                    }
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    field[y][x] = ridged.get([x as f64 * 0.1, y as f64 * 0.1]);
                 }
             }
         }
@@ -640,11 +562,7 @@ pub async fn generate_noise(
                 }
             }
         }
-        GenerateNoiseRequest::PingPong {
-            backend: _backend,
-            params,
-            ..
-        } => {
+        GenerateNoiseRequest::PingPong { params, .. } => {
             let seed = params.seed.unwrap_or(1) as i32;
             let strength = params.strength.unwrap_or(2.0);
 
@@ -754,3 +672,4 @@ pub async fn generate_noise(
         }),
     )
 }
+

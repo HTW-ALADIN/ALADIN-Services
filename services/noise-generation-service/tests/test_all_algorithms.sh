@@ -3,7 +3,7 @@
 # Smoke Tests for the Noise Generation Service
 #
 # Every test calls POST /v1/noise and validates the full JSON response,
-# which now includes: id, status, algorithm, data (full grid), and size.
+# which includes: id, status, algorithm, data (full grid), and size.
 # There are no separate GET endpoints anymore.
 # =============================================================================
 
@@ -14,9 +14,8 @@ PASS=0
 FAIL=0
 
 check_response() {
-    local test_name="$1"
-    local response="$2"
-    local expected_alg="$3"
+    local response="$1"
+    local expected_alg="$2"
 
     local alg
     alg=$(echo "$response" | jq -r '.algorithm')
@@ -66,18 +65,18 @@ run_test() {
         -H "Content-Type: application/json" \
         -d "$payload")
 
-    # Check HTTP error (e.g. connection refused)
+    # Check HTTP / JSON validity (e.g. server down or invalid payload)
     if echo "$response" | jq -e . >/dev/null 2>&1; then
-        if check_response "$test_name" "$response" "$expected_alg"; then
-            ((PASS++))
+        if check_response "$response" "$expected_alg"; then
+            PASS=$((PASS + 1))
         else
             echo "  Response: $(echo "$response" | jq -c '{id, algorithm, status, size}')"
-            ((FAIL++))
+            FAIL=$((FAIL + 1))
         fi
     else
-        echo "  ❌ FAIL: not valid JSON — is the server running?"
+        echo "  ❌ FAIL: invalid JSON — is the server running?"
         echo "  Response: $response"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
     fi
 }
 
@@ -88,57 +87,57 @@ echo "╚═══════════════════════�
 
 # ──────────── Core Noise Algorithms ────────────
 
-# Test 1: Perlin (fastnoise_lite backend)
-# Prüft: Grundlegende Perlin-Noise-Erzeugung mit dem Standard-Backend
+# Test 1: Perlin (fastnoise_lite)
+# Verifies basic Perlin noise generation using the default backend
 run_test \
     "Perlin (fastnoise_lite)" \
     "perlin" \
-    '{"algorithm":"perlin","backend":"fastnoise_lite","params":{"seed":42},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
+    '{"algorithm":"perlin","params":{"seed":42},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 2: Perlin (noise_rs backend)
-# Prüft: Perlin-Noise mit alternativem Backend → gleicher Algorithmus, andere Implementierung
+# Verifies Perlin noise with alternative backend -> same algorithm, different implementation
 run_test \
     "Perlin (noise_rs)" \
     "perlin" \
-    '{"algorithm":"perlin","backend":"noise_rs","params":{"seed":42},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
+    '{"algorithm":"perlin","params":{"seed":42},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 3: Simplex (noise_rs only)
-# Prüft: Simplex-Noise — verbesserte Rauschqualität bei geringerer Komplexität
+# Verifies Simplex noise — improved visual quality with reduced computational complexity
 run_test \
     "Simplex (noise_rs)" \
     "simplex" \
     '{"algorithm":"simplex","params":{"seed":123},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 4: OpenSimplex2 (fastnoise_lite)
-# Prüft: Modernere Variante mit besserer visueller Qualität
+# Verifies OpenSimplex2 — modern variant with better visual quality
 run_test \
     "OpenSimplex2 (fastnoise_lite)" \
     "opensimplex2" \
-    '{"algorithm":"opensimplex2","backend":"fastnoise_lite","params":{"seed":456},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
+    '{"algorithm":"opensimplex2","params":{"seed":456},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 5: OpenSimplex2 (noise_rs)
-# Prüft: OpenSimplex2 mit alternativem Backend
+# Verifies OpenSimplex2 with alternative backend
 run_test \
     "OpenSimplex2 (noise_rs)" \
     "opensimplex2" \
-    '{"algorithm":"opensimplex2","backend":"noise_rs","params":{"seed":456},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
+    '{"algorithm":"opensimplex2","params":{"seed":456},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 6: SuperSimplex (noise_rs only)
-# Prüft: Höherdimensionale Rauschvariante
+# Verifies SuperSimplex — higher-dimensional noise variant
 run_test \
     "SuperSimplex (noise_rs)" \
     "supersimplex" \
     '{"algorithm":"supersimplex","params":{"seed":789},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 7: Value noise (default backend)
-# Prüft: Gitterbasiertes Value-Noise mit kubischer Interpolation
+# Verifies grid-based Value noise with cubic interpolation
 run_test \
     "Value (fastnoise_lite)" \
     "value" \
     '{"algorithm":"value","params":{"seed":111},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 8: Cellular / Worley (fastnoise_lite)
-# Prüft: Zellbasierte Muster (Voronoi/Worley) — Default-Parameter
+# Verifies cell-based patterns (Voronoi/Worley) — default parameters
 run_test \
     "Cellular (fastnoise_lite)" \
     "cellular" \
@@ -147,35 +146,35 @@ run_test \
 # ──────────── Fractal Algorithms ────────────
 
 # Test 9: FBM (Fractal Brownian Motion)
-# Prüft: Mehr-oktaviges fraktales Rauschen mit Oktaven, Frequenz, Lückenhaftigkeit & Persistenz
+# Verifies multi-octave fractal noise with octaves, frequency, lacunarity & persistence
 run_test \
     "FBM (noise_rs)" \
     "fbm" \
     '{"algorithm":"fbm","params":{"seed":333,"octaves":4,"frequency":0.1,"lacunarity":2.0,"persistence":0.5},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 10: Billow (noise_rs only)
-# Prüft: Billow-Rauschen (Absolutwert von Perlin) — erzeugt weiche, wellenartige Strukturen
+# Verifies Billow noise (absolute value of Perlin) — produces soft, cloud-like structures
 run_test \
     "Billow (noise_rs)" \
     "billow" \
     '{"algorithm":"billow","params":{"seed":444,"octaves":3},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 11: Ridged Multi (fastnoise_lite)
-# Prüft: Rückenartige fraktale Muster mit scharfen Graten
+# Verifies ridge-like fractal patterns with sharp ridges
 run_test \
     "RidgedMulti (fastnoise_lite)" \
     "ridged_multi" \
     '{"algorithm":"ridged_multi","params":{"seed":555,"octaves":4},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 12: Hybrid Multi (noise_rs only)
-# Prüft: Hybrid-Multi-Fraktal-Rauschen — Kombination mehrerer Rauscharten
+# Verifies Hybrid Multi-fractal noise — combination of multiple noise types
 run_test \
     "HybridMulti (noise_rs)" \
     "hybrid_multi" \
     '{"algorithm":"hybrid_multi","params":{"seed":666,"octaves":4},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 13: PingPong (fastnoise_lite only)
-# Prüft: PingPong-Fraktal mit Spiegelungseffekt, gesteuert über "strength"-Parameter
+# Verifies PingPong fractal with folding effect controlled via "strength" parameter
 run_test \
     "PingPong (fastnoise_lite)" \
     "pingpong" \
@@ -184,28 +183,28 @@ run_test \
 # ──────────── Advanced Algorithms ────────────
 
 # Test 14: Domain Warp (fastnoise_lite only)
-# Prüft: Domain-Warping — Koordinatentransformation für organische Verzerrungseffekte
+# Verifies Domain Warping — coordinate transformation for organic distortion effects
 run_test \
     "Domain Warp (fastnoise_lite)" \
     "domain_warp" \
     '{"algorithm":"domain_warp","params":{"seed":888,"amplitude":1.5},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 15: Combinator (Add)
-# Prüft: Generische Kombinatoren — zwei Rauschquellen werden per "add" überlagert
+# Verifies generic combinators — combining two noise sources via "add"
 run_test \
     "Combinator (Add)" \
     "combinator" \
     '{"algorithm":"combinator","params":{"seed":999,"op":"add"},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 16: Utility (Constant)
-# Prüft: Deterministische Hilfsgeneratoren — konstanter Wert 0.5 im gesamten Feld
+# Verifies deterministic utility generators — constant value of 0.5 across the entire grid
 run_test \
     "Utility (Constant)" \
     "utility" \
     '{"algorithm":"utility","params":{"kind":"constant","value":0.5},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 17: White Noise (native)
-# Prüft: Native Weißes-Rauschen-Implementierung — rein zufällig, hash-basiert, kein Interpolationsgitter
+# Verifies native white noise implementation — pure hash-based randomness without interpolation grid
 run_test \
     "White Noise (native)" \
     "white" \
@@ -213,9 +212,9 @@ run_test \
 
 # ──────────── Response Validation Tests ────────────
 
-# Test 18: Prüft, ob die Antworts das vollständige Datenraster enthält
+# Test 18: Verifies that the response contains the full data grid
 echo ""
-echo "▸ Response-Format-Prüfung: Vollständiges Datenraster (4×4)"
+echo "▸ Response format check: Full data grid (4×4)"
 response=$(curl -s -X POST "$BASE_URL/v1/noise" \
     -H "Content-Type: application/json" \
     -d '{"algorithm":"perlin","params":{"seed":7},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}')
@@ -224,15 +223,15 @@ data_cols=$(echo "$response" | jq '.data[0] | length')
 size_field=$(echo "$response" | jq -c '.size')
 if [[ "$data_rows" -eq 4 && "$data_cols" -eq 4 && "$size_field" == "[4,4]" ]]; then
     echo "  ✅ PASS (data=${data_rows}×${data_cols}, size=${size_field})"
-    ((PASS++))
+    PASS=$((PASS + 1))
 else
     echo "  ❌ FAIL: expected 4×4 grid, got data=${data_rows}×${data_cols}, size=${size_field}"
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
 fi
 
-# Test 19: Prüft, ob unterschiedliche Seeds unterschiedliche Daten erzeugen
+# Test 19: Verifies that different seeds generate different data
 echo ""
-echo "▸ Deterministische Seed-Prüfung: Seed 1 ≠ Seed 2 (Perlin 4×4)"
+echo "▸ Deterministic seed check: Seed 1 ≠ Seed 2 (Perlin 4×4)"
 r1=$(curl -s -X POST "$BASE_URL/v1/noise" \
     -H "Content-Type: application/json" \
     -d '{"algorithm":"perlin","params":{"seed":1},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}' | jq -c '.data')
@@ -240,16 +239,16 @@ r2=$(curl -s -X POST "$BASE_URL/v1/noise" \
     -H "Content-Type: application/json" \
     -d '{"algorithm":"perlin","params":{"seed":2},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}' | jq -c '.data')
 if [[ "$r1" != "$r2" ]]; then
-    echo "  ✅ PASS (unterschiedliche Seeds → unterschiedliche Daten)"
-    ((PASS++))
+    echo "  ✅ PASS (different seeds -> different data)"
+    PASS=$((PASS + 1))
 else
-    echo "  ❌ FAIL: Seeds 1 und 2 erzeugen identische Daten"
-    ((FAIL++))
+    echo "  ❌ FAIL: Seeds 1 and 2 produced identical data"
+    FAIL=$((FAIL + 1))
 fi
 
-# Test 20: Prüft, ob derselbe Seed deterministisch dieselben Daten liefert
+# Test 20: Verifies that the same seed deterministically returns identical data
 echo ""
-echo "▸ Deterministische Reproduzierbarkeit: Gleicher Seed → gleiche Daten"
+echo "▸ Deterministic reproducibility check: Same seed -> same data"
 r1=$(curl -s -X POST "$BASE_URL/v1/noise" \
     -H "Content-Type: application/json" \
     -d '{"algorithm":"perlin","params":{"seed":42},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}' | jq -c '.data')
@@ -257,19 +256,19 @@ r2=$(curl -s -X POST "$BASE_URL/v1/noise" \
     -H "Content-Type: application/json" \
     -d '{"algorithm":"perlin","params":{"seed":42},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}' | jq -c '.data')
 if [[ "$r1" == "$r2" ]]; then
-    echo "  ✅ PASS (gleicher Seed → gleiche Daten)"
-    ((PASS++))
+    echo "  ✅ PASS (same seed -> same data)"
+    PASS=$((PASS + 1))
 else
-    echo "  ❌ FAIL: Gleicher Seed liefert unterschiedliche Daten"
-    ((FAIL++))
+    echo "  ❌ FAIL: Same seed produced different data"
+    FAIL=$((FAIL + 1))
 fi
 
 # ──────────── Performance Tests ────────────
 
-# Test 21: Performance — Mittelgroßes Gitter (256×256)
-# Prüft: Ob ein 256×256-Raster in akzeptabler Zeit generiert werden kann
+# Test 21: Performance — Medium grid (256×256)
+# Verifies if a 256×256 grid can be generated within acceptable time limits (< 10s)
 echo ""
-echo "▸ Performance-Test: Mittelgroßes Gitter 256×256"
+echo "▸ Performance test: Medium grid 256×256"
 start=$(date +%s%N)
 response=$(curl -s -X POST "$BASE_URL/v1/noise" \
     -H "Content-Type: application/json" \
@@ -280,16 +279,16 @@ data_rows=$(echo "$response" | jq '.data | length')
 data_cols=$(echo "$response" | jq '.data[0] | length')
 if [[ "$data_rows" -eq 256 && "$data_cols" -eq 256 && "$elapsed_ms" -lt 10000 ]]; then
     echo "  ✅ PASS (${data_rows}×${data_cols} in ${elapsed_ms}ms)"
-    ((PASS++))
+    PASS=$((PASS + 1))
 else
     echo "  ❌ FAIL: 256×256 grid — data=${data_rows}×${data_cols}, time=${elapsed_ms}ms"
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
 fi
 
-# Test 22: Performance — Großes Gitter (512×512)
-# Prüft: Ob ein 512×512-Raster generiert werden kann (ca. 2 MB JSON-Payload)
+# Test 22: Performance — Large grid (512×512)
+# Verifies if a 512×512 grid can be generated (~2 MB JSON payload, allowed up to 30s)
 echo ""
-echo "▸ Performance-Test: Großes Gitter 512×512 (ca. 2 MB JSON)"
+echo "▸ Performance test: Large grid 512×512 (~2 MB JSON)"
 start=$(date +%s%N)
 response=$(curl -s -X POST "$BASE_URL/v1/noise" \
     -H "Content-Type: application/json" \
@@ -298,13 +297,12 @@ end=$(date +%s%N)
 elapsed_ms=$(( (end - start) / 1000000 ))
 data_rows=$(echo "$response" | jq '.data | length')
 data_cols=$(echo "$response" | jq '.data[0] | length')
-# Für 512×512 erlauben wir bis zu 30 Sekunden
 if [[ "$data_rows" -eq 512 && "$data_cols" -eq 512 && "$elapsed_ms" -lt 30000 ]]; then
     echo "  ✅ PASS (${data_rows}×${data_cols} in ${elapsed_ms}ms)"
-    ((PASS++))
+    PASS=$((PASS + 1))
 else
     echo "  ❌ FAIL: 512×512 grid — data=${data_rows}×${data_cols}, time=${elapsed_ms}ms"
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
 fi
 
 # ──────────── Summary ────────────
