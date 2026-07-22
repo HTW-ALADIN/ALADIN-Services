@@ -10,6 +10,111 @@ use noise::{
 use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
 
+#[derive(Serialize, Deserialize, Debug, Default, ToSchema)]
+pub struct SeedParams {
+    pub seed: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, ToSchema)]
+pub struct CellularParams {
+    pub seed: Option<u64>,
+    pub distance_function: Option<CellularDistanceFunction>,
+    pub return_type: Option<CellularReturnType>,
+    pub jitter: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CellularDistanceFunction {
+    Euclidean,
+    EuclideanSq,
+    Manhattan,
+    Hybrid,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CellularReturnType {
+    CellValue,
+    Distance,
+    Distance2,
+    Distance2Add,
+    Distance2Sub,
+    Distance2Mul,
+    Distance2Div,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, ToSchema)]
+pub struct FractalParams {
+    pub seed: Option<u64>,
+    pub octaves: Option<usize>,
+    pub frequency: Option<f64>,
+    pub lacunarity: Option<f64>,
+    pub persistence: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, ToSchema)]
+pub struct RidgedMultiParams {
+    pub seed: Option<u64>,
+    pub octaves: Option<usize>,
+    pub frequency: Option<f64>,
+    pub lacunarity: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, ToSchema)]
+pub struct PingPongParams {
+    pub seed: Option<u64>,
+    pub strength: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, ToSchema)]
+pub struct DomainWarpParams {
+    pub seed: Option<u64>,
+    pub amplitude: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, ToSchema)]
+pub struct CombinatorParams {
+    pub seed: Option<u64>,
+    pub op: Option<CombinatorOp>,
+    pub blend_factor: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CombinatorOp {
+    Add,
+    Multiply,
+    Min,
+    Max,
+    Blend,
+}
+
+impl Default for CombinatorOp {
+    fn default() -> Self {
+        Self::Add
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, ToSchema)]
+pub struct UtilityParams {
+    pub kind: Option<UtilityKind>,
+    pub value: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum UtilityKind {
+    Constant,
+    Cylinders,
+}
+
+impl Default for UtilityKind {
+    fn default() -> Self {
+        Self::Constant
+    }
+}
+
 #[derive(OpenApi)]
 #[openapi(
     paths(
@@ -22,7 +127,19 @@ use utoipa::{OpenApi, ToSchema};
             Sampling,
             Output,
             NoiseFieldResult,
-            AlgorithmEntry
+            AlgorithmEntry,
+            SeedParams,
+            CellularParams,
+            CellularDistanceFunction,
+            CellularReturnType,
+            FractalParams,
+            RidgedMultiParams,
+            PingPongParams,
+            DomainWarpParams,
+            CombinatorParams,
+            CombinatorOp,
+            UtilityParams,
+            UtilityKind
         )
     ),
     tags(
@@ -50,104 +167,119 @@ pub enum GenerateNoiseRequest {
     #[serde(rename = "perlin")]
     Perlin {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: SeedParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "simplex")]
     Simplex {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: SeedParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "opensimplex2")]
     OpenSimplex2 {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: SeedParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "supersimplex")]
     SuperSimplex {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: SeedParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "value")]
     Value {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: SeedParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "cellular")]
     Cellular {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: CellularParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "fbm")]
     Fbm {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: FractalParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "billow")]
     Billow {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: FractalParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "ridged_multi")]
     RidgedMulti {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: RidgedMultiParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "hybrid_multi")]
     HybridMulti {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: RidgedMultiParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "pingpong")]
     PingPong {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: PingPongParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "domain_warp")]
     DomainWarp {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: DomainWarpParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "combinator")]
     Combinator {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: CombinatorParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "utility")]
     Utility {
         backend: Option<String>,
-        params: serde_json::Value,
+        #[serde(default)]
+        params: UtilityParams,
         sampling: Sampling,
         output: Option<Output>,
     },
     #[serde(rename = "white")]
     White {
-        params: serde_json::Value,
+        #[serde(default)]
+        params: SeedParams,
         sampling: Sampling,
         output: Option<Output>,
     },
@@ -188,16 +320,13 @@ pub async fn list_algorithms() -> Json<serde_json::Value> {
         {"algorithm": "value", "backend": "noise_rs"},
         {"algorithm": "cellular", "backend": "fastnoise_lite"},
         {"algorithm": "cellular", "backend": "noise_rs"},
-        {"algorithm": "fbm", "backend": "fastnoise_lite"},
         {"algorithm": "fbm", "backend": "noise_rs"},
         {"algorithm": "billow", "backend": "noise_rs"},
         {"algorithm": "ridged_multi", "backend": "fastnoise_lite"},
         {"algorithm": "ridged_multi", "backend": "noise_rs"},
         {"algorithm": "hybrid_multi", "backend": "noise_rs"},
         {"algorithm": "pingpong", "backend": "fastnoise_lite"},
-        {"algorithm": "pingpong", "backend": "noise_rs"},
         {"algorithm": "domain_warp", "backend": "fastnoise_lite"},
-        {"algorithm": "domain_warp", "backend": "noise_rs"},
         {"algorithm": "combinator", "backend": "noise_rs"},
         {"algorithm": "utility", "backend": "noise_rs"},
         {"algorithm": "white", "backend": "native"}
@@ -289,7 +418,7 @@ pub async fn generate_noise(
             backend, params, ..
         } => {
             let backend = backend.as_deref().unwrap_or("fastnoise_lite");
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
+            let seed = params.seed.unwrap_or(1) as i32;
             if backend == "fastnoise_lite" {
                 let mut noise = FastNoiseLite::with_seed(seed);
                 noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
@@ -311,7 +440,7 @@ pub async fn generate_noise(
             backend, params, ..
         } => {
             let _backend = backend.as_deref().unwrap_or("noise_rs");
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+            let seed = params.seed.unwrap_or(1) as u32;
             let simplex = Simplex::new(seed);
             for y in 0..size[1] {
                 for x in 0..size[0] {
@@ -323,7 +452,7 @@ pub async fn generate_noise(
             backend, params, ..
         } => {
             let backend = backend.as_deref().unwrap_or("fastnoise_lite");
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
+            let seed = params.seed.unwrap_or(1) as i32;
             if backend == "fastnoise_lite" {
                 let mut noise = FastNoiseLite::with_seed(seed);
                 noise.set_noise_type(Some(fastnoise_lite::NoiseType::OpenSimplex2));
@@ -344,7 +473,7 @@ pub async fn generate_noise(
         GenerateNoiseRequest::SuperSimplex {
             backend: _, params, ..
         } => {
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+            let seed = params.seed.unwrap_or(1) as u32;
             let supersimplex = SuperSimplex::new(seed);
             for y in 0..size[1] {
                 for x in 0..size[0] {
@@ -356,7 +485,7 @@ pub async fn generate_noise(
             backend, params, ..
         } => {
             let backend = backend.as_deref().unwrap_or("fastnoise_lite");
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
+            let seed = params.seed.unwrap_or(1) as i32;
             if backend == "fastnoise_lite" {
                 let mut noise = FastNoiseLite::with_seed(seed);
                 noise.set_noise_type(Some(fastnoise_lite::NoiseType::Value));
@@ -378,33 +507,52 @@ pub async fn generate_noise(
             backend, params, ..
         } => {
             let backend = backend.as_deref().unwrap_or("fastnoise_lite");
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
+            let seed = params.seed.unwrap_or(1) as i32;
             if backend == "fastnoise_lite" {
                 let mut noise = FastNoiseLite::with_seed(seed);
                 noise.set_noise_type(Some(fastnoise_lite::NoiseType::Cellular));
-                // Apply cellular-specific parameters
-                if let Some(dist_fn) = params.get("distance_function").and_then(|v| v.as_str()) {
+                if let Some(dist_fn) = &params.distance_function {
                     noise.set_cellular_distance_function(Some(match dist_fn {
-                        "euclidean" => fastnoise_lite::CellularDistanceFunction::Euclidean,
-                        "euclidean_sq" => fastnoise_lite::CellularDistanceFunction::EuclideanSq,
-                        "manhattan" => fastnoise_lite::CellularDistanceFunction::Manhattan,
-                        "hybrid" => fastnoise_lite::CellularDistanceFunction::Hybrid,
-                        _ => fastnoise_lite::CellularDistanceFunction::EuclideanSq,
+                        CellularDistanceFunction::Euclidean => {
+                            fastnoise_lite::CellularDistanceFunction::Euclidean
+                        }
+                        CellularDistanceFunction::EuclideanSq => {
+                            fastnoise_lite::CellularDistanceFunction::EuclideanSq
+                        }
+                        CellularDistanceFunction::Manhattan => {
+                            fastnoise_lite::CellularDistanceFunction::Manhattan
+                        }
+                        CellularDistanceFunction::Hybrid => {
+                            fastnoise_lite::CellularDistanceFunction::Hybrid
+                        }
                     }));
                 }
-                if let Some(ret_type) = params.get("return_type").and_then(|v| v.as_str()) {
+                if let Some(ret_type) = &params.return_type {
                     noise.set_cellular_return_type(Some(match ret_type {
-                        "cell_value" => fastnoise_lite::CellularReturnType::CellValue,
-                        "distance" => fastnoise_lite::CellularReturnType::Distance,
-                        "distance2" => fastnoise_lite::CellularReturnType::Distance2,
-                        "distance2add" => fastnoise_lite::CellularReturnType::Distance2Add,
-                        "distance2sub" => fastnoise_lite::CellularReturnType::Distance2Sub,
-                        "distance2mul" => fastnoise_lite::CellularReturnType::Distance2Mul,
-                        "distance2div" => fastnoise_lite::CellularReturnType::Distance2Div,
-                        _ => fastnoise_lite::CellularReturnType::CellValue,
+                        CellularReturnType::CellValue => {
+                            fastnoise_lite::CellularReturnType::CellValue
+                        }
+                        CellularReturnType::Distance => {
+                            fastnoise_lite::CellularReturnType::Distance
+                        }
+                        CellularReturnType::Distance2 => {
+                            fastnoise_lite::CellularReturnType::Distance2
+                        }
+                        CellularReturnType::Distance2Add => {
+                            fastnoise_lite::CellularReturnType::Distance2Add
+                        }
+                        CellularReturnType::Distance2Sub => {
+                            fastnoise_lite::CellularReturnType::Distance2Sub
+                        }
+                        CellularReturnType::Distance2Mul => {
+                            fastnoise_lite::CellularReturnType::Distance2Mul
+                        }
+                        CellularReturnType::Distance2Div => {
+                            fastnoise_lite::CellularReturnType::Distance2Div
+                        }
                     }));
                 }
-                if let Some(jitter) = params.get("jitter").and_then(|v| v.as_f64()) {
+                if let Some(jitter) = params.jitter {
                     noise.set_cellular_jitter(Some(jitter as f32));
                 }
                 for y in 0..size[1] {
@@ -424,20 +572,11 @@ pub async fn generate_noise(
         GenerateNoiseRequest::Fbm {
             backend: _, params, ..
         } => {
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
-            let octaves = params.get("octaves").and_then(|v| v.as_u64()).unwrap_or(4) as usize;
-            let frequency = params
-                .get("frequency")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.1);
-            let lacunarity = params
-                .get("lacunarity")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(2.0);
-            let persistence = params
-                .get("persistence")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.5);
+            let seed = params.seed.unwrap_or(1) as u32;
+            let octaves = params.octaves.unwrap_or(4);
+            let frequency = params.frequency.unwrap_or(0.1);
+            let lacunarity = params.lacunarity.unwrap_or(2.0);
+            let persistence = params.persistence.unwrap_or(0.5);
 
             let fbm = noise::Fbm::<Perlin>::new(seed)
                 .set_octaves(octaves)
@@ -454,20 +593,11 @@ pub async fn generate_noise(
         GenerateNoiseRequest::Billow {
             backend: _, params, ..
         } => {
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
-            let octaves = params.get("octaves").and_then(|v| v.as_u64()).unwrap_or(4) as usize;
-            let frequency = params
-                .get("frequency")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.1);
-            let lacunarity = params
-                .get("lacunarity")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(2.0);
-            let persistence = params
-                .get("persistence")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.5);
+            let seed = params.seed.unwrap_or(1) as u32;
+            let octaves = params.octaves.unwrap_or(4);
+            let frequency = params.frequency.unwrap_or(0.1);
+            let lacunarity = params.lacunarity.unwrap_or(2.0);
+            let persistence = params.persistence.unwrap_or(0.5);
 
             let billow = noise::Billow::<Perlin>::new(seed)
                 .set_octaves(octaves)
@@ -485,7 +615,7 @@ pub async fn generate_noise(
             backend, params, ..
         } => {
             let backend = backend.as_deref().unwrap_or("noise_rs");
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
+            let seed = params.seed.unwrap_or(1) as i32;
             if backend == "fastnoise_lite" {
                 let mut noise = FastNoiseLite::with_seed(seed);
                 noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
@@ -496,15 +626,9 @@ pub async fn generate_noise(
                     }
                 }
             } else {
-                let octaves = params.get("octaves").and_then(|v| v.as_u64()).unwrap_or(4) as usize;
-                let frequency = params
-                    .get("frequency")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.1);
-                let lacunarity = params
-                    .get("lacunarity")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(2.0);
+                let octaves = params.octaves.unwrap_or(4);
+                let frequency = params.frequency.unwrap_or(0.1);
+                let lacunarity = params.lacunarity.unwrap_or(2.0);
 
                 let ridged = noise::RidgedMulti::<Perlin>::new(seed as u32)
                     .set_octaves(octaves)
@@ -519,16 +643,10 @@ pub async fn generate_noise(
             }
         }
         GenerateNoiseRequest::HybridMulti { params, .. } => {
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
-            let octaves = params.get("octaves").and_then(|v| v.as_u64()).unwrap_or(4) as usize;
-            let frequency = params
-                .get("frequency")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.1);
-            let lacunarity = params
-                .get("lacunarity")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(2.0);
+            let seed = params.seed.unwrap_or(1) as u32;
+            let octaves = params.octaves.unwrap_or(4);
+            let frequency = params.frequency.unwrap_or(0.1);
+            let lacunarity = params.lacunarity.unwrap_or(2.0);
 
             let hybrid = HybridMulti::<Perlin>::new(seed)
                 .set_octaves(octaves)
@@ -546,11 +664,8 @@ pub async fn generate_noise(
             params,
             ..
         } => {
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
-            let strength = params
-                .get("strength")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(2.0);
+            let seed = params.seed.unwrap_or(1) as i32;
+            let strength = params.strength.unwrap_or(2.0);
 
             let mut noise = FastNoiseLite::with_seed(seed);
             noise.set_fractal_type(Some(fastnoise_lite::FractalType::PingPong));
@@ -564,11 +679,8 @@ pub async fn generate_noise(
             }
         }
         GenerateNoiseRequest::DomainWarp { params, .. } => {
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as i32;
-            let amplitude = params
-                .get("amplitude")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(1.0);
+            let seed = params.seed.unwrap_or(1) as i32;
+            let amplitude = params.amplitude.unwrap_or(1.0);
 
             let mut noise = FastNoiseLite::with_seed(seed);
             noise.set_domain_warp_type(Some(fastnoise_lite::DomainWarpType::OpenSimplex2));
@@ -588,8 +700,8 @@ pub async fn generate_noise(
             }
         }
         GenerateNoiseRequest::Combinator { params, .. } => {
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
-            let op = params.get("op").and_then(|v| v.as_str()).unwrap_or("add");
+            let seed = params.seed.unwrap_or(1) as u32;
+            let op = params.op.as_ref().unwrap_or(&CombinatorOp::Add);
 
             // Create two source noises for combination
             let source1 = Perlin::new(seed);
@@ -598,50 +710,40 @@ pub async fn generate_noise(
             for y in 0..size[1] {
                 for x in 0..size[0] {
                     let pos = [x as f64 * 0.1, y as f64 * 0.1];
-                    let val1 = source1.get(pos);
-                    let val2 = source2.get(pos);
 
                     field[y][x] = match op {
-                        "add" => Add::new(source1, source2).get(pos),
-                        "multiply" => Multiply::new(source1, source2).get(pos),
-                        "min" => Min::new(source1, source2).get(pos),
-                        "max" => Max::new(source1, source2).get(pos),
-                        "blend" => {
-                            let _blend_factor = params
-                                .get("blend_factor")
-                                .and_then(|v| v.as_f64())
-                                .unwrap_or(0.5);
+                        CombinatorOp::Add => Add::new(source1, source2).get(pos),
+                        CombinatorOp::Multiply => Multiply::new(source1, source2).get(pos),
+                        CombinatorOp::Min => Min::new(source1, source2).get(pos),
+                        CombinatorOp::Max => Max::new(source1, source2).get(pos),
+                        CombinatorOp::Blend => {
+                            let _blend_factor = params.blend_factor.unwrap_or(0.5);
                             let control = Perlin::new(seed + 2);
                             Blend::new(source1, source2, control).get(pos)
                         }
-                        _ => val1 + val2, // fallback to add
                     };
                 }
             }
         }
         GenerateNoiseRequest::Utility { params, .. } => {
-            let kind = params
-                .get("kind")
-                .and_then(|v| v.as_str())
-                .unwrap_or("constant");
+            let kind = params.kind.as_ref().unwrap_or(&UtilityKind::Constant);
 
             for y in 0..size[1] {
                 for x in 0..size[0] {
                     let pos = [x as f64 * 0.1, y as f64 * 0.1];
 
                     field[y][x] = match kind {
-                        "constant" => {
-                            let value = params.get("value").and_then(|v| v.as_f64()).unwrap_or(1.0);
+                        UtilityKind::Constant => {
+                            let value = params.value.unwrap_or(1.0);
                             Constant::new(value).get(pos)
                         }
-                        "cylinders" => Cylinders::new().get(pos),
-                        _ => 0.0, // fallback
+                        UtilityKind::Cylinders => Cylinders::new().get(pos),
                     };
                 }
             }
         }
         GenerateNoiseRequest::White { params, .. } => {
-            let seed = params.get("seed").and_then(|v| v.as_u64()).unwrap_or(1);
+            let seed = params.seed.unwrap_or(1);
 
             for y in 0..size[1] {
                 for x in 0..size[0] {

@@ -32,6 +32,99 @@ Unified REST API for multiple noise generation libraries and algorithms.
 - `POST /v1/noise` — Generate noise field and return the full result (including data grid)
 - `GET /api-docs/openapi.json` — OpenAPI specification
 
+### Concrete `params` Object Per Algorithm
+
+`params` is **not** an arbitrary JSON blob. Its shape depends on `algorithm`.
+All fields below are optional and use server-side defaults when omitted.
+
+`perlin`, `simplex`, `opensimplex2`, `supersimplex`, `value`, `white`
+```json
+{ "seed": 42 }
+```
+
+`cellular`
+```json
+{
+  "seed": 42,
+  "distance_function": "euclidean",   
+  "return_type": "cell_value",
+  "jitter": 0.45
+}
+```
+Allowed values:
+- `distance_function`: `euclidean`, `euclidean_sq`, `manhattan`, `hybrid`
+- `return_type`: `cell_value`, `distance`, `distance2`, `distance2_add`, `distance2_sub`, `distance2_mul`, `distance2_div`
+
+`fbm`, `billow`
+```json
+{
+  "seed": 42,
+  "octaves": 4,
+  "frequency": 0.1,
+  "lacunarity": 2.0,
+  "persistence": 0.5
+}
+```
+
+`ridged_multi`, `hybrid_multi`
+```json
+{
+  "seed": 42,
+  "octaves": 4,
+  "frequency": 0.1,
+  "lacunarity": 2.0
+}
+```
+
+`pingpong`
+```json
+{
+  "seed": 42,
+  "strength": 2.0
+}
+```
+
+`domain_warp`
+```json
+{
+  "seed": 42,
+  "amplitude": 1.0
+}
+```
+
+`combinator`
+```json
+{
+  "seed": 42,
+  "op": "add",
+  "blend_factor": 0.5
+}
+```
+Allowed values:
+- `op`: `add`, `multiply`, `min`, `max`, `blend`
+
+`utility`
+```json
+{
+  "kind": "constant",
+  "value": 1.0
+}
+```
+Allowed values:
+- `kind`: `constant`, `cylinders`
+
+Defaults used by the service if omitted:
+- `seed`: `1`
+- `octaves`: `4`
+- `frequency`: `0.1`
+- `lacunarity`: `2.0`
+- `persistence`: `0.5`
+- `strength`: `2.0`
+- `amplitude`: `1.0`
+- `op`: `add`
+- `kind`: `constant`
+- `value`: `1.0`
+
 ### Example Requests
 
 #### List Available Algorithms
@@ -142,7 +235,7 @@ curl -X POST http://localhost:8000/v1/noise \
 
 ## CLI Usage (Mirroring REST API)
 
-The service includes a **comprehensive CLI** that mirrors **all REST API functionality**.
+The service includes a CLI for local generation, API inspection, and server startup.
 
 ### List Available Algorithms
 ```bash
@@ -155,7 +248,7 @@ noise-generation-service list --format table
 
 ### Generate Noise Locally (all 14 algorithms)
 ```bash
-# Basic usage (seed defaults to 42 via --param)
+# Basic usage (if omitted, seed defaults to 1 in the service)
 noise-generation-service generate --algorithm perlin --width 64 --height 64
 
 # With custom parameters (all algorithms supported)
@@ -188,7 +281,7 @@ noise-generation-service generate \
 
 ### Start HTTP Server
 ```bash
-# Default (localhost:8000)
+# Default (0.0.0.0:8000)
 noise-generation-service server
 
 # Custom host/port
@@ -205,6 +298,9 @@ noise-generation-service openapi --output api-spec.json
 
 # JSON format (default)
 noise-generation-service openapi --format json
+
+# YAML output is also supported
+noise-generation-service openapi --format yaml
 ```
 
 ### CLI Help
@@ -240,6 +336,12 @@ make generate-openapi
 # OR
 cargo run -- openapi --output spec.json  # Via CLI
 ```
+
+> Important (utoipa schema registration): This service uses an explicit
+> `components(schemas(...))` list in `src/lib.rs`. If you add or change nested
+> request models (for example new `params` structs or enums used by
+> `GenerateNoiseRequest`), you must also add those types to that schema list.
+> Otherwise the generated OpenAPI can contain unresolved `$ref` entries.
 
 ## Technical Details
 
