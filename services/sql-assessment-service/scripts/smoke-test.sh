@@ -10,6 +10,8 @@
 #
 # PGlite path (no external DB needed):
 #   PGLITE_DB_ID          databaseId to use  (default: smoke-db)
+#   (also covers the grading endpoints — /api/grading/grade and
+#    /api/grading/compare/* now run against the in-process PGlite backend)
 #
 # Init-SQL-file feature (optional — tests the PGLITE_INIT_SQL_FILE / --init-sql-file feature):
 #   SMOKE_TEST_INIT_SQL   Set to '1' to enable (server must be started with PGLITE_INIT_SQL_FILE
@@ -231,6 +233,96 @@ INSERT INTO orders (product_id, quantity) VALUES (1, 5), (2, 3);'
         "${BASE_URL}/api/query/execute" \
         "$(jq -n --arg id "$PGLITE_DB_ID" \
             '{connectionInfo:{type:"pglite",databaseId:$id},query:"SELECT * FROM categories"}')"
+}
+
+# ---- PGlite grading tests --------------------------------------------------
+# Grading endpoints now run against the in-process PGlite backend (no external
+# PostgreSQL required).  These exercise /api/grading/grade and the three
+# /api/grading/compare/* endpoints end-to-end.
+
+pglite_grading_tests() {
+    echo ""
+    echo "── PGlite grading path (${BASE_URL}) ──────────────────────────────────"
+
+    local GRADE_DB_ID="smoke-grading-db"
+    local DDL
+    DDL='CREATE TABLE products (id SERIAL PRIMARY KEY, name TEXT NOT NULL, price NUMERIC(10,2));
+INSERT INTO products (name, price) VALUES ('\''Widget'\'', 9.99), ('\''Gadget'\'', 19.99), ('\''Gizmo'\'', 29.99);'
+
+    local REF='SELECT name FROM products WHERE price > 15 ORDER BY name'
+    local CORRECT='SELECT name FROM products WHERE price > 15 ORDER BY name'
+    local WRONG='SELECT name FROM products ORDER BY name'
+
+    # 1. Register the grading DB
+    post "grading — analyze-database (seed DDL)" "200" \
+        "${BASE_URL}/api/database/analyze-database" \
+        "$(jq -n --arg id "$GRADE_DB_ID" --arg sql "$DDL" \
+            '{connectionInfo:{type:"pglite",databaseId:$id,sqlContent:$sql}}')"
+
+    # 2. Full grade — identical query → equivalent:true, grade 7
+    post_body_contains "grading — grade identical query (equivalent)" "200" \
+        "${BASE_URL}/api/grading/grade" \
+        "$(jq -n --arg id "$GRADE_DB_ID" --arg ref "$REF" --arg stu "$CORRECT" \
+            '{connectionInfo:{type:"pglite",databaseId:$id},gradingRequest:{referenceQuery:$ref,studentQuery:$stu}}')" \
+        '"equivalent":true'
+
+    # 3. Full grade — wrong query → not equivalent
+    post_body_contains "grading — grade wrong query (not equivalent)" "200" \
+        "${BASE_URL}/api/grading/grade" \
+        "$(jq -n --arg id "$GRADE_DB_ID" --arg ref "$REF" --arg stu "$WRONG" \
+            '{connectionInfo:{type:"pglite",databaseId:$id},gradingRequest:{referenceQuery:$ref,studentQuery:$stu}}')" \
+        '"equivalent":false'
+
+    # 4. compare/result-set — matching sets → match:true
+    post_body_contains "grading — compare/result-set (match)" "200" \
+        "${BASE_URL}/api/grading/compare/result-set" \
+        "$(jq -n --arg id "$GRADE_DB_ID" --arg ref "$REF" --arg stu "$CORRECT" \
+            '{connectionInfo:{type:"pglite",databaseId:$id},referenceQuery:$ref,studentQuery:$stu}')" \
+        '"match":true'
+
+    # 5. compare/result-set — differing sets → match:false
+    post_body_contains "grading — compare/result-set (mismatch)" "200" \
+        "${BASE_URL}/api/grading/compare/result-set" \
+        "$(jq -n --arg id "$GRADE_DB_ID" --arg ref "$REF" --arg stu "$WRONG" \
+            '{connectionInfo:{type:"pglite",databaseId:$id},referenceQuery:$ref,studentQuery:$stu}')" \
+        '"match":false'
+
+    # 6. compare/ast — same column list → columnsMatch:true
+    post_body_contains "grading — compare/ast (columns match)" "200" \
+        "${BASE_URL}/api/grading/compare/ast" \
+        "$(jq -n --arg id "$GRADE_DB_ID" --arg ref "$REF" --arg stu "$CORRECT" \
+            '{connectionInfo:{type:"pglite",databaseId:$id},referenceQuery:$ref,studentQuery:$stu}')" \
+        '"columnsMatch":true'
+
+    # 7. compare/execution-plan — identical plans → plansMatch:true (proves EXPLAIN runs on PGlite)
+    post_body_contains "grading — compare/execution-plan (plans match)" "200" \
+        "${BASE_URL}/api/grading/compare/execution-plan" \
+        "$(jq -n --arg id "$GRADE_DB_ID" --arg ref "$REF" --arg stu "$CORRECT" \
+            '{connectionInfo:{type:"pglite",databaseId:$id},referenceQuery:$ref,studentQuery:$stu}')" \
+        '"plansMatch":true'
+
+    # 8. compare/execution-plan — differing WHERE → plansMatch:false
+    post_body_contains "grading — compare/execution-plan (plans differ)" "200" \
+        "${BASE_URL}/api/grading/compare/execution-plan" \
+        "$(jq -n --arg id "$GRADE_DB_ID" --arg ref "$REF" --arg stu "$WRONG" \
+            '{connectionInfo:{type:"pglite",databaseId:$id},referenceQuery:$ref,studentQuery:$stu}')" \
+        '"plansMatch":false'
+
+    # 9. The shared PGlite instance survives grading — a follow-up query still works
+    post "grading — DB still usable after grading (shared instance not closed)" "200" \
+        "${BASE_URL}/api/query/execute" \
+        "$(jq -n --arg id "$GRADE_DB_ID" \
+            '{connectionInfo:{type:"pglite",databaseId:$id},query:"SELECT COUNT(*) AS c FROM products"}')"
+
+    # 10. grade against an unregistered databaseId → 400 (only meaningful without init file)
+    if [[ -z "${SMOKE_TEST_INIT_SQL:-}" ]]; then
+        post "grading — grade unregistered databaseId (expect 400)" "400" \
+            "${BASE_URL}/api/grading/grade" \
+            "$(jq -n --arg ref "$REF" --arg stu "$CORRECT" \
+                '{connectionInfo:{type:"pglite",databaseId:"__not_registered_grading__"},gradingRequest:{referenceQuery:$ref,studentQuery:$stu}}')"
+    else
+        green "  SKIP  grading — unregistered databaseId (init-SQL-file auto-initialises any databaseId)"
+    fi
 }
 
 # ---- Init-SQL-file tests (optional) ---------------------------------------
@@ -460,6 +552,7 @@ done
 echo " OK"
 
 pglite_tests
+pglite_grading_tests
 pglite_init_sql_file_tests
 postgres_tests
 cli_tests

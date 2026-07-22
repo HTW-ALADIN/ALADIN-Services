@@ -1,5 +1,5 @@
-import { DataSource } from 'typeorm';
 import { AST, Join } from 'node-sql-parser';
+import { RowQueryFn } from '../../shared/utils/database-utils';
 import {
 	IParsedExecutionPlan,
 	ParsedSubplan,
@@ -60,27 +60,19 @@ export class ExecutionPlanComparator {
 		referenceAST: AST,
 		studentAliasMap: Record<string, string>,
 		referenceAliasMap: Record<string, string>,
-		dataSource: DataSource,
+		runQuery: RowQueryFn,
 		studentQuery: string,
 		referenceQuery: string,
 		lang: SupportedLanguage = 'en',
 	): Promise<ExecutionPlanComparisonResult> {
 		const executionPlan: ExecutionPlanFeedback = {};
 
-		const queryRunner = dataSource.createQueryRunner();
-		let studentRawPlan: any;
-		let referenceRawPlan: any;
-
-		try {
-			studentRawPlan = await queryRunner.query(
-				`EXPLAIN (FORMAT JSON) ${studentQuery}`,
-			);
-			referenceRawPlan = await queryRunner.query(
-				`EXPLAIN (FORMAT JSON) ${referenceQuery}`,
-			);
-		} finally {
-			await queryRunner.release();
-		}
+		const studentRawPlan = await runQuery(
+			`EXPLAIN (FORMAT JSON) ${studentQuery}`,
+		);
+		const referenceRawPlan = await runQuery(
+			`EXPLAIN (FORMAT JSON) ${referenceQuery}`,
+		);
 
 		if (!studentRawPlan || !referenceRawPlan) {
 			executionPlan.planRetrieval = {

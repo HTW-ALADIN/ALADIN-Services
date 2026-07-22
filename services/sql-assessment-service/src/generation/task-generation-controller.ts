@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { DataSource } from 'typeorm';
-import { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
 import {
+	ConnectionInfo,
 	GenerationOptions,
 	GptOptions,
 	IRequestTaskOptions,
@@ -95,7 +95,7 @@ export class TaskGenerationController {
 		res: Response,
 	): Promise<Response> {
 		let taskRequest: IRequestTaskOptions;
-		let connectionInfo: PostgresConnectionOptions;
+		let connectionInfo: ConnectionInfo;
 
 		try {
 			taskRequest = req.body;
@@ -131,9 +131,8 @@ export class TaskGenerationController {
 		// ---------------------------------------------------------------------
 
 		// ---- PGlite branch --------------------------------------------------
-		const connectionInfoAny = connectionInfo as any;
-		if (connectionInfoAny?.type === 'pglite') {
-			const { databaseId } = connectionInfoAny;
+		if (connectionInfo.type === 'pglite') {
+			const { databaseId } = connectionInfo;
 			if (!databaseId || typeof databaseId !== 'string') {
 				return res
 					.status(400)
