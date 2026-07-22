@@ -1,0 +1,26 @@
+@baseUrl = http://localhost:8003
+
+### Search OpenAlex + arXiv with dedup enabled
+POST {{baseUrl}}/v1/search
+Content-Type: application/json
+
+{
+  "query": { "title": "attention is all you need" },
+  "providers": ["openalex", "arxiv"],
+  "max_results": 10,
+  "per_provider_max": 5,
+  "credentials": {
+    "openalex": { "mailto": "team@example.org" }
+  },
+  "dedup": { "enabled": true, "strategy": "auto" }
+}
+
+### Search a provider that requires credentials, without supplying them
+### (expect per_provider.scopus.errors == ["missing_credentials"], not a request failure)
+POST {{baseUrl}}/v1/search
+Content-Type: application/json
+
+{
+  "query": { "text": "machine learning" },
+  "providers": ["scopus"]
+}
