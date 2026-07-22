@@ -1,6 +1,6 @@
 # Edit Distance Service
 
-Unified microservice for **text edit distance** and **graph edit distance (GED)** algorithms, following the same architecture as the `noise-generation-service`.
+Unified microservice for text edit distance and graph edit distance (GED) algorithms, following the same architecture as the `noise-generation-service`.
 
 ## Library Selection
 
@@ -40,9 +40,9 @@ Unified microservice for **text edit distance** and **graph edit distance (GED)*
 
 ### Text ED — `POST /v1/text/compare`
 
-Das Feld `inputs` akzeptiert ein **Array**. Du kannst entweder **ein einzelnes Paar** oder **mehrere Paare** auf einmal übergeben (Batching).
+The `inputs` field accepts an array. You may provide either a single pair or multiple pairs in one request (batching).
 
-#### Einfache Strings (Standard)
+#### Simple strings (default)
 
 ```json
 {
@@ -55,15 +55,15 @@ Das Feld `inputs` akzeptiert ein **Array**. Du kannst entweder **ein einzelnes P
 }
 ```
 
-| Feld | Typ | Beschreibung |
+| Field | Type | Description |
 |------|-----|-------------|
-| `id` | string | Beliebige ID zur Identifikation des Paares in der Response |
-| `a` | string | Erster Text |
-| `b` | string | Zweiter Text |
+| `id` | string | Arbitrary ID to identify the pair in the response |
+| `a` | string | First text |
+| `b` | string | Second text |
 
-#### Phonetic Encoding (abweichendes Format)
+#### Phonetic encoding (different format)
 
-Für `algorithm: "phonetic_encoding"` hat jedes Input-Objekt nur **ein** Feld `text` (kein Paar, da hier einzelne Wörter kodiert werden):
+For `algorithm: "phonetic_encoding"` each input object has only a single `text` field (not a pair, since individual words are encoded):
 
 ```json
 {
@@ -77,14 +77,14 @@ Für `algorithm: "phonetic_encoding"` hat jedes Input-Objekt nur **ein** Feld `t
 }
 ```
 
-| Feld | Typ | Beschreibung |
+| Field | Type | Description |
 |------|-----|-------------|
-| `id` | string | Beliebige ID |
-| `text` | string | Ein einzelner Text zur phonetischen Kodierung |
+| `id` | string | Arbitrary ID |
+| `text` | string | A single text to be phonetically encoded |
 
-#### Batch-Verarbeitung
+#### Batch processing
 
-Du kannst beliebig viele Paare in einem Request verarbeiten — der Service berechnet alle parallel (seriell, aber im gleichen Durchlauf):
+You can process any number of pairs in a single request — the service computes all entries in the same run:
 
 ```json
 {
@@ -101,9 +101,9 @@ Du kannst beliebig viele Paare in einem Request verarbeiten — der Service bere
 
 ### Graph ED — `POST /v1/graphs/ged/compute`
 
-Das Feld `graphs` akzeptiert ein **Array von Graph-Paaren**. Jeder Graph kann **inline** (mit `nodes`/`edges`) oder **als Referenz** (mit `graphRef`) angegeben werden.
+The `graphs` field accepts an array of graph pairs. Each graph can be provided inline (with `nodes`/`edges`) or by reference (with `graphRef`).
 
-#### Inline-Graphen (JSON-Struktur)
+#### Inline graphs (JSON structure)
 
 ```json
 {
@@ -136,25 +136,25 @@ Das Feld `graphs` akzeptiert ein **Array von Graph-Paaren**. Jeder Graph kann **
 }
 ```
 
-**Node-Format:**
+Node format:
 
-| Feld | Typ | Beschreibung |
+| Field | Type | Description |
 |------|-----|-------------|
-| `id` | string | **Pflicht.** Eindeutige Knoten-ID im Graphen |
-| `label` | string (optional) | Knotenlabel (wird beim Edit-Cost-Vergleich genutzt) |
-| `...` | any | Beliebige weitere Attribute |
+| `id` | string | Required. Unique node ID within the graph |
+| `label` | string (optional) | Node label (used for edit-cost comparisons) |
+| `...` | any | Any additional attributes |
 
-**Edge-Format:**
+Edge format:
 
-| Feld | Typ | Beschreibung |
+| Field | Type | Description |
 |------|-----|-------------|
-| `source` | string | **Pflicht.** ID des Quellknotens |
-| `target` | string | **Pflicht.** ID des Zielknotens |
-| `weight` | number (optional) | Kantengewicht |
-| `label` | string (optional) | Kantenlabel |
-| `...` | any | Beliebige weitere Attribute |
+| `source` | string | Required. Source node ID |
+| `target` | string | Required. Target node ID |
+| `weight` | number (optional) | Edge weight |
+| `label` | string (optional) | Edge label |
+| `...` | any | Any additional attributes |
 
-#### Graph per Referenz (für Service-Komposition)
+#### Graph by reference (for service composition)
 
 ```json
 {
@@ -171,11 +171,11 @@ Das Feld `graphs` akzeptiert ein **Array von Graph-Paaren**. Jeder Graph kann **
 }
 ```
 
-> **Hinweis**: Die `graphRef`-Auflösung ist für die Integration mit einem companion Graph-Generation-Service vorgesehen. Derzeit wird nur das **inline-Format** (nodes/edges) unterstützt.
+Note: `graphRef` resolution is intended for integration with a companion Graph-Generation service. Currently only the inline format (nodes/edges) is supported.
 
-#### Batch für Graphen
+#### Batch for graphs
 
-Auch hier können mehrere Paare auf einmal übergeben werden:
+Multiple pairs can also be submitted in one request:
 
 ```json
 {
@@ -189,7 +189,7 @@ Auch hier können mehrere Paare auf einmal übergeben werden:
 }
 ```
 
-### Output-Format (GED)
+### Output format (GED)
 
 ```json
 {
@@ -199,7 +199,7 @@ Auch hier können mehrere Paare auf einmal übergeben werden:
 }
 ```
 
-Mit `includeNodeMap: true` wird im Ergebnis der optimale Node-Mapping-Pfad zurückgegeben (unterstützt von NetworkX `mode: "path"` und GEDLIB).
+With `includeNodeMap: true` the response will include the optimal node-mapping path (supported by NetworkX `mode: "path"` and GEDLIB).
 
 ## Text Algorithms
 
@@ -455,7 +455,7 @@ The library set is derived from a **weighted maximum-coverage analysis** — a g
 
 **Text ED** (15 families):
 1. **textdistance** — 11 families, broadest coverage (Needleman-Wunsch, Gotoh, Smith-Waterman, token measures, NCD, LCS)
-2. **RapidFuzz** — adds OSA, highest quality weight (C++ core, optimal for hot path)
+2. **RapidFuzz** — adds OSA, highest-performance C++ core (optimal for hot paths)
 3. **jellyfish** — adds phonetic encoding (Soundex, Metaphone, NYSIIS)
 4. **edlib** — adds long-sequence banded alignment with CIGAR
 5. **diff-match-patch** — adds Myers diff/patch edit-script output
