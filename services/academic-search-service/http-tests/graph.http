@@ -1,0 +1,28 @@
+@baseUrl = http://localhost:8003
+
+### First call: resolve seeds (depth 0), returns a cursor for the next level
+POST {{baseUrl}}/v1/graph
+Content-Type: application/json
+
+{
+  "seeds": [
+    { "provider": "openalex", "paper_id": "10.48550/arXiv.1706.03762" }
+  ],
+  "direction": "both",
+  "max_depth": 2,
+  "max_nodes_per_level": 25,
+  "credentials": {
+    "openalex": { "mailto": "team@example.org" }
+  }
+}
+
+### Subsequent call: paste the `cursor` value from the previous response
+POST {{baseUrl}}/v1/graph
+Content-Type: application/json
+
+{
+  "cursor": "PASTE_CURSOR_HERE",
+  "credentials": {
+    "openalex": { "mailto": "team@example.org" }
+  }
+}
