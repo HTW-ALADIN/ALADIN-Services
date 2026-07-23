@@ -82,8 +82,13 @@ Default libraries are automatically assigned based on the selected algorithm.
   - `[width]` — 1D array
   - `[width, height]` — 2D grid (nested arrays)
   - `[width, height, depth]` — 3D volume (triple-nested arrays)
+  - `[width, height, depth, time]` — 4D hypervolume (4×-nested arrays)
 
-  Most algorithms support 2D and 3D. White noise additionally supports 1D.
+  **4D support** is available for noise-rs algorithms (simplex, fbm, billow,
+  ridged_multi, hybrid_multi, combinator, utility) and white noise.
+  FNL-based algorithms (perlin, opensimplex2, value, cellular, pingpong,
+  domain_warp) and supersimplex are limited to 2D/3D.
+  White noise additionally supports 1D.
   Requesting an unsupported dimension returns a 400 error with a descriptive message.
 
   **Response includes `params_used`**: Every successful response contains a
@@ -652,9 +657,9 @@ All rows use `POST /v1/noise` with the given `algorithm` tag; default libraries 
 | --- | --- | --- | --- |
 | `perlin` | Perlin noise | `fastnoise_lite` | `SetNoiseType(Perlin)` + `GetNoise(x, y[, z])` |
 | `simplex` | Simplex noise (classic) | `noise_rs` | `Simplex::new(seed).get(point)` |
-| `opensimplex2` | OpenSimplex2 / OpenSimplex2S | `fastnoise_lite` | `SetNoiseType(OpenSimplex2 | OpenSimplex2S)` + `GetNoise(x, y[, z])` (variant via `smooth` sub-field) |
+| `opensimplex2` | OpenSimplex2 / OpenSimplex2S | `fastnoise_lite` | `SetNoiseType(OpenSimplex2 | OpenSimplex2S)` + `GetNoise(x, y[, z])` |
 | `supersimplex` | SuperSimplex | `noise_rs` | `SuperSimplex::new(seed).get(point)` |
-| `value` | Value noise (+cubic) | `fastnoise_lite` | `SetNoiseType(Value | ValueCubic)` + `GetNoise(x, y[, z])` (variant via `interpolation` sub-field) |
+| `value` | Value noise (+cubic) | `fastnoise_lite` | `SetNoiseType(Value | ValueCubic)` + `GetNoise(x, y[, z])` |
 | `cellular` | Cellular / Worley / Voronoi | `fastnoise_lite` | `SetNoiseType(Cellular)`, `SetCellularDistanceFunction(...)`, `SetCellularReturnType(...)`, `SetCellularJitter(...)` + `GetNoise(x, y[, z])` |
 
 ### Fractal Algorithms
@@ -665,9 +670,9 @@ All rows use `POST /v1/noise` with the given `algorithm` tag; default libraries 
 | --- | --- | --- | --- |
 | `fbm` | Fractal Brownian Motion | `noise_rs` | `Fbm::<Source>::new(seed).set_octaves/lacunarity/persistence(...).get(point)` |
 | `billow` | Billow noise | `noise_rs` | `Billow::<Source>::new(seed).set_octaves/...(...).get(point)` |
-| `ridged_multi` | Ridged multifractal | `fastnoise_lite` | `SetFractalType(Ridged)` wraps a `source` sub-field |
+| `ridged_multi` | Ridged multifractal | `fastnoise_lite` | `SetFractalType(Ridged)`, `SetFrequency(...)`, `SetFractalOctaves(...)`, `SetFractalLacunarity(...)`, `SetFractalGain(...)` |
 | `hybrid_multi` | HybridMulti fractal | `noise_rs` | `HybridMulti::<Source>::new(seed).set_octaves/...(...).get(point)` |
-| `pingpong` | PingPong fractal | `fastnoise_lite` | `SetFractalType(PingPong)`, `SetFractalPingPongStrength(...)` wraps a `source` sub-field |
+| `pingpong` | PingPong fractal | `fastnoise_lite` | `SetFractalType(PingPong)`, `SetFractalPingPongStrength(...)` |
 
 ### Advanced Algorithms
 
@@ -676,7 +681,7 @@ All rows use `POST /v1/noise` with the given `algorithm` tag; default libraries 
 | `algorithm` tag | Canonical family | Default Library | Underlying function |
 | --- | --- | --- | --- |
 | `domain_warp` | Domain warping | `fastnoise_lite` | `SetDomainWarpType(...)`, `SetDomainWarpAmp(...)` + `DomainWarp2D/3D(x, y[, z])` |
-| `combinator` | Generic combinators | `noise_rs` | `Add`/`Multiply`/`Min`/`Max`/`Blend`/`Turbulence`/`ScalePoint` (selected via `op` sub-field, each wrapping 1–2 `source` sub-fields) |
+| `combinator` | Generic combinators | `noise_rs` | `Add`/`Multiply`/`Min`/`Max`/`Blend` (selected via `op` sub-field), each wrapping two Perlin sources with seeds `seed` and `seed+1` |
 | `utility` | Utility / deterministic generators | `noise_rs` | `Constant::new(value)` / `Cylinders::new()` (selected via `kind` sub-field) |
 
 ### Native White Noise

@@ -478,12 +478,32 @@ pub async fn generate_noise(
     let field_id = format!("nsf_{}", uuid::Uuid::new_v4());
 
     // Determine size and dimensionality from sampling
+    // Default 64x64 is a practical choice: large enough to show visible noise
+    // structures, small enough to keep response payload manageable (~32 KB for
+    // f64 values). This matches common examples in noise library documentation.
     let size = payload.sampling_size().unwrap_or_else(|| vec![64, 64]);
     let mode = match size.len() {
         1 => "1d",
         2 => "2d",
         3 => "3d",
-        _ => "2d",
+        4 => "4d",
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(NoiseFieldResult {
+                    id: field_id,
+                    status: format!(
+                        "error: algorithm '{}' does not support {}D sampling (only 1D-4D are supported)",
+                        algorithm_name,
+                        size.len()
+                    ),
+                    algorithm: algorithm_name,
+                    data: serde_json::Value::Null,
+                    size,
+                    params_used: serde_json::Value::Null,
+                }),
+            );
+        }
     };
 
     // Validate that the selected algorithm supports the requested dimension
@@ -572,13 +592,40 @@ impl GenerateNoiseRequest {
     }
 
     /// Returns `Err(msg)` if the algorithm does not support the requested dimension.
+    /// 
+    /// Dimension support per algorithm family:
+    /// - noise-rs: Simplex, Fbm, Billow, RidgedMulti, HybridMulti, Combinator, Utility:
+    ///   2D, 3D, **4D** via `NoiseFn<f64, 4>`
+    /// - noise-rs: SuperSimplex: 2D, 3D only (no 4D in noise crate)
+    /// - FNL: Perlin, OpenSimplex2, Value, Cellular, PingPong: 2D, 3D only
+    /// - DomainWarp: 2D, 3D only
+    /// - White noise: 1D, 2D, 3D, **4D**
+    /// - 5D+ is rejected for all algorithms.
     fn check_dimension_support(&self, mode: &str) -> Result<(), String> {
+        // 5D+ is not supported by any algorithm
+        if !matches!(mode, "1d" | "2d" | "3d" | "4d") {
+            return Err(format!(
+                "algorithm '{}' does not support {} sampling (only 1D-4D are supported)",
+                self.algorithm_name(),
+                mode
+            ));
+        }
         match self {
-            // noise-crate types (Simplex, SuperSimplex, Fbm, Billow, RidgedMulti, HybridMulti,
-            // Combinator, Utility): support 2D and 3D via NoiseFn<f64, 2> and NoiseFn<f64, 3>.
-            // The noise crate does NOT support 1D — we return an error for 1D.
+            // SuperSimplex: noise-rs but only 2D and 3D (no 4D impl in crate)
+            GenerateNoiseRequest::SuperSimplex { .. } => match mode {
+                "1d" => Err(format!(
+                    "algorithm '{}' does not support 1D sampling (noise-crate requires at least 2D)",
+                    self.algorithm_name()
+                )),
+                "4d" => Err(format!(
+                    "algorithm '{}' does not support 4D sampling (noise-crate SuperSimplex is limited to 2D/3D)",
+                    self.algorithm_name()
+                )),
+                _ => Ok(()),
+            },
+            // Other noise-crate types: support 2D, 3D, and 4D via NoiseFn<f64, 2/3/4>.
+            // The noise crate does NOT support 1D.
             GenerateNoiseRequest::Simplex { .. }
-            | GenerateNoiseRequest::SuperSimplex { .. }
             | GenerateNoiseRequest::Fbm { .. }
             | GenerateNoiseRequest::Billow { .. }
             | GenerateNoiseRequest::RidgedMulti { .. }
@@ -592,7 +639,7 @@ impl GenerateNoiseRequest {
                 _ => Ok(()),
             },
             // FastNoiseLite types (Perlin, OpenSimplex2, Value, Cellular, PingPong):
-            // support 2D and 3D via get_noise_2d/get_noise_3d. No 1D support in fnl either.
+            // support 2D and 3D via get_noise_2d/get_noise_3d. No 1D or 4D in fnl.
             GenerateNoiseRequest::Perlin { .. }
             | GenerateNoiseRequest::OpenSimplex2 { .. }
             | GenerateNoiseRequest::Value { .. }
@@ -600,6 +647,10 @@ impl GenerateNoiseRequest {
             | GenerateNoiseRequest::PingPong { .. } => match mode {
                 "1d" => Err(format!(
                     "algorithm '{}' does not support 1D sampling (fastnoise-lite requires at least 2D)",
+                    self.algorithm_name()
+                )),
+                "4d" => Err(format!(
+                    "algorithm '{}' does not support 4D sampling (fastnoise-lite is limited to 2D/3D)",
                     self.algorithm_name()
                 )),
                 _ => Ok(()),
@@ -610,9 +661,13 @@ impl GenerateNoiseRequest {
                     "algorithm '{}' does not support 1D sampling (domain warping requires at least 2D)",
                     self.algorithm_name()
                 )),
+                "4d" => Err(format!(
+                    "algorithm '{}' does not support 4D sampling (domain warping is limited to 2D/3D)",
+                    self.algorithm_name()
+                )),
                 _ => Ok(()),
             },
-            // White noise: supports all dimensions natively
+            // White noise: supports all dimensions natively (1D, 2D, 3D, 4D)
             GenerateNoiseRequest::White { .. } => Ok(()),
         }
     }
@@ -662,8 +717,8 @@ impl GenerateNoiseRequest {
 
 // ─── Macro: 2D/3D per-cell iteration for pixel-wise noise ──────────────
 
-/// Generates the 2D or 3D loop structure and calls `$f(pos)` for each cell,
-/// where `pos` is `[f64; 2]` or `[f64; 3]`. Shared by Combinator and
+/// Generates the 2D, 3D, or 4D loop structure and calls `$f(pos)` for each cell,
+/// where `pos` is `[f64; 2]`, `[f64; 3]`, or `[f64; 4]`. Shared by Combinator and
 /// Utility to avoid duplicating the nested loop code.
 macro_rules! fill_cell_loops {
     ($flat:expr, $size:expr, $mode:expr, $f:expr) => {
@@ -687,6 +742,23 @@ macro_rules! fill_cell_loops {
                         for x in 0..w {
                             $flat[idx] = $f([x as f64 * 0.1, y as f64 * 0.1, z as f64 * 0.1]);
                             idx += 1;
+                        }
+                    }
+                }
+            }
+            "4d" => {
+                let w = $size[0];
+                let h = $size[1];
+                let d = $size[2];
+                let t = $size[3];
+                let mut idx = 0;
+                for w4 in 0..t {
+                    for z in 0..d {
+                        for y in 0..h {
+                            for x in 0..w {
+                                $flat[idx] = $f([x as f64 * 0.1, y as f64 * 0.1, z as f64 * 0.1, w4 as f64 * 0.1]);
+                                idx += 1;
+                            }
                         }
                     }
                 }
@@ -799,6 +871,33 @@ impl ResolvedNoiseParams {
     }
 }
 
+// ─── Helper: resolve a seed-only params struct to resolved params ────────
+
+fn resolve_seed_only(params: &SeedParams) -> ResolvedNoiseParams {
+    ResolvedNoiseParams::SeedOnly {
+        seed: get_seed(params.seed),
+    }
+}
+
+// ─── Helper: resolve fractal params (shared by Fbm, Billow, RidgedMulti, HybridMulti) ─
+
+fn resolve_fractal(
+    seed: Option<u32>,
+    octaves: Option<usize>,
+    frequency: Option<f64>,
+    lacunarity: Option<f64>,
+    persistence: Option<f64>,
+    default_persistence: f64,
+) -> ResolvedNoiseParams {
+    ResolvedNoiseParams::Fractal {
+        seed: get_seed(seed),
+        octaves: octaves.unwrap_or(DEFAULT_OCTAVES),
+        frequency: frequency.unwrap_or(DEFAULT_FREQUENCY),
+        lacunarity: lacunarity.unwrap_or(DEFAULT_LACUNARITY),
+        persistence: persistence.unwrap_or(default_persistence),
+    }
+}
+
 /// Resolves optional request parameters into concrete values once.
 /// Uses the centralized `DEFAULT_*` constants for defaults.
 fn resolve_params(payload: &GenerateNoiseRequest) -> ResolvedNoiseParams {
@@ -808,9 +907,7 @@ fn resolve_params(payload: &GenerateNoiseRequest) -> ResolvedNoiseParams {
         | GenerateNoiseRequest::OpenSimplex2 { params, .. }
         | GenerateNoiseRequest::SuperSimplex { params, .. }
         | GenerateNoiseRequest::Value { params, .. }
-        | GenerateNoiseRequest::White { params, .. } => ResolvedNoiseParams::SeedOnly {
-            seed: get_seed(params.seed),
-        },
+        | GenerateNoiseRequest::White { params, .. } => resolve_seed_only(params),
         GenerateNoiseRequest::Cellular { params, .. } => ResolvedNoiseParams::Cellular {
             seed: get_seed(params.seed),
             distance_function: params
@@ -823,34 +920,26 @@ fn resolve_params(payload: &GenerateNoiseRequest) -> ResolvedNoiseParams {
                 .unwrap_or(CellularReturnType::CellValue),
             jitter: params.jitter.unwrap_or(DEFAULT_JITTER),
         },
-        GenerateNoiseRequest::Fbm { params, .. } => ResolvedNoiseParams::Fractal {
-            seed: get_seed(params.seed),
-            octaves: params.octaves.unwrap_or(DEFAULT_OCTAVES),
-            frequency: params.frequency.unwrap_or(DEFAULT_FREQUENCY),
-            lacunarity: params.lacunarity.unwrap_or(DEFAULT_LACUNARITY),
-            persistence: params.persistence.unwrap_or(DEFAULT_PERSISTENCE_FBM_BILLOW),
-        },
-        GenerateNoiseRequest::Billow { params, .. } => ResolvedNoiseParams::Fractal {
-            seed: get_seed(params.seed),
-            octaves: params.octaves.unwrap_or(DEFAULT_OCTAVES),
-            frequency: params.frequency.unwrap_or(DEFAULT_FREQUENCY),
-            lacunarity: params.lacunarity.unwrap_or(DEFAULT_LACUNARITY),
-            persistence: params.persistence.unwrap_or(DEFAULT_PERSISTENCE_FBM_BILLOW),
-        },
-        GenerateNoiseRequest::RidgedMulti { params, .. } => ResolvedNoiseParams::Fractal {
-            seed: get_seed(params.seed),
-            octaves: params.octaves.unwrap_or(DEFAULT_OCTAVES),
-            frequency: params.frequency.unwrap_or(DEFAULT_FREQUENCY),
-            lacunarity: params.lacunarity.unwrap_or(DEFAULT_LACUNARITY),
-            persistence: params.persistence.unwrap_or(DEFAULT_PERSISTENCE_RIDGED),
-        },
-        GenerateNoiseRequest::HybridMulti { params, .. } => ResolvedNoiseParams::Fractal {
-            seed: get_seed(params.seed),
-            octaves: params.octaves.unwrap_or(DEFAULT_OCTAVES),
-            frequency: params.frequency.unwrap_or(DEFAULT_FREQUENCY),
-            lacunarity: params.lacunarity.unwrap_or(DEFAULT_LACUNARITY),
-            persistence: params.persistence.unwrap_or(DEFAULT_PERSISTENCE_HYBRID),
-        },
+        GenerateNoiseRequest::Fbm { params, .. } => resolve_fractal(
+            params.seed, params.octaves, params.frequency,
+            params.lacunarity, params.persistence,
+            DEFAULT_PERSISTENCE_FBM_BILLOW,
+        ),
+        GenerateNoiseRequest::Billow { params, .. } => resolve_fractal(
+            params.seed, params.octaves, params.frequency,
+            params.lacunarity, params.persistence,
+            DEFAULT_PERSISTENCE_FBM_BILLOW,
+        ),
+        GenerateNoiseRequest::RidgedMulti { params, .. } => resolve_fractal(
+            params.seed, params.octaves, params.frequency,
+            params.lacunarity, params.persistence,
+            DEFAULT_PERSISTENCE_RIDGED,
+        ),
+        GenerateNoiseRequest::HybridMulti { params, .. } => resolve_fractal(
+            params.seed, params.octaves, params.frequency,
+            params.lacunarity, params.persistence,
+            DEFAULT_PERSISTENCE_HYBRID,
+        ),
         GenerateNoiseRequest::PingPong { params, .. } => ResolvedNoiseParams::PingPong {
             seed: get_seed(params.seed),
             strength: params.strength.unwrap_or(DEFAULT_STRENGTH),
@@ -967,7 +1056,7 @@ fn generate_flat(
         // ─── noise-crate algorithms (2D/3D) ───────────────────────────────────
         (GenerateNoiseRequest::Simplex { .. }, ResolvedNoiseParams::SeedOnly { seed }) => {
             let simplex = Simplex::new(*seed);
-            fill_noise_rs::<Simplex>(flat, size, mode, &simplex);
+            fill_noise_rs_4d::<Simplex>(flat, size, mode, &simplex);
         }
         (GenerateNoiseRequest::SuperSimplex { .. }, ResolvedNoiseParams::SeedOnly { seed }) => {
             let s = SuperSimplex::new(*seed);
@@ -989,7 +1078,7 @@ fn generate_flat(
                 .set_frequency(*frequency)
                 .set_lacunarity(*lacunarity)
                 .set_persistence(*persistence);
-            fill_noise_rs::<noise::Fbm<Perlin>>(flat, size, mode, &n);
+            fill_noise_rs_4d::<noise::Fbm<Perlin>>(flat, size, mode, &n);
         }
         (
             GenerateNoiseRequest::Billow { .. },
@@ -1006,7 +1095,7 @@ fn generate_flat(
                 .set_frequency(*frequency)
                 .set_lacunarity(*lacunarity)
                 .set_persistence(*persistence);
-            fill_noise_rs::<noise::Billow<Perlin>>(flat, size, mode, &n);
+            fill_noise_rs_4d::<noise::Billow<Perlin>>(flat, size, mode, &n);
         }
         (
             GenerateNoiseRequest::RidgedMulti { .. },
@@ -1023,7 +1112,7 @@ fn generate_flat(
                 .set_frequency(*frequency)
                 .set_lacunarity(*lacunarity)
                 .set_persistence(*persistence);
-            fill_noise_rs::<noise::RidgedMulti<Perlin>>(flat, size, mode, &n);
+            fill_noise_rs_4d::<noise::RidgedMulti<Perlin>>(flat, size, mode, &n);
         }
         (
             GenerateNoiseRequest::HybridMulti { .. },
@@ -1040,7 +1129,7 @@ fn generate_flat(
                 .set_frequency(*frequency)
                 .set_lacunarity(*lacunarity)
                 .set_persistence(*persistence);
-            fill_noise_rs::<HybridMulti<Perlin>>(flat, size, mode, &n);
+            fill_noise_rs_4d::<HybridMulti<Perlin>>(flat, size, mode, &n);
         }
         // ─── Combinator ──────────────────────────────────────────────────────
         (
@@ -1099,6 +1188,23 @@ fn generate_flat(
                         }
                     }
                 }
+                "4d" => {
+                    let w = size[0];
+                    let h = size[1];
+                    let d = size[2];
+                    let t = size[3];
+                    let mut idx = 0;
+                    for w4 in 0..t {
+                        for z in 0..d {
+                            for y in 0..h {
+                                for x in 0..w {
+                                    flat[idx] = white_noise_4d(s, x, y, z, w4);
+                                    idx += 1;
+                                }
+                            }
+                        }
+                    }
+                }
                 _ => unreachable!("dimension already validated"),
             }
         }
@@ -1139,7 +1245,8 @@ fn fill_fnl(flat: &mut [f64], size: &[usize], mode: &str, noise: &FastNoiseLite)
     }
 }
 
-/// Fills `flat` using a noise-crate NoiseFn source (2D or 3D).
+/// Fills `flat` using a noise-crate NoiseFn source (2D or 3D only).
+/// Used by SuperSimplex which does not implement NoiseFn<f64, 4>.
 fn fill_noise_rs<T>(flat: &mut [f64], size: &[usize], mode: &str, noise: &T)
 where
     T: NoiseFn<f64, 2> + NoiseFn<f64, 3>,
@@ -1165,6 +1272,63 @@ where
                         flat[idx] =
                             noise.get([x as f64 * 0.1, y as f64 * 0.1, z as f64 * 0.1]);
                         idx += 1;
+                    }
+                }
+            }
+        }
+        _ => unreachable!("dimension already validated"),
+    }
+}
+
+/// Fills `flat` using a noise-crate NoiseFn source (2D, 3D, or 4D).
+/// Used by most noise-rs generators which implement NoiseFn for all three dimensions.
+fn fill_noise_rs_4d<T>(flat: &mut [f64], size: &[usize], mode: &str, noise: &T)
+where
+    T: NoiseFn<f64, 2> + NoiseFn<f64, 3> + NoiseFn<f64, 4>,
+{
+    match mode {
+        "2d" => {
+            let w = size[0];
+            let h = size[1];
+            for y in 0..h {
+                for x in 0..w {
+                    flat[y * w + x] = noise.get([x as f64 * 0.1, y as f64 * 0.1]);
+                }
+            }
+        }
+        "3d" => {
+            let w = size[0];
+            let h = size[1];
+            let d = size[2];
+            let mut idx = 0;
+            for z in 0..d {
+                for y in 0..h {
+                    for x in 0..w {
+                        flat[idx] =
+                            noise.get([x as f64 * 0.1, y as f64 * 0.1, z as f64 * 0.1]);
+                        idx += 1;
+                    }
+                }
+            }
+        }
+        "4d" => {
+            let w = size[0];
+            let h = size[1];
+            let d = size[2];
+            let t = size[3];
+            let mut idx = 0;
+            for w4 in 0..t {
+                for z in 0..d {
+                    for y in 0..h {
+                        for x in 0..w {
+                            flat[idx] = noise.get([
+                                x as f64 * 0.1,
+                                y as f64 * 0.1,
+                                z as f64 * 0.1,
+                                w4 as f64 * 0.1,
+                            ]);
+                            idx += 1;
+                        }
                     }
                 }
             }
@@ -1219,7 +1383,8 @@ fn fill_domain_warp(flat: &mut [f64], size: &[usize], mode: &str, seed: i32, amp
 // ─── Shape data for response ──────────────────────────────────────────────────
 
 /// Converts a flat Vec<f64> into the JSON shape matching the requested
-/// dimensionality: 1D → array, 2D → nested array, 3D → nested array of arrays.
+/// dimensionality: 1D → array, 2D → nested array, 3D → array of 2D arrays,
+/// 4D → array of 3D volumes (each volume is array of 2D slices).
 fn shape_data(flat: &[f64], size: &[usize], mode: &str) -> serde_json::Value {
     match mode {
         "1d" => serde_json::Value::Array(flat.iter().map(|v| serde_json::json!(v)).collect()),
@@ -1253,6 +1418,32 @@ fn shape_data(flat: &[f64], size: &[usize], mode: &str) -> serde_json::Value {
                     rows.push(serde_json::Value::Array(row));
                 }
                 result.push(serde_json::Value::Array(rows));
+            }
+            serde_json::Value::Array(result)
+        }
+        "4d" => {
+            let w = size[0];
+            let h = size[1];
+            let d = size[2];
+            let t = size[3];
+            let slice = w * h;
+            let volume = slice * d;
+            let mut result = Vec::with_capacity(t);
+            for w4 in 0..t {
+                let mut volumes = Vec::with_capacity(d);
+                for z in 0..d {
+                    let mut rows = Vec::with_capacity(h);
+                    for y in 0..h {
+                        let start = w4 * volume + z * slice + y * w;
+                        let row: Vec<serde_json::Value> = flat[start..start + w]
+                            .iter()
+                            .map(|v| serde_json::json!(v))
+                            .collect();
+                        rows.push(serde_json::Value::Array(row));
+                    }
+                    volumes.push(serde_json::Value::Array(rows));
+                }
+                result.push(serde_json::Value::Array(volumes));
             }
             serde_json::Value::Array(result)
         }
@@ -1290,6 +1481,19 @@ fn white_noise_3d(seed: u64, x: usize, y: usize, z: usize) -> f64 {
     state ^= (x as u64).wrapping_mul(374761393);
     state ^= (y as u64).wrapping_mul(668265263);
     state ^= (z as u64).wrapping_mul(941568331);
+    state = state.wrapping_mul(12741261754838537793);
+    let hash = state ^ (state >> 31);
+    (hash as f64 / u64::MAX as f64) * 2.0 - 1.0
+}
+
+fn white_noise_4d(seed: u64, x: usize, y: usize, z: usize, w: usize) -> f64 {
+    let mut state = seed
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
+    state ^= (x as u64).wrapping_mul(374761393);
+    state ^= (y as u64).wrapping_mul(668265263);
+    state ^= (z as u64).wrapping_mul(941568331);
+    state ^= (w as u64).wrapping_mul(1221221227);
     state = state.wrapping_mul(12741261754838537793);
     let hash = state ^ (state >> 31);
     (hash as f64 / u64::MAX as f64) * 2.0 - 1.0

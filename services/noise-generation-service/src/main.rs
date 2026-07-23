@@ -97,7 +97,8 @@ fn build_sampling(size: Vec<usize>) -> lib::Sampling {
         1 => "1d",
         2 => "2d",
         3 => "3d",
-        _ => "2d",
+        4 => "4d",
+        _ => "4d",  // 5D+ will be rejected by generate_noise's check_dimension_support
     };
     lib::Sampling {
         mode: mode.to_string(),

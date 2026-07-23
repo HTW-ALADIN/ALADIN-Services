@@ -441,7 +441,7 @@ fn algorithms_for_dim(dim: usize) -> Vec<&'static str> {
             "hybrid_multi", "pingpong", "domain_warp", "combinator",
             "utility", "white",
         ],
-        _ => vec![],
+        _ => algorithms_for_4d(),
     }
 }
 
@@ -625,4 +625,106 @@ async fn test_normalize_output() {
             assert!(v >= 0.0 && v <= 1.0, "normalized value {} out of range", v);
         }
     }
+}
+
+// ─── Helper: algorithms that SUPPORT 4D ─────────────────────────────────
+
+fn algorithms_for_4d() -> Vec<&'static str> {
+    vec![
+        "simplex", "fbm", "billow", "ridged_multi", "hybrid_multi",
+        "combinator", "utility", "white",
+    ]
+}
+
+/// Algorithms that do NOT support 4D (FNL-only, DomainWarp, SuperSimplex).
+fn algorithms_not_for_4d() -> Vec<&'static str> {
+    vec![
+        "perlin", "opensimplex2", "supersimplex", "value", "cellular",
+        "pingpong", "domain_warp",
+    ]
+}
+
+// ─── Tests: 4D support ─────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_4d_success_for_noise_rs_algorithms() {
+    let url = start_test_server().await;
+    for alg in algorithms_for_4d() {
+        let params = if alg == "utility" {
+            json!({"kind": "constant", "value": 0.5})
+        } else {
+            json!({"seed": 42})
+        };
+        let result = post_noise(&url, alg, params, vec![3, 3, 3, 3]).await;
+        assert_eq!(
+            result["status"], "completed",
+            "algorithm {} should succeed with 4D",
+            alg
+        );
+        assert_eq!(result["size"], json!([3, 3, 3, 3]));
+        let hypervolume = result["data"].as_array().unwrap();
+        assert_eq!(hypervolume.len(), 3, "{}: expected 4th dim size 3", alg);
+        assert_eq!(
+            hypervolume[0].as_array().unwrap().len(),
+            3,
+            "{}: expected depth 3",
+            alg
+        );
+        assert_eq!(
+            hypervolume[0].as_array().unwrap()[0].as_array().unwrap().len(),
+            3,
+            "{}: expected 3 rows",
+            alg
+        );
+        assert_eq!(
+            hypervolume[0].as_array().unwrap()[0].as_array().unwrap()[0]
+                .as_array()
+                .unwrap()
+                .len(),
+            3,
+            "{}: expected 3 cols",
+            alg
+        );
+        assert!(result["params_used"].is_object());
+    }
+}
+
+#[tokio::test]
+async fn test_4d_rejected_for_fnl_algorithms() {
+    let url = start_test_server().await;
+    for alg in algorithms_not_for_4d() {
+        let params = if alg == "utility" {
+            json!({"kind": "constant", "value": 0.5})
+        } else {
+            json!({"seed": 42})
+        };
+        let response = post_noise_raw(&url, alg, params, vec![4, 4, 4, 4]).await;
+        assert_eq!(
+            response.status(),
+            400,
+            "algorithm {} should reject 4D with 400",
+            alg
+        );
+        let result: serde_json::Value = response.json().await.unwrap();
+        let msg = result["status"].as_str().unwrap();
+        assert!(
+            msg.contains("4D") || msg.contains("dimension") || msg.contains("support"),
+            "algorithm {}: error should mention 4D/dimension, got: {}",
+            alg,
+            msg
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_5d_rejected_for_white_noise() {
+    let url = start_test_server().await;
+    let response = post_noise_raw(&url, "white", json!({"seed": 42}), vec![4, 4, 4, 4, 4]).await;
+    assert_eq!(response.status(), 400);
+    let result: serde_json::Value = response.json().await.unwrap();
+    let msg = result["status"].as_str().unwrap();
+    assert!(
+        msg.contains("5D") || msg.contains("dimension") || msg.contains("support"),
+        "error should mention dimension limit (5D)"
+    );
 }

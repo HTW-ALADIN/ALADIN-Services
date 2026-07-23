@@ -156,7 +156,7 @@ pub struct GenerateArgs {
     pub algorithm: Algorithm,
 
     /// Size of noise field (comma-separated, e.g. "64,64" or "64" for square)
-    #[arg(short, long, default_value = "64,64", value_delimiter = ',', num_args = 1..=3)]
+    #[arg(short, long, default_value = "64,64", value_delimiter = ',', num_args = 1..=4)]
     pub size: Vec<usize>,
 
     /// Output format: json (default) or csv
