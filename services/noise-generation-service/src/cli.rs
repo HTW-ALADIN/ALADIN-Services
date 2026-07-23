@@ -13,7 +13,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug, PartialEq)]
 pub enum Commands {
-    /// List all available algorithms and backends
+    /// List all available algorithms
     #[command(alias = "ls")]
     List {
         /// Output format: json (default) or table

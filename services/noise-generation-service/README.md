@@ -2,7 +2,7 @@
 
 
 
-Unified REST API for multiple noise generation libraries and algorithms. The backend library is now automatically selected by default for each requested algorithm.
+Unified REST API for multiple noise generation libraries and algorithms.
 
 ## Features
 
@@ -72,7 +72,7 @@ Default libraries are automatically assigned based on the selected algorithm.
 
 
 
-* `GET /v1/algorithms` — List all available algorithms and default backends
+* `GET /v1/algorithms` — List all available algorithms
 
 
 * `POST /v1/noise` — Generate noise field and return the full result (including data grid)
@@ -586,6 +586,6 @@ All rows use `POST /v1/noise` with the given `algorithm` tag; default libraries 
 
 White noise requires no coherence/interpolation logic and is implemented natively rather than via an external library. Because it is inherently uncorrelated, its `params` schema is minimal (`seed` only) and `sampling.mode: "grid"` bypasses interpolation entirely — each grid cell is sampled independently, so generation is trivially parallelizable.
 
-| `algorithm` tag | Canonical family | Backend | Underlying function |
-| --- | --- | --- | --- |
-| `white` | White noise | `native` | `seeded_prng(seed, x, y, z, w).next_f32() * 2.0 - 1.0` — uncorrelated per-cell/per-point noise, no interpolation |
+| `algorithm` tag | Canonical family | Underlying function |
+| --- | --- | --- |
+| `white` | White noise | `seeded_prng(seed, x, y, z, w).next_f32() * 2.0 - 1.0` — uncorrelated per-cell/per-point noise, no interpolation |
