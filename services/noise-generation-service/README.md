@@ -540,6 +540,8 @@ cargo run -- openapi --output spec.json  # Via CLI
 All rows use `POST /v1/noise` with the given `algorithm` tag; default libraries are selected automatically and the response includes the full noise field data grid in the `data` field.
 
 > **⚠️ Performance Note:** For large grids (e.g., 1024×1024 or larger), the noise generation will take longer and the response payload may become very large (several MB). Consider using smaller grid sizes for interactive use, or use the CLI's `generate` command for local generation without network overhead. A future enhancement may add HTTP streaming (e.g., `Transfer-Encoding: chunked`) for large grid responses.
+>
+> **📦 Caching Note:** An internal cache for previously generated noise fields is planned as a future update. This would allow re-requesting identical noise fields (same algorithm, parameters, and sampling configuration) without re-computation, improving response times for repeated or shared requests.
 > 
 > 
 
