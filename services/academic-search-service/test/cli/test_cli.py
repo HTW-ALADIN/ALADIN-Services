@@ -3,12 +3,36 @@ import json
 from typer.testing import CliRunner
 
 from cli import app
+from cli.commands import authors as authors_cmd
 from cli.commands import search as search_cmd
 from config import settings
+from core.author import AuthorProfile
+from core.author_search_service import AuthorProviderOutcome, AuthorSearchOutcome
 from core.paper import Paper
 from core.search_service import ProviderOutcome, SearchOutcome
 
 runner = CliRunner()
+
+
+def test_authors_cli_prints_json(monkeypatch):
+    async def _fake_run_author_search(**kwargs):
+        return AuthorSearchOutcome(
+            authors=[AuthorProfile(provider="openalex", name="Jane Smith")],
+            papers=[],
+            per_provider={"openalex": AuthorProviderOutcome(count=1)},
+            took_ms=1.0,
+        )
+
+    monkeypatch.setattr(authors_cmd, "run_author_search", _fake_run_author_search)
+
+    result = runner.invoke(
+        app,
+        ["authors", "--query", '{"name": "Jane Smith"}', "--providers", "openalex"],
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["authors"][0]["name"] == "Jane Smith"
+    assert payload["per_provider"]["openalex"]["count"] == 1
 
 
 def test_search_cli_prints_json(monkeypatch):

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from api.routes import download, export, graph, health, search
+from api.routes import authors, download, export, graph, health, search
 
 app = FastAPI(
     title="academic-search-service",
@@ -14,6 +14,7 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(search.router)
+app.include_router(authors.router)
 app.include_router(export.router)
 app.include_router(download.router)
 app.include_router(graph.router)

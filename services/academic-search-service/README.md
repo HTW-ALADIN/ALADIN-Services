@@ -122,6 +122,7 @@ The API listens on port `8003` by default. OpenAPI docs: `http://localhost:8003/
 | --- | --- | --- |
 | `GET` | `/health` | Liveness probe |
 | `POST` | `/v1/search` | Search across multiple providers, with optional dedup |
+| `POST` | `/v1/authors/search` | Search for authors by name/partial name/ID, or fetch papers by a matched author |
 | `POST` | `/v1/export` | Export a paper list to BibTeX/RIS/CSV/JSON |
 | `POST` | `/v1/download` | Download a bounded batch of PDFs |
 | `GET` | `/v1/fulltext` | Extract full text for a single paper (academic-mcp providers only) |
@@ -137,6 +138,39 @@ curl -X POST http://localhost:8003/v1/search \
     "providers": ["openalex", "arxiv"],
     "credentials": {"openalex": {"mailto": "team@example.org"}},
     "dedup": {"enabled": true}
+  }'
+```
+
+### Example: author search
+
+`/v1/authors/search` is only routed to providers with an author-level API
+(`openalex`, `semantic_scholar`, `scopus` -- see `supports_author_search` in
+`src/core/provider_registry.py`); other providers listed in `providers` are
+reported per-provider as `"author_search_not_supported"` rather than failing
+the whole request. `query.name` supports full or partial names (each backend
+does fuzzy/substring matching server-side). `query.ids` accepts any of the
+identifier schemes already available from these providers: `orcid`,
+`openalex_author_id`, `semantic_scholar_author_id`, `scopus_author_id`.
+`output` controls whether the response contains author profiles or the papers
+written by the matched author(s):
+
+```sh
+# Search by (partial) name, get back author profiles.
+curl -X POST http://localhost:8003/v1/authors/search \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": {"name": "Jane Smith"},
+    "providers": ["openalex", "semantic_scholar"],
+    "credentials": {"openalex": {"mailto": "team@example.org"}}
+  }'
+
+# Look up a specific author by ORCID and fetch their papers instead.
+curl -X POST http://localhost:8003/v1/authors/search \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": {"ids": {"orcid": "0000-0002-1825-0097"}},
+    "providers": ["openalex"],
+    "output": "papers"
   }'
 ```
 
@@ -188,3 +222,16 @@ paginated for programmatic callers who want incremental results.
 - **CrossRef is not routed through `scimesh`.** The installed `scimesh`
   version (0.3.0) does not yet ship a CrossRef provider; CrossRef search goes
   through `academic-mcp` only.
+- **Author search is limited to `openalex`, `semantic_scholar`, and
+  `scopus`.** `scimesh`'s typed `Provider` classes only expose paper
+  `search`/`get`/`citations`, not author-level endpoints, and none of
+  `academic-mcp`'s searchers have an author-identity concept at all (free-text
+  query strings only). `src/adapters/author_adapter.py` therefore calls the
+  OpenAlex, Semantic Scholar, and Scopus REST APIs directly for
+  `/v1/authors/search`; every other provider reports
+  `"author_search_not_supported"` per-provider rather than failing the whole
+  request. Cross-provider ORCID resolution is best-effort: only OpenAlex
+  supports filtering/looking up authors and their works directly by ORCID --
+  Semantic Scholar and Scopus require their own native author ID
+  (`semantic_scholar_author_id`, `scopus_author_id`) for a direct lookup, and
+  fall back to a best-match-by-citation-count name search otherwise.

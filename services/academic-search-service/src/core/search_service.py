@@ -10,10 +10,8 @@ import time
 from dataclasses import dataclass, field
 
 from adapters import academic_mcp_adapter, scimesh_adapter
-from config import settings
-from core.credentials import resolve_credentials
 from core.paper import Paper
-from core.provider_registry import get_provider_spec
+from core.provider_fanout import run_provider
 from core.query import SearchQuery
 from dedup.engine import DedupReport, Strategy, deduplicate
 
@@ -38,33 +36,17 @@ async def _search_one_provider(
     credentials: dict[str, dict[str, str]],
     per_provider_max: int,
 ) -> tuple[str, list[Paper], list[str]]:
-    try:
-        spec = get_provider_spec(provider)
-    except KeyError:
-        return provider, [], ["unknown_provider"]
-
-    resolution = resolve_credentials(provider, credentials.get(provider))
-    if not resolution.ok:
-        return provider, [], resolution.errors
-
-    try:
+    async def build_coro(spec, creds: dict[str, str]) -> list[Paper]:
         if spec.backend == "scimesh":
-            coro = scimesh_adapter.search(
-                provider, query.to_scimesh_query(), resolution.credentials, per_provider_max
+            return await scimesh_adapter.search(
+                provider, query.to_scimesh_query(), creds, per_provider_max
             )
-        else:
-            coro = academic_mcp_adapter.search(
-                provider, query.to_text_query(), resolution.credentials, per_provider_max
-            )
-        # A single hung/slow provider must not block the whole request
-        # indefinitely -- bound each provider call and report a timeout as a
-        # per-provider error, same as any other provider failure.
-        papers = await asyncio.wait_for(coro, timeout=settings.provider_timeout_seconds)
-        return provider, papers, []
-    except TimeoutError:
-        return provider, [], [f"provider_timeout: exceeded {settings.provider_timeout_seconds}s"]
-    except Exception as exc:  # noqa: BLE001 - one provider's failure must not fail the request
-        return provider, [], [f"provider_error: {exc}"]
+        return await academic_mcp_adapter.search(
+            provider, query.to_text_query(), creds, per_provider_max
+        )
+
+    papers, errors = await run_provider(provider, credentials, build_coro, [])
+    return provider, papers, errors
 
 
 async def run_search(

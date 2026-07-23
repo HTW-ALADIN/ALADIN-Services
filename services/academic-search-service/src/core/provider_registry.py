@@ -35,6 +35,14 @@ class ProviderSpec:
     backend: Backend
     credential_fields: tuple[CredentialField, ...] = field(default_factory=tuple)
     supports_citations: bool = False
+    # Providers with an author-level API (author search/get + "papers by this
+    # author" lookup), exposed via /v1/authors/search. None of academic-mcp's
+    # searchers expose author-level endpoints (only free-text query strings),
+    # so this is currently scimesh-backed-providers-only.
+    supports_author_search: bool = False
+    # Which `AuthorIdentifier` fields (see core/author.py) this provider can
+    # resolve directly to a single author without a name-based lookup first.
+    author_id_fields: tuple[str, ...] = field(default_factory=tuple)
     notes: str = ""
 
     @property
@@ -56,6 +64,8 @@ PROVIDER_REGISTRY: dict[str, ProviderSpec] = {
             CredentialField("mailto", required=False, description="Polite-pool contact email"),
         ),
         supports_citations=True,
+        supports_author_search=True,
+        author_id_fields=("openalex_author_id", "orcid"),
     ),
     "semantic_scholar": ProviderSpec(
         name="semantic_scholar",
@@ -64,6 +74,8 @@ PROVIDER_REGISTRY: dict[str, ProviderSpec] = {
             CredentialField("api_key", required=False, description="Raises rate limits"),
         ),
         supports_citations=True,
+        supports_author_search=True,
+        author_id_fields=("semantic_scholar_author_id",),
     ),
     "scopus": ProviderSpec(
         name="scopus",
@@ -72,6 +84,8 @@ PROVIDER_REGISTRY: dict[str, ProviderSpec] = {
             CredentialField("api_key", required=True, description="Elsevier/Scopus API key"),
         ),
         supports_citations=True,
+        supports_author_search=True,
+        author_id_fields=("scopus_author_id",),
     ),
     "crossref": ProviderSpec(
         name="crossref",
@@ -131,3 +145,7 @@ def get_provider_spec(provider: str) -> ProviderSpec:
 
 def providers_supporting_citations() -> list[str]:
     return [name for name, spec in PROVIDER_REGISTRY.items() if spec.supports_citations]
+
+
+def providers_supporting_author_search() -> list[str]:
+    return [name for name, spec in PROVIDER_REGISTRY.items() if spec.supports_author_search]
