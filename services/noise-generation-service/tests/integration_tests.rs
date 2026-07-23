@@ -9,12 +9,11 @@ async fn test_perlin_generation() {
             "algorithm": "perlin",
             "params": {},
             "sampling": {
-                "mode": "grid",
-                "dimensions": 2
+                "mode": "grid"
             },
             "output": {
                 "format": "json",
-                "normalize": "none"
+                "normalize": false
             }
         }))
         .send()
@@ -34,12 +33,11 @@ async fn test_simplex_generation() {
             "params": {},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2,
                 "size": [5, 5]
             },
             "output": {
                 "format": "json",
-                "normalize": "none"
+                "normalize": false
             }
         }))
         .send()
@@ -69,12 +67,11 @@ async fn test_opensimplex2_generation() {
             "params": {},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2,
                 "size": [5, 5]
             },
             "output": {
                 "format": "json",
-                "normalize": "none"
+                "normalize": false
             }
         }))
         .send()
@@ -99,12 +96,11 @@ async fn test_supersimplex_generation() {
             "params": {},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2,
                 "size": [5, 5]
             },
             "output": {
                 "format": "json",
-                "normalize": "none"
+                "normalize": false
             }
         }))
         .send()
@@ -129,12 +125,11 @@ async fn test_value_generation() {
             "params": {},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2,
                 "size": [5, 5]
             },
             "output": {
                 "format": "json",
-                "normalize": "none"
+                "normalize": false
             }
         }))
         .send()
@@ -157,8 +152,8 @@ async fn test_cellular_parameters() {
         .json(&json!({
             "algorithm": "cellular",
             "params": {"distance_function": "euclidean", "return_type": "cell_value", "jitter": 0.45},
-            "sampling": {"mode": "grid", "dimensions": 2, "size": [5, 5]},
-            "output": {"format": "json", "normalize": "none"}
+            "sampling": {"mode": "grid", "size": [5, 5]},
+            "output": {"format": "json", "normalize": false}
         }))
         .send().await.unwrap();
     let field1 = resp1.json::<serde_json::Value>().await.unwrap()["data"].clone();
@@ -168,8 +163,8 @@ async fn test_cellular_parameters() {
         .json(&json!({
             "algorithm": "cellular",
             "params": {"distance_function": "manhattan", "return_type": "distance", "jitter": 0.9},
-            "sampling": {"mode": "grid", "dimensions": 2, "size": [5, 5]},
-            "output": {"format": "json", "normalize": "none"}
+            "sampling": {"mode": "grid", "size": [5, 5]},
+            "output": {"format": "json", "normalize": false}
         }))
         .send()
         .await
@@ -189,8 +184,8 @@ async fn test_fbm_seed_parameter() {
         .json(&json!({
             "algorithm": "fbm",
             "params": params1,
-            "sampling": {"mode": "grid", "dimensions": 2, "size": [20, 20]},
-            "output": {"format": "json", "normalize": "none"}
+            "sampling": {"mode": "grid", "size": [20, 20]},
+            "output": {"format": "json", "normalize": false}
         }))
         .send()
         .await
@@ -205,8 +200,8 @@ async fn test_fbm_seed_parameter() {
         .json(&json!({
             "algorithm": "fbm",
             "params": params2,
-            "sampling": {"mode": "grid", "dimensions": 2, "size": [20, 20]},
-            "output": {"format": "json", "normalize": "none"}
+            "sampling": {"mode": "grid", "size": [20, 20]},
+            "output": {"format": "json", "normalize": false}
         }))
         .send()
         .await
@@ -239,12 +234,11 @@ async fn test_billow_generation() {
             "params": {"seed": 1, "octaves": 3, "persistence": 0.5},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2,
                 "size": [5, 5]
             },
             "output": {
                 "format": "json",
-                "normalize": "none"
+                "normalize": false
             }
         }))
         .send()
@@ -261,15 +255,14 @@ async fn test_ridged_multi_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "ridged_multi",
-            "params": {"seed": 1, "octaves": 3, "lacunarity": 2.0, "gain": 0.5},
+            "params": {"seed": 1, "octaves": 3, "lacunarity": 2.0, "persistence": 0.5},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2,
                 "size": [5, 5]
             },
             "output": {
                 "format": "json",
-                "normalize": "none"
+                "normalize": false
             }
         }))
         .send()
@@ -289,12 +282,11 @@ async fn test_hybrid_multi_generation() {
             "params": {"seed": 1, "octaves": 3, "persistence": 0.5},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2,
                 "size": [5, 5]
             },
             "output": {
                 "format": "json",
-                "normalize": "none"
+                "normalize": false
             }
         }))
         .send()
@@ -314,12 +306,11 @@ async fn test_pingpong_generation() {
             "params": {"seed": 1, "strength": 2.0},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2,
                 "size": [5, 5]
             },
             "output": {
                 "format": "json",
-                "normalize": "none"
+                "normalize": false
             }
         }))
         .send()
@@ -336,15 +327,14 @@ async fn test_domain_warp_generation() {
         .post("http://localhost:8000/v1/noise")
         .json(&json!({
             "algorithm": "domain_warp",
-            "params": {"seed": 1, "warp_type": "open_simplex2", "amplitude": 30.0},
+            "params": {"seed": 1, "amplitude": 30.0},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2,
                 "size": [5, 5]
             },
             "output": {
                 "format": "json",
-                "normalize": "none"
+                "normalize": false
             }
         }))
         .send()
@@ -364,12 +354,11 @@ async fn test_combinator_generation() {
             "params": {"op": "add"},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2,
                 "size": [5, 5]
             },
             "output": {
                 "format": "json",
-                "normalize": "none"
+                "normalize": false
             }
         }))
         .send()
@@ -394,12 +383,11 @@ async fn test_utility_generation() {
             "params": {"kind": "constant", "value": 0.5},
             "sampling": {
                 "mode": "grid",
-                "dimensions": 2,
                 "size": [5, 5]
             },
             "output": {
                 "format": "json",
-                "normalize": "none"
+                "normalize": false
             }
         }))
         .send()
@@ -425,8 +413,8 @@ async fn test_white_noise_seed_parameter() {
         .json(&json!({
             "algorithm": "white",
             "params": params1,
-            "sampling": {"mode": "grid", "dimensions": 2, "size": [20, 20]},
-            "output": {"format": "json", "normalize": "none"}
+            "sampling": {"mode": "grid", "size": [20, 20]},
+            "output": {"format": "json", "normalize": false}
         }))
         .send()
         .await
@@ -441,8 +429,8 @@ async fn test_white_noise_seed_parameter() {
         .json(&json!({
             "algorithm": "white",
             "params": params2,
-            "sampling": {"mode": "grid", "dimensions": 2, "size": [20, 20]},
-            "output": {"format": "json", "normalize": "none"}
+            "sampling": {"mode": "grid", "size": [20, 20]},
+            "output": {"format": "json", "normalize": false}
         }))
         .send()
         .await
@@ -479,7 +467,6 @@ async fn test_performance_medium_grid() {
             "params": {"seed": 42},
             "sampling": {
                 "mode": "2d",
-                "dimensions": 2,
                 "size": [256, 256]
             }
         }))
@@ -516,7 +503,6 @@ async fn test_performance_large_grid() {
             "params": {"seed": 42},
             "sampling": {
                 "mode": "2d",
-                "dimensions": 2,
                 "size": [512, 512]
             }
         }))

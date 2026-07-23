@@ -8,10 +8,8 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use clap::Parser;
-use cli::{Cli, Commands, GenerateArgs};
-use serde::de::DeserializeOwned;
-use serde_json::Value;
+use clap::{CommandFactory, Parser};
+use cli::{Algorithm, Cli, Commands, GenerateArgs, GenerateFormat, ListFormat, OpenApiFormat};
 use std::path::PathBuf;
 use tokio::net::TcpListener;
 use utoipa::OpenApi;
@@ -44,8 +42,10 @@ async fn main() {
         }
     }
 
-    // Default: start server
-    start_server("0.0.0.0:8000".to_string()).await;
+    // No subcommand — show help
+    Cli::command().print_help().unwrap();
+    println!();
+    std::process::exit(1);
 }
 
 // ─── Server ──────────────────────────────────────────────────────────────────
@@ -66,19 +66,18 @@ async fn start_server(bind_addr: String) {
 
 // ─── CLI: list ───────────────────────────────────────────────────────────────
 
-async fn handle_list_command(format: String) {
+async fn handle_list_command(format: ListFormat) {
     let algorithms = lib::list_algorithms().await;
     let data: Vec<String> = serde_json::from_value(algorithms.0).unwrap();
-    match format.as_str() {
-        "table" => {
-            println!("{:<20}", "Algorithm");
-            println!("{:-<20}", "");
+    match format {
+        ListFormat::Csv => {
+            println!("algorithm");
             for alg in &data {
-                println!("{:<20}", alg);
+                println!("{}", alg);
             }
             println!("\nTotal: {} algorithms", data.len());
         }
-        _ => {
+        ListFormat::Json => {
             println!("{}", serde_json::to_string_pretty(&data).unwrap());
         }
     }
@@ -86,20 +85,27 @@ async fn handle_list_command(format: String) {
 
 // ─── CLI: generate (local) ───────────────────────────────────────────────────
 
-fn build_sampling(width: usize, height: usize) -> lib::Sampling {
+fn build_sampling(size: Vec<usize>) -> lib::Sampling {
+    let mode = match size.len() {
+        1 => "1d",
+        2 => "2d",
+        3 => "3d",
+        _ => "2d",
+    };
     lib::Sampling {
-        mode: "2d".to_string(),
-        dimensions: 2,
-        size: Some(vec![width, height]),
+        mode: mode.to_string(),
+        size: Some(size),
     }
 }
 
-fn parse_typed_params<T>(extra: Vec<(String, Value)>) -> T
+fn parse_typed_params<T>(params: serde_json::Value) -> T
 where
-    T: DeserializeOwned + Default,
+    T: serde::de::DeserializeOwned + Default,
 {
-    let value = Value::Object(extra.into_iter().collect());
-    match serde_json::from_value(value) {
+    if params.is_null() || params.as_object().map_or(false, |o| o.is_empty()) {
+        return T::default();
+    }
+    match serde_json::from_value(params) {
         Ok(parsed) => parsed,
         Err(err) => {
             eprintln!("Error: invalid params object ({})", err);
@@ -111,98 +117,102 @@ where
 async fn handle_generate_command(args: GenerateArgs) {
     use lib::GenerateNoiseRequest;
 
-    let sampling = build_sampling(args.width, args.height);
+    let sampling = build_sampling(args.size);
 
-    // Build the request — supports all 15 algorithm families
-    let request = match args.algorithm.as_str() {
-        "perlin" => GenerateNoiseRequest::Perlin {
+    // Build output config from CLI flags
+    let output = Some(lib::Output {
+        format: match args.format {
+            GenerateFormat::Json => lib::OutputFormat::Json,
+            GenerateFormat::Csv => lib::OutputFormat::Csv,
+        },
+        normalize: args.normalize,
+    });
+
+    // Build the request — supports all algorithm families
+    let request = match args.algorithm {
+        Algorithm::Perlin => GenerateNoiseRequest::Perlin {
             params: parse_typed_params::<lib::SeedParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "simplex" => GenerateNoiseRequest::Simplex {
+        Algorithm::Simplex => GenerateNoiseRequest::Simplex {
             params: parse_typed_params::<lib::SeedParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "opensimplex2" => GenerateNoiseRequest::OpenSimplex2 {
+        Algorithm::OpenSimplex2 => GenerateNoiseRequest::OpenSimplex2 {
             params: parse_typed_params::<lib::SeedParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "supersimplex" => GenerateNoiseRequest::SuperSimplex {
+        Algorithm::SuperSimplex => GenerateNoiseRequest::SuperSimplex {
             params: parse_typed_params::<lib::SeedParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "value" => GenerateNoiseRequest::Value {
+        Algorithm::Value => GenerateNoiseRequest::Value {
             params: parse_typed_params::<lib::SeedParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "cellular" => GenerateNoiseRequest::Cellular {
+        Algorithm::Cellular => GenerateNoiseRequest::Cellular {
             params: parse_typed_params::<lib::CellularParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "fbm" => GenerateNoiseRequest::Fbm {
+        Algorithm::Fbm => GenerateNoiseRequest::Fbm {
             params: parse_typed_params::<lib::FractalParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "billow" => GenerateNoiseRequest::Billow {
+        Algorithm::Billow => GenerateNoiseRequest::Billow {
             params: parse_typed_params::<lib::FractalParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "ridged_multi" => GenerateNoiseRequest::RidgedMulti {
+        Algorithm::RidgedMulti => GenerateNoiseRequest::RidgedMulti {
             params: parse_typed_params::<lib::RidgedMultiParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "hybrid_multi" => GenerateNoiseRequest::HybridMulti {
+        Algorithm::HybridMulti => GenerateNoiseRequest::HybridMulti {
             params: parse_typed_params::<lib::RidgedMultiParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "pingpong" => GenerateNoiseRequest::PingPong {
+        Algorithm::PingPong => GenerateNoiseRequest::PingPong {
             params: parse_typed_params::<lib::PingPongParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "domain_warp" => GenerateNoiseRequest::DomainWarp {
+        Algorithm::DomainWarp => GenerateNoiseRequest::DomainWarp {
             params: parse_typed_params::<lib::DomainWarpParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "combinator" => GenerateNoiseRequest::Combinator {
+        Algorithm::Combinator => GenerateNoiseRequest::Combinator {
             params: parse_typed_params::<lib::CombinatorParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "utility" => GenerateNoiseRequest::Utility {
+        Algorithm::Utility => GenerateNoiseRequest::Utility {
             params: parse_typed_params::<lib::UtilityParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        "white" => GenerateNoiseRequest::White {
+        Algorithm::White => GenerateNoiseRequest::White {
             params: parse_typed_params::<lib::SeedParams>(args.params),
             sampling,
-            output: None,
+            output: output.clone(),
         },
-        _ => {
-            eprintln!("Error: unknown algorithm '{}'", args.algorithm);
-            eprintln!("Run 'noise-generation-service list' to see all available algorithms");
-            std::process::exit(1);
-        }
     };
 
-    // Generate noise (no state needed)
+    // Generate noise
     let (status, result) = lib::generate_noise(axum::Json(request)).await;
 
     // Output
-    match args.format.as_str() {
-        "json" => {
+    match args.format {
+        GenerateFormat::Json => {
             let output = serde_json::json!({
                 "status": status.as_u16(),
                 "result": result.0
@@ -210,7 +220,7 @@ async fn handle_generate_command(args: GenerateArgs) {
             let text = serde_json::to_string_pretty(&output).unwrap();
             write_or_print(text, args.output);
         }
-        "csv" => {
+        GenerateFormat::Csv => {
             let mut csv = String::new();
             for row in &result.0.data {
                 csv.push_str(
@@ -223,31 +233,23 @@ async fn handle_generate_command(args: GenerateArgs) {
             }
             write_or_print(csv, args.output);
         }
-        _ => {
-            eprintln!("Error: unsupported output format '{}'", args.format);
-            std::process::exit(1);
-        }
     }
 }
 
 // ─── CLI: openapi ────────────────────────────────────────────────────────────
 
-async fn handle_openapi_command(format: String, output: Option<PathBuf>) {
+async fn handle_openapi_command(format: OpenApiFormat, output: Option<PathBuf>) {
     use utoipa::OpenApi;
     let spec = lib::ApiDoc::openapi();
 
-    let text = match format.as_str() {
-        "json" => serde_json::to_string_pretty(&spec).unwrap(),
-        "yaml" => {
+    let text = match format {
+        OpenApiFormat::Json => serde_json::to_string_pretty(&spec).unwrap(),
+        OpenApiFormat::Yaml => {
             // Fallback: convert JSON to YAML-like output via serde_yaml
             let json_val: serde_json::Value =
                 serde_json::from_str(&serde_json::to_string_pretty(&spec).unwrap()).unwrap();
             // Simple YAML output via debug formatting
             serde_json::to_string_pretty(&json_val).unwrap()
-        }
-        _ => {
-            eprintln!("Error: unsupported format '{}' (use json or yaml)", format);
-            std::process::exit(1);
         }
     };
 

@@ -66,7 +66,7 @@ Default libraries are automatically assigned based on the selected algorithm.
 
  | `seed`<br> |
 
-**Total: 14 unique algorithms with automatic library selection**
+**Total: 15 unique algorithms with automatic library selection**
 
 ### API Endpoints
 
