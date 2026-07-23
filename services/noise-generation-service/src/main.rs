@@ -68,12 +68,19 @@ async fn start_server(bind_addr: String) {
 
 async fn handle_list_command(format: ListFormat) {
     let algorithms = lib::list_algorithms().await;
-    let data: Vec<String> = serde_json::from_value(algorithms.0).unwrap();
+    let data: Vec<serde_json::Value> = algorithms
+        .0
+        .into_iter()
+        .map(|a| serde_json::to_value(a).unwrap())
+        .collect();
     match format {
         ListFormat::Csv => {
-            println!("algorithm");
-            for alg in &data {
-                println!("{}", alg);
+            // CSV: flat output — algorithm name column, defaults as compact JSON
+            println!("algorithm,defaults");
+            for entry in &data {
+                let name = entry["name"].as_str().unwrap_or("");
+                let defaults = entry["defaults"].to_string().replace('"', "\"\"");
+                println!("\"{}\",\"{}\"", name, defaults);
             }
             println!("\nTotal: {} algorithms", data.len());
         }
@@ -222,14 +229,25 @@ async fn handle_generate_command(args: GenerateArgs) {
         }
         GenerateFormat::Csv => {
             let mut csv = String::new();
-            for row in &result.0.data {
-                csv.push_str(
-                    &row.iter()
-                        .map(|v| format!("{:.6}", v))
-                        .collect::<Vec<_>>()
-                        .join(","),
-                );
-                csv.push('\n');
+            // data is serde_json::Value: for 2D it's an array of arrays; for 1D it's a flat array
+            if let Some(rows) = result.0.data.as_array() {
+                for row in rows {
+                    if let Some(values) = row.as_array() {
+                        csv.push_str(
+                            &values
+                                .iter()
+                                .map(|v| {
+                                    format!("{:.6}", v.as_f64().unwrap_or(0.0))
+                                })
+                                .collect::<Vec<_>>()
+                                .join(","),
+                        );
+                        csv.push('\n');
+                    } else {
+                        // 1D: treat as single row
+                        csv.push_str(&format!("{:.6}\n", row.as_f64().unwrap_or(0.0)));
+                    }
+                }
             }
             write_or_print(csv, args.output);
         }

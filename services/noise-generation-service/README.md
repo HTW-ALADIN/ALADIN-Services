@@ -72,10 +72,26 @@ Default libraries are automatically assigned based on the selected algorithm.
 
 
 
-* `GET /v1/algorithms` — List all available algorithms
+* `GET /v1/algorithms` — List all available algorithms with their default parameters
 
 
 * `POST /v1/noise` — Generate noise field and return the full result (including data grid)
+
+  The `sampling.size` field determines the dimensionality of the result:
+
+  - `[width]` — 1D array
+  - `[width, height]` — 2D grid (nested arrays)
+  - `[width, height, depth]` — 3D volume (triple-nested arrays)
+
+  Most algorithms support 2D and 3D. White noise additionally supports 1D.
+  Requesting an unsupported dimension returns a 400 error with a descriptive message.
+
+  **Response includes `params_used`**: Every successful response contains a
+  `params_used` field that echoes all resolved parameters (including applied
+  defaults and the effective seed). This makes every generated noise field
+  fully reproducible — even when the caller omitted optional parameters or
+  left the seed unset (in which case the randomly generated seed is included
+  in the response).
 
 
 * `GET /api-docs/openapi.json` — OpenAPI specification
@@ -137,7 +153,8 @@ Allowed values:
   "seed": 42,
   "octaves": 4,
   "frequency": 0.1,
-  "lacunarity": 2.0
+  "lacunarity": 2.0,
+  "persistence": 0.5
 }
 
 ```
@@ -195,7 +212,7 @@ Allowed values:
 
 Defaults used by the service if omitted:
 
-* `seed`: `1`
+* `seed`: randomly generated per request (based on current time) if omitted — not deterministic
 
 * `octaves`: `4`
 
@@ -203,7 +220,7 @@ Defaults used by the service if omitted:
 
 * `lacunarity`: `2.0`
 
-* `persistence`: `0.5`
+* `persistence`: `0.5` (Fbm, Billow), `0.5` (RidgedMulti), `0.25` (HybridMulti)
 
 * `strength`: `2.0`
 
@@ -214,6 +231,63 @@ Defaults used by the service if omitted:
 * `kind`: `constant`
 
 * `value`: `1.0`
+
+> **Why are parameters still optional?** All fields remain optional so that the
+> service stays easily callable by AI agents or quick scripts with minimal context.
+> However, **reproducibility is now guaranteed** via two mechanisms:
+> 1. **`POST /v1/noise` response** includes a `params_used` field that echoes all
+>    resolved parameter values (including the effective seed).
+> 2. **`GET /v1/algorithms`** lists every algorithm together with its server-side
+>    default values, enabling clients to inspect defaults without reading docs.
+>
+> This way you get both convenience (optional fields) and full traceability
+> (resolved values in the response + discoverable defaults via the API).
+
+
+### GET /v1/algorithms Response
+
+The endpoint now returns an array of objects, each containing the algorithm
+name and its default parameter values:
+
+```json
+[
+  {
+    "name": "perlin",
+    "defaults": { "seed": null }
+  },
+  {
+    "name": "cellular",
+    "defaults": {
+      "seed": null,
+      "distance_function": "euclidean",
+      "return_type": "cell_value",
+      "jitter": 0.45
+    }
+  },
+  {
+    "name": "fbm",
+    "defaults": {
+      "seed": null,
+      "octaves": 4,
+      "frequency": 0.1,
+      "lacunarity": 2.0,
+      "persistence": 0.5
+    }
+  },
+  ...
+]
+```
+
+> The `seed` default shows as `null` because seeds are randomly generated per
+> request when omitted. The actual effective seed for a specific response is
+> always included in `params_used` in the `POST /v1/noise` response.
+
+**CLI output (`noise-generation-service list`)**:
+
+- **JSON format** (`--format json`, default): Returns the same structured array
+  as the REST endpoint.
+- **CSV format** (`--format csv`): Lists algorithm name and defaults
+  (as a compact JSON string in a second column).
 
 
 ---
@@ -242,8 +316,6 @@ curl -s -X POST http://localhost:8000/v1/noise \
     "algorithm": "perlin",
     "params": {"seed": 42},
     "sampling": {
-      "mode": "2d",
-      "dimensions": 2,
       "size": [4, 4]
     }
   }' | jq .
@@ -258,8 +330,46 @@ Response:
   "status": "completed",
   "algorithm": "perlin",
   "data": [[0.23, -0.45, ...], ...],
-  "size": [4, 4]
+  "size": [4, 4],
+  "params_used": {
+    "seed": 42
+  }
 }
+
+```
+
+#### Generate Perlin Noise Without Seed (auto-generated seed in response)
+
+```bash
+curl -s -X POST http://localhost:8000/v1/noise \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "perlin",
+    "params": {},
+    "sampling": {
+      "size": [4, 4]
+    }
+  }' | jq .
+
+```
+
+Response (seed is auto-generated but echoed back):
+
+```json
+{
+  "id": "nsf_def456...",
+  "status": "completed",
+  "algorithm": "perlin",
+  "data": [[-0.12, 0.34, ...], ...],
+  "size": [4, 4],
+  "params_used": {
+    "seed": 3714829405
+  }
+}
+```
+
+> The `params_used` field contains the effective seed even when none was provided.
+> Save this value to reproduce the identical noise field later.
 
 ```
 
@@ -280,8 +390,6 @@ curl -X POST http://localhost:8000/v1/noise \
       "persistence": 0.5
     },
     "sampling": {
-      "mode": "2d", 
-      "dimensions": 2,
       "size": [128, 128]
     }
   }'
@@ -302,8 +410,6 @@ curl -X POST http://localhost:8000/v1/noise \
       "amplitude": 2.0
     },
     "sampling": {
-      "mode": "2d",
-      "dimensions": 2,
       "size": [64, 64]
     }
   }'
@@ -324,8 +430,6 @@ curl -X POST http://localhost:8000/v1/noise \
       "op": "add"
     },
     "sampling": {
-      "mode": "2d",
-      "dimensions": 2, 
       "size": [32, 32]
     }
   }'
@@ -346,8 +450,6 @@ curl -X POST http://localhost:8000/v1/noise \
       "value": 0.5
     },
     "sampling": {
-      "mode": "2d",
-      "dimensions": 2,
       "size": [16, 16]
     }
   }'
@@ -367,48 +469,45 @@ The service includes a CLI for local generation, API inspection, and server star
 
 
 ```bash
-# JSON output (default)
+# JSON output (default) — returns structured array with name + defaults
 noise-generation-service list
 
-# Table format (human-readable)
-noise-generation-service list --format table
+# CSV output — "algorithm","defaults" columns
+noise-generation-service list --format csv
 
 ```
 
-### Generate Noise Locally (all 14 algorithms)
+### Generate Noise Locally (all 15 algorithms)
 
-
+Parameters are passed as a single JSON object via `--params`, and grid size via `--size` (1–3 comma-separated values: `width` for 1D, `width,height` for 2D, `width,height,depth` for 3D; defaults to `64,64` if omitted).
 
 ```bash
-# Basic usage (if omitted, seed defaults to 1 in the service)
-noise-generation-service generate --algorithm perlin --width 64 --height 64
+# Basic usage (if --params is omitted, seed is chosen at random by the service)
+noise-generation-service generate --algorithm perlin --size 64,64
 
 # With custom parameters (all algorithms supported)
 noise-generation-service generate \
   --algorithm fbm \
-  --width 128 --height 128 \
-  --param seed=42 \
-  --param octaves=6 \
-  --param frequency=0.1 \
-  --param lacunarity=2.0 \
-  --param persistence=0.5 \
+  --size 128,128 \
+  --params '{"seed": 42, "octaves": 6, "frequency": 0.1, "lacunarity": 2.0, "persistence": 0.5}' \
   --output noise_field.json
 
 # CSV output
 noise-generation-service generate \
   --algorithm white \
-  --param seed=999 \
-  --width 32 --height 32 \
+  --params '{"seed": 999}' \
+  --size 32,32 \
   --format csv \
   --output noise.csv
 
 # Combinator noise with blend operation
 noise-generation-service generate \
   --algorithm combinator \
-  --param seed=555 \
-  --param op=blend \
-  --param blend_factor=0.5 \
-  --width 32 --height 32
+  --params '{"seed": 555, "op": "blend", "blend_factor": 0.5}' \
+  --size 32,32
+
+# Normalize output values to [0,1]
+noise-generation-service generate --algorithm perlin --normalize
 
 ```
 
