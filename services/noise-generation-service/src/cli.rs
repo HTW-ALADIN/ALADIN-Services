@@ -155,24 +155,29 @@ pub struct GenerateArgs {
     #[arg(short, long)]
     pub algorithm: Algorithm,
 
-    /// Size of noise field (comma-separated, e.g. "64,64" or "64" for square)
-    #[arg(short, long, default_value = "64,64", value_delimiter = ',', num_args = 1..=4)]
-    pub size: Vec<usize>,
+    /// Size of noise field (comma-separated, e.g. "64,64" or "64" for square).
+    /// Maps to `sampling.size` in the API.
+    #[arg(
+        short = 's', long = "sampling-size",
+        default_value = "64,64", value_delimiter = ',', num_args = 1..=4,
+        visible_alias = "size"
+    )]
+    pub sampling_size: Vec<usize>,
 
-    /// Output format: json (default) or csv
-    #[arg(short, long, default_value = "json")]
-    pub format: GenerateFormat,
+    /// Output format: json (default) or csv. Maps to `output.format` in the API.
+    #[arg(short = 'f', long = "output-format", default_value = "json", visible_alias = "format")]
+    pub output_format: GenerateFormat,
 
-    /// Output file (stdout if not specified)
-    #[arg(short, long)]
-    pub output: Option<PathBuf>,
+    /// Output file (stdout if not specified). CLI-only, not part of the API schema.
+    #[arg(short = 'o', long = "output-file", visible_alias = "output")]
+    pub output_file: Option<PathBuf>,
 
     /// Algorithm parameters as JSON object (e.g. '{"seed": 42}')
     #[arg(long, default_value = "{}", value_parser = parse_params_json)]
     pub params: serde_json::Value,
 
-    /// Normalize output values to [0,1] range
-    #[arg(long)]
-    pub normalize: bool,
+    /// Normalize output values to [0,1] range. Maps to `output.normalize` in the API.
+    #[arg(long = "output-normalize", visible_alias = "normalize")]
+    pub output_normalize: bool,
 }
 

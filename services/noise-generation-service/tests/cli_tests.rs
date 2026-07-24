@@ -9,8 +9,8 @@ fn test_cli_parse_generate() {
     match cli.command {
         Some(Commands::Generate(args)) => {
             assert_eq!(args.algorithm, Algorithm::Perlin);
-            assert_eq!(args.format, GenerateFormat::Json);
-            assert_eq!(args.size, vec![64, 64]);
+            assert_eq!(args.output_format, GenerateFormat::Json);
+            assert_eq!(args.sampling_size, vec![64, 64]);
         }
         _ => panic!("Expected Generate command"),
     }
@@ -18,11 +18,11 @@ fn test_cli_parse_generate() {
 
 #[test]
 fn test_cli_generate_custom_size() {
-    let cli = Cli::parse_from(["test", "generate", "--algorithm", "fbm", "--size", "128,256"]);
+    let cli = Cli::parse_from(["test", "generate", "--algorithm", "fbm", "--sampling-size", "128,256"]);
     match cli.command {
         Some(Commands::Generate(args)) => {
             assert_eq!(args.algorithm, Algorithm::Fbm);
-            assert_eq!(args.size, vec![128, 256]);
+            assert_eq!(args.sampling_size, vec![128, 256]);
         }
         _ => panic!("Expected Generate command"),
     }
@@ -80,11 +80,11 @@ fn test_cli_openapi_format_yaml() {
 
 #[test]
 fn test_cli_generate_format_csv() {
-    let cli = Cli::parse_from(["test", "generate", "--algorithm", "simplex", "--format", "csv"]);
+    let cli = Cli::parse_from(["test", "generate", "--algorithm", "simplex", "--output-format", "csv"]);
     match cli.command {
         Some(Commands::Generate(args)) => {
-            assert_eq!(args.format, GenerateFormat::Csv);
-            assert!(!args.normalize);
+            assert_eq!(args.output_format, GenerateFormat::Csv);
+            assert!(!args.output_normalize);
         }
         _ => panic!("Expected Generate command"),
     }
@@ -92,10 +92,10 @@ fn test_cli_generate_format_csv() {
 
 #[test]
 fn test_cli_generate_normalize() {
-    let cli = Cli::parse_from(["test", "generate", "--algorithm", "perlin", "--normalize"]);
+    let cli = Cli::parse_from(["test", "generate", "--algorithm", "perlin", "--output-normalize"]);
     match cli.command {
         Some(Commands::Generate(args)) => {
-            assert!(args.normalize);
+            assert!(args.output_normalize);
         }
         _ => panic!("Expected Generate command"),
     }

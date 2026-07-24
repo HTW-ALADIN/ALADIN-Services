@@ -622,7 +622,7 @@ async fn test_normalize_output() {
     for row in result["data"].as_array().unwrap() {
         for val in row.as_array().unwrap() {
             let v = val.as_f64().unwrap();
-            assert!(v >= 0.0 && v <= 1.0, "normalized value {} out of range", v);
+            assert!((0.0..=1.0).contains(&v), "normalized value {} out of range", v);
         }
     }
 }

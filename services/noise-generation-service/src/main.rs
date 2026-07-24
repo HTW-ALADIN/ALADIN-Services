@@ -93,15 +93,7 @@ async fn handle_list_command(format: ListFormat) {
 // ─── CLI: generate (local) ───────────────────────────────────────────────────
 
 fn build_sampling(size: Vec<usize>) -> lib::Sampling {
-    let mode = match size.len() {
-        1 => "1d",
-        2 => "2d",
-        3 => "3d",
-        4 => "4d",
-        _ => "4d",  // 5D+ will be rejected by generate_noise's check_dimension_support
-    };
     lib::Sampling {
-        mode: mode.to_string(),
         size: Some(size),
     }
 }
@@ -110,7 +102,7 @@ fn parse_typed_params<T>(params: serde_json::Value) -> T
 where
     T: serde::de::DeserializeOwned + Default,
 {
-    if params.is_null() || params.as_object().map_or(false, |o| o.is_empty()) {
+    if params.is_null() || params.as_object().is_some_and(|o| o.is_empty()) {
         return T::default();
     }
     match serde_json::from_value(params) {
@@ -125,15 +117,16 @@ where
 async fn handle_generate_command(args: GenerateArgs) {
     use lib::GenerateNoiseRequest;
 
-    let sampling = build_sampling(args.size);
+    let size = args.sampling_size.clone();
+    let sampling = build_sampling(args.sampling_size);
 
     // Build output config from CLI flags
     let output = Some(lib::Output {
-        format: match args.format {
+        format: match args.output_format {
             GenerateFormat::Json => lib::OutputFormat::Json,
             GenerateFormat::Csv => lib::OutputFormat::Csv,
         },
-        normalize: args.normalize,
+        normalize: args.output_normalize,
     });
 
     // Build the request — supports all algorithm families
@@ -219,16 +212,21 @@ async fn handle_generate_command(args: GenerateArgs) {
     let (status, result) = lib::generate_noise(axum::Json(request)).await;
 
     // Output
-    match args.format {
+    match args.output_format {
         GenerateFormat::Json => {
             let output = serde_json::json!({
                 "status": status.as_u16(),
                 "result": result.0
             });
             let text = serde_json::to_string_pretty(&output).unwrap();
-            write_or_print(text, args.output);
+            write_or_print(text, args.output_file);
         }
         GenerateFormat::Csv => {
+            let dim = size.len();
+            if dim > 2 {
+                eprintln!("Error: CSV output only supports 1D/2D noise fields; use --output-format json for {dim}D data");
+                std::process::exit(1);
+            }
             let mut csv = String::new();
             // data is serde_json::Value: for 2D it's an array of arrays; for 1D it's a flat array
             if let Some(rows) = result.0.data.as_array() {
@@ -250,7 +248,7 @@ async fn handle_generate_command(args: GenerateArgs) {
                     }
                 }
             }
-            write_or_print(csv, args.output);
+            write_or_print(csv, args.output_file);
         }
     }
 }
@@ -264,11 +262,9 @@ async fn handle_openapi_command(format: OpenApiFormat, output: Option<PathBuf>) 
     let text = match format {
         OpenApiFormat::Json => serde_json::to_string_pretty(&spec).unwrap(),
         OpenApiFormat::Yaml => {
-            // Fallback: convert JSON to YAML-like output via serde_yaml
             let json_val: serde_json::Value =
                 serde_json::from_str(&serde_json::to_string_pretty(&spec).unwrap()).unwrap();
-            // Simple YAML output via debug formatting
-            serde_json::to_string_pretty(&json_val).unwrap()
+            serde_yaml::to_string(&json_val).unwrap()
         }
     };
 

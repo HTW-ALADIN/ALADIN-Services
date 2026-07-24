@@ -142,9 +142,10 @@ pub struct CombinatorParams {
     pub blend_factor: Option<f64>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CombinatorOp {
+    #[default]
     Add,
     Multiply,
     Min,
@@ -152,11 +153,7 @@ pub enum CombinatorOp {
     Blend,
 }
 
-impl Default for CombinatorOp {
-    fn default() -> Self {
-        Self::Add
-    }
-}
+
 
 #[derive(Serialize, Deserialize, Debug, Default, ToSchema)]
 pub struct UtilityParams {
@@ -164,18 +161,14 @@ pub struct UtilityParams {
     pub value: Option<f64>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum UtilityKind {
+    #[default]
     Constant,
     Cylinders,
 }
 
-impl Default for UtilityKind {
-    fn default() -> Self {
-        Self::Constant
-    }
-}
 
 #[derive(Serialize, Debug, ToSchema)]
 pub struct AlgorithmInfo {
@@ -222,21 +215,15 @@ pub struct ApiDoc;
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct Sampling {
-    pub mode: String,
     pub size: Option<Vec<usize>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum OutputFormat {
+    #[default]
     Json,
     Csv,
-}
-
-impl Default for OutputFormat {
-    fn default() -> Self {
-        Self::Json
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -962,6 +949,20 @@ fn resolve_params(payload: &GenerateNoiseRequest) -> ResolvedNoiseParams {
 
 // ─── Noise generation per algorithm (flat output) ──────────────────────────
 
+/// Wraps filler for noise-rs fractal types (Fbm, Billow, RidgedMulti, HybridMulti).
+macro_rules! fill_fractal {
+    ($flat:expr, $size:expr, $mode:expr, $seed:expr,
+     $octaves:expr, $frequency:expr, $lacunarity:expr, $persistence:expr,
+     $fractal_type:ty) => {{
+        let n = <$fractal_type>::new($seed)
+            .set_octaves($octaves)
+            .set_frequency($frequency)
+            .set_lacunarity($lacunarity)
+            .set_persistence($persistence);
+        fill_noise_rs_4d::<$fractal_type>($flat, $size, $mode, &n);
+    }};
+}
+
 /// Generates noise into a flat Vec<f64> according to the requested dimensionality.
 /// `size` is the grid extent: [width] for 1D, [width, height] for 2D, [width, height, depth] for 3D.
 /// `resolved` contains the already-resolved parameters (seed etc.) — this is the *only* place
@@ -974,21 +975,15 @@ fn generate_flat(
     mode: &str,
 ) {
     match (payload, resolved) {
-        // ─── fastnoise-lite algorithms (2D/3D) ────────────────────────────────
+        // ─── fastnoise-lite seed-only algorithms (2D/3D) ───────────────────────
         (GenerateNoiseRequest::Perlin { .. }, ResolvedNoiseParams::SeedOnly { seed }) => {
-            let mut noise = FastNoiseLite::with_seed(*seed as i32);
-            noise.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
-            fill_fnl(flat, size, mode, &noise);
+            fill_fnl_seed_only(flat, size, mode, *seed, fastnoise_lite::NoiseType::Perlin);
         }
         (GenerateNoiseRequest::OpenSimplex2 { .. }, ResolvedNoiseParams::SeedOnly { seed }) => {
-            let mut noise = FastNoiseLite::with_seed(*seed as i32);
-            noise.set_noise_type(Some(fastnoise_lite::NoiseType::OpenSimplex2));
-            fill_fnl(flat, size, mode, &noise);
+            fill_fnl_seed_only(flat, size, mode, *seed, fastnoise_lite::NoiseType::OpenSimplex2);
         }
         (GenerateNoiseRequest::Value { .. }, ResolvedNoiseParams::SeedOnly { seed }) => {
-            let mut noise = FastNoiseLite::with_seed(*seed as i32);
-            noise.set_noise_type(Some(fastnoise_lite::NoiseType::Value));
-            fill_fnl(flat, size, mode, &noise);
+            fill_fnl_seed_only(flat, size, mode, *seed, fastnoise_lite::NoiseType::Value);
         }
         (
             GenerateNoiseRequest::Cellular { .. },
@@ -1065,71 +1060,27 @@ fn generate_flat(
         // ─── Fractal family (Fbm, Billow, RidgedMulti, HybridMulti) ──────────
         (
             GenerateNoiseRequest::Fbm { .. },
-            ResolvedNoiseParams::Fractal {
-                seed,
-                octaves,
-                frequency,
-                lacunarity,
-                persistence,
-            },
+            ResolvedNoiseParams::Fractal { seed, octaves, frequency, lacunarity, persistence },
         ) => {
-            let n = noise::Fbm::<Perlin>::new(*seed)
-                .set_octaves(*octaves)
-                .set_frequency(*frequency)
-                .set_lacunarity(*lacunarity)
-                .set_persistence(*persistence);
-            fill_noise_rs_4d::<noise::Fbm<Perlin>>(flat, size, mode, &n);
+            fill_fractal!(flat, size, mode, *seed, *octaves, *frequency, *lacunarity, *persistence, noise::Fbm<Perlin>);
         }
         (
             GenerateNoiseRequest::Billow { .. },
-            ResolvedNoiseParams::Fractal {
-                seed,
-                octaves,
-                frequency,
-                lacunarity,
-                persistence,
-            },
+            ResolvedNoiseParams::Fractal { seed, octaves, frequency, lacunarity, persistence },
         ) => {
-            let n = noise::Billow::<Perlin>::new(*seed)
-                .set_octaves(*octaves)
-                .set_frequency(*frequency)
-                .set_lacunarity(*lacunarity)
-                .set_persistence(*persistence);
-            fill_noise_rs_4d::<noise::Billow<Perlin>>(flat, size, mode, &n);
+            fill_fractal!(flat, size, mode, *seed, *octaves, *frequency, *lacunarity, *persistence, noise::Billow<Perlin>);
         }
         (
             GenerateNoiseRequest::RidgedMulti { .. },
-            ResolvedNoiseParams::Fractal {
-                seed,
-                octaves,
-                frequency,
-                lacunarity,
-                persistence,
-            },
+            ResolvedNoiseParams::Fractal { seed, octaves, frequency, lacunarity, persistence },
         ) => {
-            let n = noise::RidgedMulti::<Perlin>::new(*seed)
-                .set_octaves(*octaves)
-                .set_frequency(*frequency)
-                .set_lacunarity(*lacunarity)
-                .set_persistence(*persistence);
-            fill_noise_rs_4d::<noise::RidgedMulti<Perlin>>(flat, size, mode, &n);
+            fill_fractal!(flat, size, mode, *seed, *octaves, *frequency, *lacunarity, *persistence, noise::RidgedMulti<Perlin>);
         }
         (
             GenerateNoiseRequest::HybridMulti { .. },
-            ResolvedNoiseParams::Fractal {
-                seed,
-                octaves,
-                frequency,
-                lacunarity,
-                persistence,
-            },
+            ResolvedNoiseParams::Fractal { seed, octaves, frequency, lacunarity, persistence },
         ) => {
-            let n = HybridMulti::<Perlin>::new(*seed)
-                .set_octaves(*octaves)
-                .set_frequency(*frequency)
-                .set_lacunarity(*lacunarity)
-                .set_persistence(*persistence);
-            fill_noise_rs_4d::<HybridMulti<Perlin>>(flat, size, mode, &n);
+            fill_fractal!(flat, size, mode, *seed, *octaves, *frequency, *lacunarity, *persistence, HybridMulti<Perlin>);
         }
         // ─── Combinator ──────────────────────────────────────────────────────
         (
@@ -1214,6 +1165,13 @@ fn generate_flat(
 }
 
 // ─── Dimension-generic fill helpers ──────────────────────────────────────────
+
+/// Wraps fill_fnl for seed-only FNL algorithms (Perlin, OpenSimplex2, Value).
+fn fill_fnl_seed_only(flat: &mut [f64], size: &[usize], mode: &str, seed: u32, noise_type: fastnoise_lite::NoiseType) {
+    let mut noise = FastNoiseLite::with_seed(seed as i32);
+    noise.set_noise_type(Some(noise_type));
+    fill_fnl(flat, size, mode, &noise);
+}
 
 /// Fills `flat` using fastnoise-lite (2D or 3D).
 fn fill_fnl(flat: &mut [f64], size: &[usize], mode: &str, noise: &FastNoiseLite) {

@@ -484,37 +484,49 @@ noise-generation-service list --format csv
 
 ### Generate Noise Locally (all 15 algorithms)
 
-Parameters are passed as a single JSON object via `--params`, and grid size via `--size` (1–3 comma-separated values: `width` for 1D, `width,height` for 2D, `width,height,depth` for 3D; defaults to `64,64` if omitted).
+Parameters are passed as a single JSON object via `--params`, and grid size via
+`--sampling-size` (or the deprecated alias `--size`; 1–4 comma-separated
+values: `width` for 1D, `width,height` for 2D, `width,height,depth` for 3D,
+`width,height,depth,time` for 4D; defaults to `64,64` if omitted).
+
+> **CLI-API mapping**: `--sampling-size` → `sampling.size`,
+> `--output-format` → `output.format`,
+> `--output-normalize` → `output.normalize`.
+> `--output-file` is CLI-only (not part of the API schema).
+> Deprecated aliases (`--size`, `--format`, `--normalize`) still work for
+> backward compatibility.
 
 ```bash
 # Basic usage (if --params is omitted, seed is chosen at random by the service)
-noise-generation-service generate --algorithm perlin --size 64,64
+noise-generation-service generate --algorithm perlin --sampling-size 64,64
 
 # With custom parameters (all algorithms supported)
 noise-generation-service generate \
   --algorithm fbm \
-  --size 128,128 \
+  --sampling-size 128,128 \
   --params '{"seed": 42, "octaves": 6, "frequency": 0.1, "lacunarity": 2.0, "persistence": 0.5}' \
-  --output noise_field.json
+  --output-file noise_field.json
 
 # CSV output
 noise-generation-service generate \
   --algorithm white \
   --params '{"seed": 999}' \
-  --size 32,32 \
-  --format csv \
-  --output noise.csv
+  --sampling-size 32,32 \
+  --output-format csv \
+  --output-file noise.csv
 
 # Combinator noise with blend operation
 noise-generation-service generate \
   --algorithm combinator \
   --params '{"seed": 555, "op": "blend", "blend_factor": 0.5}' \
-  --size 32,32
+  --sampling-size 32,32
 
 # Normalize output values to [0,1]
-noise-generation-service generate --algorithm perlin --normalize
+noise-generation-service generate --algorithm perlin --output-normalize
 
-```
+# CSV output is limited to 1D/2D data; 3D/4D requests will error:
+noise-generation-service generate --algorithm white --sampling-size 4,4,4 --output-format csv
+# → Error: CSV output only supports 1D/2D noise fields; use --output-format json for 3D data
 
 ### Start HTTP Server
 
@@ -688,7 +700,7 @@ All rows use `POST /v1/noise` with the given `algorithm` tag; default libraries 
 
 
 
-White noise requires no coherence/interpolation logic and is implemented natively rather than via an external library. Because it is inherently uncorrelated, its `params` schema is minimal (`seed` only) and `sampling.mode: "grid"` bypasses interpolation entirely — each grid cell is sampled independently, so generation is trivially parallelizable.
+White noise requires no coherence/interpolation logic and is implemented natively rather than via an external library. Because it is inherently uncorrelated, its `params` schema is minimal (`seed` only) — each grid cell is sampled independently, so generation is trivially parallelizable.
 
 | `algorithm` tag | Canonical family | Underlying function |
 | --- | --- | --- |
