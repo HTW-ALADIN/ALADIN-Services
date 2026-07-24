@@ -129,84 +129,26 @@ async fn handle_generate_command(args: GenerateArgs) {
         normalize: args.output_normalize,
     });
 
-    // Build the request — supports all algorithm families
-    let request = match args.algorithm {
-        Algorithm::Perlin => GenerateNoiseRequest::Perlin {
-            params: parse_typed_params::<lib::SeedParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::Simplex => GenerateNoiseRequest::Simplex {
-            params: parse_typed_params::<lib::SeedParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::OpenSimplex2 => GenerateNoiseRequest::OpenSimplex2 {
-            params: parse_typed_params::<lib::SeedParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::SuperSimplex => GenerateNoiseRequest::SuperSimplex {
-            params: parse_typed_params::<lib::SeedParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::Value => GenerateNoiseRequest::Value {
-            params: parse_typed_params::<lib::SeedParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::Cellular => GenerateNoiseRequest::Cellular {
-            params: parse_typed_params::<lib::CellularParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::Fbm => GenerateNoiseRequest::Fbm {
-            params: parse_typed_params::<lib::FractalParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::Billow => GenerateNoiseRequest::Billow {
-            params: parse_typed_params::<lib::FractalParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::RidgedMulti => GenerateNoiseRequest::RidgedMulti {
-            params: parse_typed_params::<lib::RidgedMultiParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::HybridMulti => GenerateNoiseRequest::HybridMulti {
-            params: parse_typed_params::<lib::RidgedMultiParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::PingPong => GenerateNoiseRequest::PingPong {
-            params: parse_typed_params::<lib::PingPongParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::DomainWarp => GenerateNoiseRequest::DomainWarp {
-            params: parse_typed_params::<lib::DomainWarpParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::Combinator => GenerateNoiseRequest::Combinator {
-            params: parse_typed_params::<lib::CombinatorParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::Utility => GenerateNoiseRequest::Utility {
-            params: parse_typed_params::<lib::UtilityParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
-        Algorithm::White => GenerateNoiseRequest::White {
-            params: parse_typed_params::<lib::SeedParams>(args.params),
-            sampling,
-            output: output.clone(),
-        },
+    // Build the algorithm params — single match, no duplicated output/sampling
+    let algorithm = match args.algorithm {
+        Algorithm::Perlin => lib::AlgorithmParams::Perlin(parse_typed_params::<lib::SeedParams>(args.params)),
+        Algorithm::Simplex => lib::AlgorithmParams::Simplex(parse_typed_params::<lib::SeedParams>(args.params)),
+        Algorithm::OpenSimplex2 => lib::AlgorithmParams::OpenSimplex2(parse_typed_params::<lib::SeedParams>(args.params)),
+        Algorithm::SuperSimplex => lib::AlgorithmParams::SuperSimplex(parse_typed_params::<lib::SeedParams>(args.params)),
+        Algorithm::Value => lib::AlgorithmParams::Value(parse_typed_params::<lib::SeedParams>(args.params)),
+        Algorithm::Cellular => lib::AlgorithmParams::Cellular(parse_typed_params::<lib::CellularParams>(args.params)),
+        Algorithm::Fbm => lib::AlgorithmParams::Fbm(parse_typed_params::<lib::FractalParams>(args.params)),
+        Algorithm::Billow => lib::AlgorithmParams::Billow(parse_typed_params::<lib::FractalParams>(args.params)),
+        Algorithm::RidgedMulti => lib::AlgorithmParams::RidgedMulti(parse_typed_params::<lib::RidgedMultiParams>(args.params)),
+        Algorithm::HybridMulti => lib::AlgorithmParams::HybridMulti(parse_typed_params::<lib::RidgedMultiParams>(args.params)),
+        Algorithm::PingPong => lib::AlgorithmParams::PingPong(parse_typed_params::<lib::PingPongParams>(args.params)),
+        Algorithm::DomainWarp => lib::AlgorithmParams::DomainWarp(parse_typed_params::<lib::DomainWarpParams>(args.params)),
+        Algorithm::Combinator => lib::AlgorithmParams::Combinator(parse_typed_params::<lib::CombinatorParams>(args.params)),
+        Algorithm::Utility => lib::AlgorithmParams::Utility(parse_typed_params::<lib::UtilityParams>(args.params)),
+        Algorithm::White => lib::AlgorithmParams::White(parse_typed_params::<lib::SeedParams>(args.params)),
     };
+
+    let request = GenerateNoiseRequest { algorithm, sampling, output };
 
     // Generate noise
     let (status, result) = lib::generate_noise(axum::Json(request)).await;

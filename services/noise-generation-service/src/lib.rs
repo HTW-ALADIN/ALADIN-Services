@@ -188,6 +188,7 @@ pub struct AlgorithmInfo {
     components(
         schemas(
             GenerateNoiseRequest,
+            AlgorithmParams,
             Sampling,
             Output,
             OutputFormat,
@@ -233,113 +234,31 @@ pub struct Output {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
-#[serde(tag = "algorithm")]
-pub enum GenerateNoiseRequest {
-    #[serde(rename = "perlin")]
-    Perlin {
-        #[serde(default)]
-        params: SeedParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "simplex")]
-    Simplex {
-        #[serde(default)]
-        params: SeedParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "opensimplex2")]
-    OpenSimplex2 {
-        #[serde(default)]
-        params: SeedParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "supersimplex")]
-    SuperSimplex {
-        #[serde(default)]
-        params: SeedParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "value")]
-    Value {
-        #[serde(default)]
-        params: SeedParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "cellular")]
-    Cellular {
-        #[serde(default)]
-        params: CellularParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "fbm")]
-    Fbm {
-        #[serde(default)]
-        params: FractalParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "billow")]
-    Billow {
-        #[serde(default)]
-        params: FractalParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "ridged_multi")]
-    RidgedMulti {
-        #[serde(default)]
-        params: RidgedMultiParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "hybrid_multi")]
-    HybridMulti {
-        #[serde(default)]
-        params: RidgedMultiParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "pingpong")]
-    PingPong {
-        #[serde(default)]
-        params: PingPongParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "domain_warp")]
-    DomainWarp {
-        #[serde(default)]
-        params: DomainWarpParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "combinator")]
-    Combinator {
-        #[serde(default)]
-        params: CombinatorParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "utility")]
-    Utility {
-        #[serde(default)]
-        params: UtilityParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
-    #[serde(rename = "white")]
-    White {
-        #[serde(default)]
-        params: SeedParams,
-        sampling: Sampling,
-        output: Option<Output>,
-    },
+#[serde(tag = "algorithm", content = "params")]
+pub enum AlgorithmParams {
+    #[serde(rename = "perlin")]       Perlin(#[serde(default)] SeedParams),
+    #[serde(rename = "simplex")]      Simplex(#[serde(default)] SeedParams),
+    #[serde(rename = "opensimplex2")] OpenSimplex2(#[serde(default)] SeedParams),
+    #[serde(rename = "supersimplex")] SuperSimplex(#[serde(default)] SeedParams),
+    #[serde(rename = "value")]        Value(#[serde(default)] SeedParams),
+    #[serde(rename = "cellular")]     Cellular(#[serde(default)] CellularParams),
+    #[serde(rename = "fbm")]          Fbm(#[serde(default)] FractalParams),
+    #[serde(rename = "billow")]       Billow(#[serde(default)] FractalParams),
+    #[serde(rename = "ridged_multi")] RidgedMulti(#[serde(default)] RidgedMultiParams),
+    #[serde(rename = "hybrid_multi")] HybridMulti(#[serde(default)] RidgedMultiParams),
+    #[serde(rename = "pingpong")]     PingPong(#[serde(default)] PingPongParams),
+    #[serde(rename = "domain_warp")]  DomainWarp(#[serde(default)] DomainWarpParams),
+    #[serde(rename = "combinator")]   Combinator(#[serde(default)] CombinatorParams),
+    #[serde(rename = "utility")]      Utility(#[serde(default)] UtilityParams),
+    #[serde(rename = "white")]        White(#[serde(default)] SeedParams),
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct GenerateNoiseRequest {
+    #[serde(flatten)]
+    pub algorithm: AlgorithmParams,
+    pub sampling: Sampling,
+    pub output: Option<Output>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
@@ -558,22 +477,22 @@ pub async fn generate_noise(
 
 impl GenerateNoiseRequest {
     fn algorithm_name(&self) -> String {
-        match self {
-            GenerateNoiseRequest::Perlin { .. } => "perlin",
-            GenerateNoiseRequest::Simplex { .. } => "simplex",
-            GenerateNoiseRequest::OpenSimplex2 { .. } => "opensimplex2",
-            GenerateNoiseRequest::SuperSimplex { .. } => "supersimplex",
-            GenerateNoiseRequest::Value { .. } => "value",
-            GenerateNoiseRequest::Cellular { .. } => "cellular",
-            GenerateNoiseRequest::Fbm { .. } => "fbm",
-            GenerateNoiseRequest::Billow { .. } => "billow",
-            GenerateNoiseRequest::RidgedMulti { .. } => "ridged_multi",
-            GenerateNoiseRequest::HybridMulti { .. } => "hybrid_multi",
-            GenerateNoiseRequest::PingPong { .. } => "pingpong",
-            GenerateNoiseRequest::DomainWarp { .. } => "domain_warp",
-            GenerateNoiseRequest::Combinator { .. } => "combinator",
-            GenerateNoiseRequest::Utility { .. } => "utility",
-            GenerateNoiseRequest::White { .. } => "white",
+        match &self.algorithm {
+            AlgorithmParams::Perlin(..) => "perlin",
+            AlgorithmParams::Simplex(..) => "simplex",
+            AlgorithmParams::OpenSimplex2(..) => "opensimplex2",
+            AlgorithmParams::SuperSimplex(..) => "supersimplex",
+            AlgorithmParams::Value(..) => "value",
+            AlgorithmParams::Cellular(..) => "cellular",
+            AlgorithmParams::Fbm(..) => "fbm",
+            AlgorithmParams::Billow(..) => "billow",
+            AlgorithmParams::RidgedMulti(..) => "ridged_multi",
+            AlgorithmParams::HybridMulti(..) => "hybrid_multi",
+            AlgorithmParams::PingPong(..) => "pingpong",
+            AlgorithmParams::DomainWarp(..) => "domain_warp",
+            AlgorithmParams::Combinator(..) => "combinator",
+            AlgorithmParams::Utility(..) => "utility",
+            AlgorithmParams::White(..) => "white",
         }
         .to_string()
     }
@@ -597,9 +516,9 @@ impl GenerateNoiseRequest {
                 mode
             ));
         }
-        match self {
+        match &self.algorithm {
             // SuperSimplex: noise-rs but only 2D and 3D (no 4D impl in crate)
-            GenerateNoiseRequest::SuperSimplex { .. } => match mode {
+            AlgorithmParams::SuperSimplex(..) => match mode {
                 "1d" => Err(format!(
                     "algorithm '{}' does not support 1D sampling (noise-crate requires at least 2D)",
                     self.algorithm_name()
@@ -612,13 +531,13 @@ impl GenerateNoiseRequest {
             },
             // Other noise-crate types: support 2D, 3D, and 4D via NoiseFn<f64, 2/3/4>.
             // The noise crate does NOT support 1D.
-            GenerateNoiseRequest::Simplex { .. }
-            | GenerateNoiseRequest::Fbm { .. }
-            | GenerateNoiseRequest::Billow { .. }
-            | GenerateNoiseRequest::RidgedMulti { .. }
-            | GenerateNoiseRequest::HybridMulti { .. }
-            | GenerateNoiseRequest::Combinator { .. }
-            | GenerateNoiseRequest::Utility { .. } => match mode {
+            AlgorithmParams::Simplex(..)
+            | AlgorithmParams::Fbm(..)
+            | AlgorithmParams::Billow(..)
+            | AlgorithmParams::RidgedMulti(..)
+            | AlgorithmParams::HybridMulti(..)
+            | AlgorithmParams::Combinator(..)
+            | AlgorithmParams::Utility(..) => match mode {
                 "1d" => Err(format!(
                     "algorithm '{}' does not support 1D sampling (noise-crate requires at least 2D)",
                     self.algorithm_name()
@@ -627,11 +546,11 @@ impl GenerateNoiseRequest {
             },
             // FastNoiseLite types (Perlin, OpenSimplex2, Value, Cellular, PingPong):
             // support 2D and 3D via get_noise_2d/get_noise_3d. No 1D or 4D in fnl.
-            GenerateNoiseRequest::Perlin { .. }
-            | GenerateNoiseRequest::OpenSimplex2 { .. }
-            | GenerateNoiseRequest::Value { .. }
-            | GenerateNoiseRequest::Cellular { .. }
-            | GenerateNoiseRequest::PingPong { .. } => match mode {
+            AlgorithmParams::Perlin(..)
+            | AlgorithmParams::OpenSimplex2(..)
+            | AlgorithmParams::Value(..)
+            | AlgorithmParams::Cellular(..)
+            | AlgorithmParams::PingPong(..) => match mode {
                 "1d" => Err(format!(
                     "algorithm '{}' does not support 1D sampling (fastnoise-lite requires at least 2D)",
                     self.algorithm_name()
@@ -643,7 +562,7 @@ impl GenerateNoiseRequest {
                 _ => Ok(()),
             },
             // DomainWarp: only 2D and 3D
-            GenerateNoiseRequest::DomainWarp { .. } => match mode {
+            AlgorithmParams::DomainWarp(..) => match mode {
                 "1d" => Err(format!(
                     "algorithm '{}' does not support 1D sampling (domain warping requires at least 2D)",
                     self.algorithm_name()
@@ -655,50 +574,16 @@ impl GenerateNoiseRequest {
                 _ => Ok(()),
             },
             // White noise: supports all dimensions natively (1D, 2D, 3D, 4D)
-            GenerateNoiseRequest::White { .. } => Ok(()),
+            AlgorithmParams::White(..) => Ok(()),
         }
     }
 
     fn sampling_size(&self) -> Option<Vec<usize>> {
-        match self {
-            GenerateNoiseRequest::Perlin { sampling, .. }
-            | GenerateNoiseRequest::Simplex { sampling, .. }
-            | GenerateNoiseRequest::OpenSimplex2 { sampling, .. }
-            | GenerateNoiseRequest::SuperSimplex { sampling, .. }
-            | GenerateNoiseRequest::Value { sampling, .. }
-            | GenerateNoiseRequest::Cellular { sampling, .. }
-            | GenerateNoiseRequest::Fbm { sampling, .. }
-            | GenerateNoiseRequest::Billow { sampling, .. }
-            | GenerateNoiseRequest::RidgedMulti { sampling, .. }
-            | GenerateNoiseRequest::HybridMulti { sampling, .. }
-            | GenerateNoiseRequest::PingPong { sampling, .. }
-            | GenerateNoiseRequest::DomainWarp { sampling, .. }
-            | GenerateNoiseRequest::Combinator { sampling, .. }
-            | GenerateNoiseRequest::Utility { sampling, .. }
-            | GenerateNoiseRequest::White { sampling, .. } => sampling.size.clone(),
-        }
+        self.sampling.size.clone()
     }
 
     fn should_normalize(&self) -> bool {
-        match self {
-            GenerateNoiseRequest::Perlin { output, .. }
-            | GenerateNoiseRequest::Simplex { output, .. }
-            | GenerateNoiseRequest::OpenSimplex2 { output, .. }
-            | GenerateNoiseRequest::SuperSimplex { output, .. }
-            | GenerateNoiseRequest::Value { output, .. }
-            | GenerateNoiseRequest::Cellular { output, .. }
-            | GenerateNoiseRequest::Fbm { output, .. }
-            | GenerateNoiseRequest::Billow { output, .. }
-            | GenerateNoiseRequest::RidgedMulti { output, .. }
-            | GenerateNoiseRequest::HybridMulti { output, .. }
-            | GenerateNoiseRequest::PingPong { output, .. }
-            | GenerateNoiseRequest::DomainWarp { output, .. }
-            | GenerateNoiseRequest::Combinator { output, .. }
-            | GenerateNoiseRequest::Utility { output, .. }
-            | GenerateNoiseRequest::White { output, .. } => {
-                output.as_ref().map(|o| o.normalize).unwrap_or(false)
-            }
-        }
+        self.output.as_ref().map(|o| o.normalize).unwrap_or(false)
     }
 }
 
@@ -888,14 +773,14 @@ fn resolve_fractal(
 /// Resolves optional request parameters into concrete values once.
 /// Uses the centralized `DEFAULT_*` constants for defaults.
 fn resolve_params(payload: &GenerateNoiseRequest) -> ResolvedNoiseParams {
-    match payload {
-        GenerateNoiseRequest::Perlin { params, .. }
-        | GenerateNoiseRequest::Simplex { params, .. }
-        | GenerateNoiseRequest::OpenSimplex2 { params, .. }
-        | GenerateNoiseRequest::SuperSimplex { params, .. }
-        | GenerateNoiseRequest::Value { params, .. }
-        | GenerateNoiseRequest::White { params, .. } => resolve_seed_only(params),
-        GenerateNoiseRequest::Cellular { params, .. } => ResolvedNoiseParams::Cellular {
+    match &payload.algorithm {
+        AlgorithmParams::Perlin(params)
+        | AlgorithmParams::Simplex(params)
+        | AlgorithmParams::OpenSimplex2(params)
+        | AlgorithmParams::SuperSimplex(params)
+        | AlgorithmParams::Value(params)
+        | AlgorithmParams::White(params) => resolve_seed_only(params),
+        AlgorithmParams::Cellular(params) => ResolvedNoiseParams::Cellular {
             seed: get_seed(params.seed),
             distance_function: params
                 .distance_function
@@ -907,40 +792,40 @@ fn resolve_params(payload: &GenerateNoiseRequest) -> ResolvedNoiseParams {
                 .unwrap_or(CellularReturnType::CellValue),
             jitter: params.jitter.unwrap_or(DEFAULT_JITTER),
         },
-        GenerateNoiseRequest::Fbm { params, .. } => resolve_fractal(
+        AlgorithmParams::Fbm(params) => resolve_fractal(
             params.seed, params.octaves, params.frequency,
             params.lacunarity, params.persistence,
             DEFAULT_PERSISTENCE_FBM_BILLOW,
         ),
-        GenerateNoiseRequest::Billow { params, .. } => resolve_fractal(
+        AlgorithmParams::Billow(params) => resolve_fractal(
             params.seed, params.octaves, params.frequency,
             params.lacunarity, params.persistence,
             DEFAULT_PERSISTENCE_FBM_BILLOW,
         ),
-        GenerateNoiseRequest::RidgedMulti { params, .. } => resolve_fractal(
+        AlgorithmParams::RidgedMulti(params) => resolve_fractal(
             params.seed, params.octaves, params.frequency,
             params.lacunarity, params.persistence,
             DEFAULT_PERSISTENCE_RIDGED,
         ),
-        GenerateNoiseRequest::HybridMulti { params, .. } => resolve_fractal(
+        AlgorithmParams::HybridMulti(params) => resolve_fractal(
             params.seed, params.octaves, params.frequency,
             params.lacunarity, params.persistence,
             DEFAULT_PERSISTENCE_HYBRID,
         ),
-        GenerateNoiseRequest::PingPong { params, .. } => ResolvedNoiseParams::PingPong {
+        AlgorithmParams::PingPong(params) => ResolvedNoiseParams::PingPong {
             seed: get_seed(params.seed),
             strength: params.strength.unwrap_or(DEFAULT_STRENGTH),
         },
-        GenerateNoiseRequest::DomainWarp { params, .. } => ResolvedNoiseParams::DomainWarp {
+        AlgorithmParams::DomainWarp(params) => ResolvedNoiseParams::DomainWarp {
             seed: get_seed(params.seed),
             amplitude: params.amplitude.unwrap_or(DEFAULT_AMPLITUDE),
         },
-        GenerateNoiseRequest::Combinator { params, .. } => ResolvedNoiseParams::Combinator {
+        AlgorithmParams::Combinator(params) => ResolvedNoiseParams::Combinator {
             seed: get_seed(params.seed),
             op: params.op.clone().unwrap_or(CombinatorOp::Add),
             blend_factor: params.blend_factor.unwrap_or(DEFAULT_BLEND_FACTOR),
         },
-        GenerateNoiseRequest::Utility { params, .. } => ResolvedNoiseParams::Utility {
+        AlgorithmParams::Utility(params) => ResolvedNoiseParams::Utility {
             kind: params.kind.clone().unwrap_or(UtilityKind::Constant),
             value: params.value.unwrap_or(DEFAULT_UTILITY_VALUE),
         },
@@ -974,19 +859,19 @@ fn generate_flat(
     size: &[usize],
     mode: &str,
 ) {
-    match (payload, resolved) {
+    match (&payload.algorithm, resolved) {
         // ─── fastnoise-lite seed-only algorithms (2D/3D) ───────────────────────
-        (GenerateNoiseRequest::Perlin { .. }, ResolvedNoiseParams::SeedOnly { seed }) => {
+        (AlgorithmParams::Perlin(..), ResolvedNoiseParams::SeedOnly { seed }) => {
             fill_fnl_seed_only(flat, size, mode, *seed, fastnoise_lite::NoiseType::Perlin);
         }
-        (GenerateNoiseRequest::OpenSimplex2 { .. }, ResolvedNoiseParams::SeedOnly { seed }) => {
+        (AlgorithmParams::OpenSimplex2(..), ResolvedNoiseParams::SeedOnly { seed }) => {
             fill_fnl_seed_only(flat, size, mode, *seed, fastnoise_lite::NoiseType::OpenSimplex2);
         }
-        (GenerateNoiseRequest::Value { .. }, ResolvedNoiseParams::SeedOnly { seed }) => {
+        (AlgorithmParams::Value(..), ResolvedNoiseParams::SeedOnly { seed }) => {
             fill_fnl_seed_only(flat, size, mode, *seed, fastnoise_lite::NoiseType::Value);
         }
         (
-            GenerateNoiseRequest::Cellular { .. },
+            AlgorithmParams::Cellular(..),
             ResolvedNoiseParams::Cellular {
                 seed,
                 distance_function,
@@ -1032,7 +917,7 @@ fn generate_flat(
         }
         // ─── PingPong: fastnoise-lite fractal ─────────────────────────────────
         (
-            GenerateNoiseRequest::PingPong { .. },
+            AlgorithmParams::PingPong(..),
             ResolvedNoiseParams::PingPong { seed, strength },
         ) => {
             let mut noise = FastNoiseLite::with_seed(*seed as i32);
@@ -1043,48 +928,48 @@ fn generate_flat(
         }
         // ─── DomainWarp: fastnoise-lite domain warp ───────────────────────────
         (
-            GenerateNoiseRequest::DomainWarp { .. },
+            AlgorithmParams::DomainWarp(..),
             ResolvedNoiseParams::DomainWarp { seed, amplitude },
         ) => {
             fill_domain_warp(flat, size, mode, *seed as i32, *amplitude);
         }
         // ─── noise-crate algorithms (2D/3D) ───────────────────────────────────
-        (GenerateNoiseRequest::Simplex { .. }, ResolvedNoiseParams::SeedOnly { seed }) => {
+        (AlgorithmParams::Simplex(..), ResolvedNoiseParams::SeedOnly { seed }) => {
             let simplex = Simplex::new(*seed);
             fill_noise_rs_4d::<Simplex>(flat, size, mode, &simplex);
         }
-        (GenerateNoiseRequest::SuperSimplex { .. }, ResolvedNoiseParams::SeedOnly { seed }) => {
+        (AlgorithmParams::SuperSimplex(..), ResolvedNoiseParams::SeedOnly { seed }) => {
             let s = SuperSimplex::new(*seed);
             fill_noise_rs::<SuperSimplex>(flat, size, mode, &s);
         }
         // ─── Fractal family (Fbm, Billow, RidgedMulti, HybridMulti) ──────────
         (
-            GenerateNoiseRequest::Fbm { .. },
+            AlgorithmParams::Fbm(..),
             ResolvedNoiseParams::Fractal { seed, octaves, frequency, lacunarity, persistence },
         ) => {
             fill_fractal!(flat, size, mode, *seed, *octaves, *frequency, *lacunarity, *persistence, noise::Fbm<Perlin>);
         }
         (
-            GenerateNoiseRequest::Billow { .. },
+            AlgorithmParams::Billow(..),
             ResolvedNoiseParams::Fractal { seed, octaves, frequency, lacunarity, persistence },
         ) => {
             fill_fractal!(flat, size, mode, *seed, *octaves, *frequency, *lacunarity, *persistence, noise::Billow<Perlin>);
         }
         (
-            GenerateNoiseRequest::RidgedMulti { .. },
+            AlgorithmParams::RidgedMulti(..),
             ResolvedNoiseParams::Fractal { seed, octaves, frequency, lacunarity, persistence },
         ) => {
             fill_fractal!(flat, size, mode, *seed, *octaves, *frequency, *lacunarity, *persistence, noise::RidgedMulti<Perlin>);
         }
         (
-            GenerateNoiseRequest::HybridMulti { .. },
+            AlgorithmParams::HybridMulti(..),
             ResolvedNoiseParams::Fractal { seed, octaves, frequency, lacunarity, persistence },
         ) => {
             fill_fractal!(flat, size, mode, *seed, *octaves, *frequency, *lacunarity, *persistence, HybridMulti<Perlin>);
         }
         // ─── Combinator ──────────────────────────────────────────────────────
         (
-            GenerateNoiseRequest::Combinator { .. },
+            AlgorithmParams::Combinator(..),
             ResolvedNoiseParams::Combinator { seed, op, blend_factor },
         ) => {
             let source1 = Perlin::new(*seed);
@@ -1099,7 +984,7 @@ fn generate_flat(
             });
         }
         // ─── Utility ─────────────────────────────────────────────────────────
-        (GenerateNoiseRequest::Utility { .. }, ResolvedNoiseParams::Utility { kind, value }) => {
+        (AlgorithmParams::Utility(..), ResolvedNoiseParams::Utility { kind, value }) => {
             let val = *value;
             fill_cell_loops!(flat, size, mode, |pos| match kind {
                 UtilityKind::Constant => Constant::new(val).get(pos),
@@ -1107,7 +992,7 @@ fn generate_flat(
             });
         }
         // ─── White noise ─────────────────────────────────────────────────────
-        (GenerateNoiseRequest::White { .. }, ResolvedNoiseParams::SeedOnly { seed }) => {
+        (AlgorithmParams::White(..), ResolvedNoiseParams::SeedOnly { seed }) => {
             let s = *seed as u64;
             match mode {
                 "1d" => {
@@ -1455,5 +1340,132 @@ fn white_noise_4d(seed: u64, x: usize, y: usize, z: usize, w: usize) -> f64 {
     state = state.wrapping_mul(12741261754838537793);
     let hash = state ^ (state >> 31);
     (hash as f64 / u64::MAX as f64) * 2.0 - 1.0
+}
+
+// ─── Tests ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Verify that the JSON wire format matches the expected layout:
+    ///   { "algorithm": "perlin", "params": {...}, "sampling": {...}, "output": {...} }
+    /// The order of keys in the serialized JSON is determined by serde's flatten
+    /// behavior — the only requirement is that the four keys exist with correct values.
+    #[test]
+    fn test_serialization_perlin() {
+        let req = GenerateNoiseRequest {
+            algorithm: AlgorithmParams::Perlin(SeedParams { seed: Some(42) }),
+            sampling: Sampling { size: Some(vec![64, 64]) },
+            output: Some(Output {
+                format: OutputFormat::Json,
+                normalize: false,
+            }),
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["algorithm"], "perlin");
+        assert_eq!(json["params"]["seed"], 42);
+        assert_eq!(json["sampling"]["size"], serde_json::json!([64, 64]));
+        assert_eq!(json["output"]["format"], "json");
+        assert_eq!(json["output"]["normalize"], false);
+        // Verify all four expected top-level keys are present (order is serde-determined)
+        let keys: std::collections::BTreeSet<&str> =
+            json.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        let expected: std::collections::BTreeSet<&str> =
+            ["algorithm", "params", "sampling", "output"].into();
+        assert_eq!(keys, expected);
+    }
+
+    #[test]
+    fn test_serialization_fbm() {
+        let req = GenerateNoiseRequest {
+            algorithm: AlgorithmParams::Fbm(FractalParams {
+                seed: Some(42),
+                octaves: Some(4),
+                frequency: Some(0.1),
+                lacunarity: Some(2.0),
+                persistence: Some(0.5),
+            }),
+            sampling: Sampling { size: Some(vec![32, 32]) },
+            output: None,
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["algorithm"], "fbm");
+        assert_eq!(json["params"]["seed"], 42);
+        assert_eq!(json["params"]["octaves"], 4);
+        assert_eq!(json["sampling"]["size"], serde_json::json!([32, 32]));
+        assert!(json["output"].is_null());
+        let keys: std::collections::BTreeSet<&str> =
+            json.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        let expected: std::collections::BTreeSet<&str> =
+            ["algorithm", "params", "sampling", "output"].into();
+        assert_eq!(keys, expected);
+    }
+
+    #[test]
+    fn test_serialization_cellular() {
+        let req = GenerateNoiseRequest {
+            algorithm: AlgorithmParams::Cellular(CellularParams {
+                seed: Some(123),
+                distance_function: Some(CellularDistanceFunction::EuclideanSq),
+                return_type: Some(CellularReturnType::Distance2),
+                jitter: Some(0.6),
+            }),
+            sampling: Sampling { size: Some(vec![16, 16]) },
+            output: Some(Output {
+                format: OutputFormat::Csv,
+                normalize: true,
+            }),
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["algorithm"], "cellular");
+        assert_eq!(json["params"]["seed"], 123);
+        assert_eq!(json["params"]["distance_function"], "euclidean_sq");
+        assert_eq!(json["params"]["return_type"], "distance2");
+        assert_eq!(json["params"]["jitter"], 0.6);
+        assert_eq!(json["output"]["format"], "csv");
+        assert_eq!(json["output"]["normalize"], true);
+        let keys: std::collections::BTreeSet<&str> =
+            json.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        let expected: std::collections::BTreeSet<&str> =
+            ["algorithm", "params", "sampling", "output"].into();
+        assert_eq!(keys, expected);
+    }
+
+    #[test]
+    fn test_deserialization_roundtrip() {
+        let json_str = r#"{"algorithm":"perlin","params":{"seed":42},"sampling":{"size":[64,64]},"output":{"format":"json","normalize":false}}"#;
+        let req: GenerateNoiseRequest = serde_json::from_str(json_str).unwrap();
+        assert_eq!(req.algorithm_name(), "perlin");
+        assert_eq!(req.sampling_size(), Some(vec![64, 64]));
+        assert_eq!(req.should_normalize(), false);
+        // Re-serialize and verify
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["algorithm"], "perlin");
+        assert_eq!(json["params"]["seed"], 42);
+    }
+
+    #[test]
+    fn test_deserialization_fbm_roundtrip() {
+        let json_str = r#"{"algorithm":"fbm","params":{"seed":42,"octaves":4,"frequency":0.1,"lacunarity":2.0,"persistence":0.5},"sampling":{"size":[32,32]},"output":null}"#;
+        let req: GenerateNoiseRequest = serde_json::from_str(json_str).unwrap();
+        assert_eq!(req.algorithm_name(), "fbm");
+        assert_eq!(req.sampling_size(), Some(vec![32, 32]));
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["algorithm"], "fbm");
+        assert_eq!(json["params"]["seed"], 42);
+    }
+
+    #[test]
+    fn test_deserialization_cellular_roundtrip() {
+        let json_str = r#"{"algorithm":"cellular","params":{"seed":123,"distance_function":"euclidean_sq","return_type":"distance2","jitter":0.6},"sampling":{"size":[16,16]},"output":{"format":"csv","normalize":true}}"#;
+        let req: GenerateNoiseRequest = serde_json::from_str(json_str).unwrap();
+        assert_eq!(req.algorithm_name(), "cellular");
+        assert_eq!(req.sampling_size(), Some(vec![16, 16]));
+        assert_eq!(req.should_normalize(), true);
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["algorithm"], "cellular");
+        assert_eq!(json["params"]["distance_function"], "euclidean_sq");
+    }
 }
 
