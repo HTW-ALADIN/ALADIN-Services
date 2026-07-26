@@ -1,0 +1,7 @@
+/target
+*.openapi.json
+.git
+.gitignore
+docker-compose*.yml
+Dockerfile
+README.md

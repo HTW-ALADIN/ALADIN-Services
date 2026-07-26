@@ -1,0 +1,10 @@
+services:
+  noise-generation-service:
+    container_name: noise-generation-service
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - RUST_LOG=debug
+    stdin_open: true
+    tty: true
