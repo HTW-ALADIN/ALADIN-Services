@@ -1,4 +1,4 @@
-.PHONY: prep build test lint start clean docker-build generate-openapi dev prod
+.PHONY: prep build test lint start clean docker-build generate-openapi dev prod smoke-test
 
 prep:
 	cargo fetch
@@ -24,6 +24,11 @@ docker-build:
 
 generate-openapi:
 	cargo run -- openapi --output noise-generation-service.openapi.json
+
+# Black-box smoke test against a *running* server (not run by `make test`).
+# Usage: make start & then, in another shell, make smoke-test
+smoke-test:
+	./tests/test_all_algorithms.sh
 
 dev:
 	docker-compose -f docker-compose.dev.yml up --build

@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 axum = "0.7.5"
-tokio = { version = "1.36", features = ["full"] }
+tokio = { version = "1.36", features = ["rt-multi-thread", "macros", "net"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
@@ -16,8 +16,14 @@ uuid = { version = "1.10", features = ["v4"] }
 utoipa = { version = "4", features = ["axum_extras"] }
 utoipa-swagger-ui = { version = "4", features = ["axum"] }
 
+# `axum`, `tokio`, and `utoipa` are intentionally NOT re-declared here:
+# `[dependencies]` entries are already available to integration tests and
+# doctests, and duplicating them risked silent version drift between the two
+# tables.
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["json"] }
-axum = "0.7.5"
-tokio = { version = "1.36", features = ["full"] }
-utoipa = { version = "4", features = ["axum_extras"] }
+
+[lints.clippy]
+# `fill_white_noise`'s 1D loop (src/generate.rs) reads clearer as an
+# explicit range loop than as an iterator chain.
+needless_range_loop = "allow"

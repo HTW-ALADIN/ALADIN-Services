@@ -9,6 +9,13 @@
 
 set -euo pipefail
 
+for dep in curl jq; do
+    if ! command -v "$dep" >/dev/null 2>&1; then
+        echo "Error: '$dep' is required to run this script but was not found in PATH." >&2
+        exit 1
+    fi
+done
+
 BASE_URL="${1:-http://localhost:8000}"
 PASS=0
 FAIL=0
@@ -94,12 +101,14 @@ run_test \
     "perlin" \
     '{"algorithm":"perlin","params":{"seed":42},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
-# Test 2: Perlin (noise_rs backend)
-# Verifies Perlin noise with alternative backend -> same algorithm, different implementation
+# Test 2: Perlin with a different seed
+# The service always routes "perlin" through fastnoise-lite (there is no
+# separate "noise_rs" Perlin backend to select between) — this checks that a
+# different seed still produces a valid response, not a second backend.
 run_test \
-    "Perlin (noise_rs)" \
+    "Perlin (different seed)" \
     "perlin" \
-    '{"algorithm":"perlin","params":{"seed":42},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
+    '{"algorithm":"perlin","params":{"seed":99},"sampling":{"mode":"2d","dimensions":2,"size":[4,4]}}'
 
 # Test 3: Simplex (noise_rs only)
 # Verifies Simplex noise — improved visual quality with reduced computational complexity
