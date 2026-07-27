@@ -728,3 +728,83 @@ async fn test_5d_rejected_for_white_noise() {
         "error should mention dimension limit (5D)"
     );
 }
+
+#[tokio::test]
+async fn test_oversized_dimension_rejected_with_400() {
+    let url = start_test_server().await;
+    // A single dimension far beyond the per-dimension cap must be rejected
+    // before any allocation happens.
+    let response = post_noise_raw(&url, "perlin", json!({"seed": 1}), vec![50_000, 50_000]).await;
+    assert_eq!(response.status(), 400);
+    let result: serde_json::Value = response.json().await.unwrap();
+    assert!(result["status"].as_str().unwrap().starts_with("error:"));
+    assert_eq!(result["data"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn test_oversized_total_cells_rejected_with_400() {
+    let url = start_test_server().await;
+    // Individually-small dimensions whose product exceeds the total-cell cap
+    // must still be rejected.
+    let response = post_noise_raw(&url, "perlin", json!({"seed": 1}), vec![4000, 4000, 4000]).await;
+    assert_eq!(response.status(), 400);
+    let result: serde_json::Value = response.json().await.unwrap();
+    assert!(result["status"].as_str().unwrap().starts_with("error:"));
+    assert_eq!(result["data"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn test_zero_dimension_rejected_with_400() {
+    let url = start_test_server().await;
+    let response = post_noise_raw(&url, "perlin", json!({"seed": 1}), vec![0, 8]).await;
+    assert_eq!(response.status(), 400);
+    let result: serde_json::Value = response.json().await.unwrap();
+    assert!(result["status"].as_str().unwrap().starts_with("error:"));
+}
+
+#[tokio::test]
+async fn test_csv_output_format_rejected_by_api() {
+    let url = start_test_server().await;
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{}/v1/noise", url))
+        .json(&json!({
+            "algorithm": "perlin",
+            "params": {"seed": 1},
+            "sampling": { "size": [4, 4] },
+            "output": { "format": "csv", "normalize": false }
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 400);
+    let result: serde_json::Value = response.json().await.unwrap();
+    assert!(
+        result["status"].as_str().unwrap().contains("csv"),
+        "error should mention csv, got: {:?}",
+        result["status"]
+    );
+    assert_eq!(result["data"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn test_octaves_echoed_value_is_clamped_to_generated_value() {
+    let url = start_test_server().await;
+    let client = reqwest::Client::new();
+    // 100 octaves exceeds the noise crate's internal clamp of 32; the echoed
+    // `params_used.octaves` must reflect what was actually generated.
+    let response = client
+        .post(format!("{}/v1/noise", url))
+        .json(&json!({
+            "algorithm": "fbm",
+            "params": {"seed": 1, "octaves": 100},
+            "sampling": { "size": [4, 4] },
+            "output": { "format": "json", "normalize": false }
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 201);
+    let result: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(result["params_used"]["octaves"], 32);
+}

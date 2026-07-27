@@ -36,6 +36,21 @@ const DEFAULT_PERSISTENCE_FBM_BILLOW: f64 = 0.5;
 /// explicitly via the `params.persistence` field.
 const DEFAULT_PERSISTENCE_RIDGED: f64 = 0.5;
 
+/// Maximum extent allowed for any single sampling dimension. Bounds per-request
+/// memory/CPU cost and prevents pathological requests from exhausting the host.
+const MAX_SAMPLING_DIM: usize = 4096;
+
+/// Maximum total number of cells (product of all dimensions) allowed per
+/// request. Chosen to keep the largest response well under typical memory
+/// limits (16M f64 cells ≈ 128 MB flat buffer before JSON shaping).
+const MAX_SAMPLING_CELLS: usize = 16 * 1024 * 1024;
+
+/// Maximum octaves accepted by the `noise` crate's `MultiFractal::set_octaves`
+/// (clamped internally to `1..=32`). Requested values are clamped to this same
+/// range up front so the echoed `params_used.octaves` always matches what was
+/// actually generated.
+const MAX_OCTAVES: usize = 32;
+
 /// Default persistence for HybridMulti (0.25). HybridMulti combines octave
 /// amplitudes multiplicatively; a lower persistence prevents signal
 /// saturation (consistent with noise-crate examples).
@@ -333,8 +348,9 @@ fn algorithm_defaults(name: &str) -> serde_json::Value {
             })
         }
         "utility" => {
+            // Utility noise (constant/cylinders) is deterministic and takes no
+            // seed — do not advertise one here, matching `ResolvedNoiseParams::Utility`.
             serde_json::json!({
-                "seed": null,
                 "kind": "constant",
                 "value": DEFAULT_UTILITY_VALUE
             })
@@ -412,6 +428,22 @@ pub async fn generate_noise(
         }
     };
 
+    // The HTTP API always responds with JSON; CSV rendering only exists in the
+    // CLI. Reject CSV requests explicitly instead of silently returning JSON.
+    if payload.wants_unsupported_csv() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(NoiseFieldResult {
+                id: field_id,
+                status: "error: output.format 'csv' is not supported by POST /v1/noise; use the CLI's --output-format csv, or omit output.format for JSON".to_string(),
+                algorithm: algorithm_name,
+                data: serde_json::Value::Null,
+                size,
+                params_used: serde_json::Value::Null,
+            }),
+        );
+    }
+
     // Validate that the selected algorithm supports the requested dimension
     // before resolving parameters (avoid unnecessary random seed allocation on error)
     if let Err(msg) = payload.check_dimension_support(mode) {
@@ -428,37 +460,81 @@ pub async fn generate_noise(
         );
     }
 
+    // Reject pathological grid sizes before allocating anything. Each dimension
+    // is capped individually and the total cell count is computed with checked
+    // arithmetic so a huge or overflowing request can't reach `vec![0.0; total]`.
+    if size.iter().any(|&d| d == 0 || d > MAX_SAMPLING_DIM) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(NoiseFieldResult {
+                id: field_id,
+                status: format!(
+                    "error: each sampling dimension must be between 1 and {} (got {:?})",
+                    MAX_SAMPLING_DIM, size
+                ),
+                algorithm: algorithm_name,
+                data: serde_json::Value::Null,
+                size,
+                params_used: serde_json::Value::Null,
+            }),
+        );
+    }
+    let total = match size.iter().try_fold(1usize, |acc, &d| acc.checked_mul(d)) {
+        Some(total) if total <= MAX_SAMPLING_CELLS => total,
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(NoiseFieldResult {
+                    id: field_id,
+                    status: format!(
+                        "error: requested sampling size {:?} exceeds the maximum of {} total cells",
+                        size, MAX_SAMPLING_CELLS
+                    ),
+                    algorithm: algorithm_name,
+                    data: serde_json::Value::Null,
+                    size,
+                    params_used: serde_json::Value::Null,
+                }),
+            );
+        }
+    };
+
     // Resolve parameters once — used for both generation and response echo
     let resolved = resolve_params(&payload);
 
-    // Generate flattened noise data using resolved parameters
-    let total: usize = size.iter().product();
-    let mut flat = vec![0.0; total];
-    generate_flat(&mut flat, &payload, &resolved, &size, mode);
-
-    // Normalize (if requested)
+    // Run the CPU-bound generation/shaping work on a blocking thread so a large
+    // request doesn't stall the async executor for other in-flight requests.
     let normalize = payload.should_normalize();
-    if normalize {
-        let mut min_val = f64::MAX;
-        let mut max_val = f64::MIN;
-        for &v in &flat {
-            if v < min_val {
-                min_val = v;
-            }
-            if v > max_val {
-                max_val = v;
-            }
-        }
-        let range = max_val - min_val;
-        if range > 0.0 {
-            for v in &mut flat {
-                *v = (*v - min_val) / range;
-            }
-        }
-    }
+    let mode_owned = mode.to_string();
+    let size_for_task = size.clone();
+    let (shaped, params_used) = tokio::task::spawn_blocking(move || {
+        let mut flat = vec![0.0; total];
+        generate_flat(&mut flat, &payload, &resolved, &size_for_task, &mode_owned);
 
-    // Shape flat data into the requested dimensionality
-    let shaped = shape_data(&flat, &size, mode);
+        if normalize {
+            let mut min_val = f64::MAX;
+            let mut max_val = f64::MIN;
+            for &v in &flat {
+                if v < min_val {
+                    min_val = v;
+                }
+                if v > max_val {
+                    max_val = v;
+                }
+            }
+            let range = max_val - min_val;
+            if range > 0.0 {
+                for v in &mut flat {
+                    *v = (*v - min_val) / range;
+                }
+            }
+        }
+
+        let shaped = shape_data(&flat, &size_for_task, &mode_owned);
+        (shaped, resolved.to_json())
+    })
+    .await
+    .expect("noise generation task panicked");
 
     (
         StatusCode::CREATED,
@@ -468,7 +544,7 @@ pub async fn generate_noise(
             algorithm: algorithm_name,
             data: shaped,
             size,
-            params_used: resolved.to_json(),
+            params_used,
         }),
     )
 }
@@ -584,6 +660,15 @@ impl GenerateNoiseRequest {
 
     fn should_normalize(&self) -> bool {
         self.output.as_ref().map(|o| o.normalize).unwrap_or(false)
+    }
+
+    /// `POST /v1/noise` always returns JSON; CSV is only supported by the CLI's
+    /// local `generate` command, which renders it client-side from the JSON body.
+    fn wants_unsupported_csv(&self) -> bool {
+        matches!(
+            self.output.as_ref().map(|o| &o.format),
+            Some(OutputFormat::Csv)
+        )
     }
 }
 
@@ -763,7 +848,9 @@ fn resolve_fractal(
 ) -> ResolvedNoiseParams {
     ResolvedNoiseParams::Fractal {
         seed: get_seed(seed),
-        octaves: octaves.unwrap_or(DEFAULT_OCTAVES),
+        // Clamp to the same 1..=32 range that `MultiFractal::set_octaves` enforces
+        // internally, so the value echoed in `params_used` matches generation.
+        octaves: octaves.unwrap_or(DEFAULT_OCTAVES).clamp(1, MAX_OCTAVES),
         frequency: frequency.unwrap_or(DEFAULT_FREQUENCY),
         lacunarity: lacunarity.unwrap_or(DEFAULT_LACUNARITY),
         persistence: persistence.unwrap_or(default_persistence),
@@ -1189,11 +1276,13 @@ fn fill_domain_warp(flat: &mut [f64], size: &[usize], mode: &str, seed: i32, amp
             let mut noise = FastNoiseLite::with_seed(seed);
             noise.set_domain_warp_type(Some(fastnoise_lite::DomainWarpType::OpenSimplex2));
             noise.set_domain_warp_amp(Some(amplitude as f32));
+            // `base` depends only on `seed`, not on the loop position — build it
+            // once outside the loop instead of once per cell.
+            let mut base = FastNoiseLite::with_seed(seed + 1);
+            base.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
             for y in 0..h {
                 for x in 0..w {
                     let (wx, wy) = noise.domain_warp_2d(x as f32, y as f32);
-                    let mut base = FastNoiseLite::with_seed(seed + 1);
-                    base.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
                     flat[y * w + x] = base.get_noise_2d(wx, wy) as f64;
                 }
             }
@@ -1205,14 +1294,16 @@ fn fill_domain_warp(flat: &mut [f64], size: &[usize], mode: &str, seed: i32, amp
             let mut noise = FastNoiseLite::with_seed(seed);
             noise.set_domain_warp_type(Some(fastnoise_lite::DomainWarpType::OpenSimplex2));
             noise.set_domain_warp_amp(Some(amplitude as f32));
+            // `base` depends only on `seed`, not on the loop position — build it
+            // once outside the loop instead of once per cell.
+            let mut base = FastNoiseLite::with_seed(seed + 1);
+            base.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
             let mut idx = 0;
             for z in 0..d {
                 for y in 0..h {
                     for x in 0..w {
                         let (wx, wy, wz) =
                             noise.domain_warp_3d(x as f32, y as f32, z as f32);
-                        let mut base = FastNoiseLite::with_seed(seed + 1);
-                        base.set_noise_type(Some(fastnoise_lite::NoiseType::Perlin));
                         flat[idx] = base.get_noise_3d(wx, wy, wz) as f64;
                         idx += 1;
                     }

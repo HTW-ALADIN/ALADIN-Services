@@ -19,8 +19,11 @@ RUN apt-get update && apt-get install -y libssl3
 # Copy the binary from the builder
 COPY --from=builder /app/target/release/noise-generation-service /usr/local/bin/noise-generation-service
 
+# Expose the HTTP port the server binds to by default
+EXPOSE 8000
+
 # Set the user
 USER nobody
 
-# Start the service
-CMD ["/usr/local/bin/noise-generation-service"]
+# Start the service (defaults to binding 0.0.0.0:8000)
+CMD ["/usr/local/bin/noise-generation-service", "server"]

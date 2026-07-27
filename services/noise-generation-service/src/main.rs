@@ -120,12 +120,12 @@ async fn handle_generate_command(args: GenerateArgs) {
     let size = args.sampling_size.clone();
     let sampling = build_sampling(args.sampling_size);
 
-    // Build output config from CLI flags
+    // `lib::generate_noise` always produces a JSON body (CSV rendering below is
+    // done locally from that JSON), so always request JSON here regardless of
+    // `--output-format`; `generate_noise` rejects `output.format: csv` requests
+    // since the HTTP API itself has no CSV response support.
     let output = Some(lib::Output {
-        format: match args.output_format {
-            GenerateFormat::Json => lib::OutputFormat::Json,
-            GenerateFormat::Csv => lib::OutputFormat::Csv,
-        },
+        format: lib::OutputFormat::Json,
         normalize: args.output_normalize,
     });
 
@@ -152,6 +152,13 @@ async fn handle_generate_command(args: GenerateArgs) {
 
     // Generate noise
     let (status, result) = lib::generate_noise(axum::Json(request)).await;
+
+    // Surface generation errors instead of silently exiting 0 with empty/partial
+    // output — `result.0.status` carries the human-readable error message.
+    if !status.is_success() {
+        eprintln!("Error: {}", result.0.status);
+        std::process::exit(1);
+    }
 
     // Output
     match args.output_format {
