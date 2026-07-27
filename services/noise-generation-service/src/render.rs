@@ -1,19 +1,17 @@
 //! CSV rendering for the CLI's `list` and `generate` commands.
 //!
 //! CSV output only exists for the CLI (`POST /v1/noise` always returns JSON,
-//! see `crate::error::NoiseError::UnsupportedCsv`), but it previously lived
-//! entirely in `main.rs` as two independent, inconsistently-quoted
-//! implementations with no test coverage. Moving it into the library gives
-//! it one consistent quoting strategy and makes it unit-testable without
-//! going through the CLI's argument parsing.
+//! see `crate::error::NoiseError::UnsupportedCsv`). Living in the library
+//! gives it one consistent quoting strategy and makes it unit-testable
+//! without going through the CLI's argument parsing.
 
 use crate::model::AlgorithmInfo;
 
 /// Renders the algorithm list as CSV: one row per algorithm, with its
 /// defaults rendered as a quoted, escaped JSON blob. Every field is
-/// double-quoted with `"` escaped as `""` (RFC 4180), and unlike the
-/// original implementation, no trailing human-readable summary line is
-/// appended — a summary line would not itself be valid CSV.
+/// double-quoted with `"` escaped as `""` (RFC 4180); no trailing
+/// human-readable summary line is appended, since that would not itself be
+/// valid CSV.
 pub fn list_csv(entries: &[AlgorithmInfo]) -> String {
     let mut csv = String::from("algorithm,defaults\n");
     for entry in entries {

@@ -24,8 +24,7 @@ fn build_app() -> Router {
 /// reserves the port and starts queuing incoming connections in the OS
 /// backlog before `axum::serve`'s accept loop ever polls it, so the very
 /// first request from `reqwest` will simply wait in that backlog rather than
-/// hit `ConnectionRefused`. A fixed `sleep` after spawning previously papered
-/// over any startup race without actually guaranteeing anything.
+/// hit `ConnectionRefused`.
 async fn start_test_server() -> String {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -183,9 +182,7 @@ async fn test_params_used_reproducibility() {
 // ─── Tests: POST /v1/noise — params_used per algorithm family ────────────────
 //
 // Table-driven: each case is (algorithm, request params, expected params_used
-// fields to check). Previously these were 12 separate near-identical
-// functions that each spun up their own server and repeated the same
-// build-request/assert-fields shape.
+// fields to check).
 
 struct ParamsUsedCase {
     algorithm: &'static str,

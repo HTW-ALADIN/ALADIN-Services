@@ -1,12 +1,8 @@
 //! Structured errors for noise-field generation.
 //!
-//! Previously every validation failure in `generate_noise` built its own
-//! ad-hoc `NoiseFieldResult` literal by hand (repeated 5x with only the
-//! `status` string differing) and returned `StatusCode::BAD_REQUEST`
-//! unconditionally. `NoiseError` centralizes the failure cases; the HTTP
-//! handler (`crate::http`) is the only place that turns one into the
-//! response body, and the CLI can match on it directly instead of parsing
-//! a string.
+//! `NoiseError` centralizes the failure cases; the HTTP handler
+//! (`crate::http`) is the only place that turns one into the response body,
+//! and the CLI can match on it directly instead of parsing a string.
 
 use axum::http::StatusCode;
 

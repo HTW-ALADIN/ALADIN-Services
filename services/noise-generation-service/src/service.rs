@@ -1,12 +1,5 @@
 //! HTTP-free core generation service.
 //!
-//! Previously the CLI's `generate` command invoked the axum handler
-//! (`generate_noise`) directly, fabricating an `axum::Json` wrapper around a
-//! request it never sent over a network, then unwrapped the `axum::Json`
-//! response and inspected an `axum::http::StatusCode` to decide whether to
-//! exit non-zero. That made the CLI depend on HTTP types for logic that is
-//! not HTTP-specific at all.
-//!
 //! [`generate`] is the shared core both the CLI and the `POST /v1/noise`
 //! handler (`crate::http`) call into: it validates the request and runs the
 //! CPU-bound generation, and returns a plain `Result` with no HTTP

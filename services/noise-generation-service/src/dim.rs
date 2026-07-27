@@ -1,9 +1,8 @@
 //! Dimensionality of a sampling grid, and shared per-cell iteration helpers.
 //!
-//! Every generation kernel used to accept `mode: &str` with values like
-//! `"2d"`/`"3d"`/`"4d"` — a typo (e.g. `"2D"`) would silently fall through to
-//! `unreachable!()` and panic at runtime. `Dim` makes the set of supported
-//! dimensionalities a compile-time-checked enum instead.
+//! `Dim` makes the set of supported dimensionalities a compile-time-checked
+//! enum, so every generation kernel can match on it exhaustively instead of
+//! branching on a `mode: &str` value.
 
 use std::fmt;
 

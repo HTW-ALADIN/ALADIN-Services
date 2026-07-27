@@ -1,11 +1,5 @@
 //! Single source of truth for the set of supported noise algorithms.
 //!
-//! Previously the 15 algorithms were enumerated independently in at least
-//! six places (the wire-tagged enum, a name-lookup match, a hardcoded name
-//! array, a dimension-support decision table, and — in the CLI layer — a
-//! second parallel enum plus its `Display` impl). Adding or renaming an
-//! algorithm meant touching all of them by hand with no compiler check.
-//!
 //! The [`algorithms!`] macro below generates the wire-tagged
 //! [`AlgorithmParams`] enum, the algorithm name lookup, and the
 //! dimension-support table from one declarative list. `ALGORITHM_NAMES` and
@@ -111,9 +105,8 @@ algorithms! {
 /// share the same [`FractalParams`] shape but differ in their default
 /// `persistence`).
 pub const DEFAULT_PERSISTENCE_FBM_BILLOW: f64 = 0.5;
-/// Unified to 0.5 from the original 1.0 — integration tests always passed
-/// `persistence: 0.5` explicitly for `ridged_multi`, indicating the 1.0
-/// default was a copy-paste error. Pass `persistence` explicitly for 1.0.
+/// Deliberately 0.5, not 1.0: callers wanting the noise-crate library
+/// default of 1.0 for `ridged_multi` must pass `persistence` explicitly.
 pub const DEFAULT_PERSISTENCE_RIDGED: f64 = 0.5;
 /// HybridMulti combines octave amplitudes multiplicatively; a lower
 /// persistence prevents signal saturation (consistent with noise-crate

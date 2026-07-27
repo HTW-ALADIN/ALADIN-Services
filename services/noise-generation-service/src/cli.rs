@@ -1,17 +1,10 @@
 //! `clap` CLI argument definitions.
 //!
-//! The `--algorithm` flag previously had its own parallel `Algorithm` enum
-//! (with a hand-written `Display` impl re-encoding each variant back to the
-//! exact wire-name string `crate::algorithms::AlgorithmParams` already
-//! defines via `#[serde(rename = ...)]`) plus a 15-arm bridge match in
-//! `main.rs` to convert between the two enums. Both algorithm identity lists
-//! had to be kept in sync by hand.
-//!
-//! Now `--algorithm` is validated at parse time against
+//! `--algorithm` is validated at parse time against
 //! `crate::algorithms::ALGORITHM_NAMES` (the same table the HTTP API and
 //! `GET /v1/algorithms` use) and stored as the wire-name `String` directly,
 //! so `main.rs` can hand it straight to `serde_json` to build an
-//! `AlgorithmParams` value — no second enum, no bridge match.
+//! `AlgorithmParams` value.
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde_json::Value;
@@ -23,17 +16,14 @@ use crate::algorithms::ALGORITHM_NAMES;
 /// Parses and validates an `--algorithm` value against `ALGORITHM_NAMES`,
 /// producing a clap-friendly error listing the valid options on failure.
 ///
-/// Also accepts the previous CLI spelling of multi-word algorithm names.
-/// Before this module existed, `--algorithm` was a `clap::ValueEnum` that
-/// (with no `#[value(name = ...)]` overrides) exposed clap's default
-/// kebab-case value names — e.g. `ridged-multi`, `open-simplex2`,
-/// `ping-pong` — which differ from the wire-format snake_case names used
-/// everywhere else (`ridged_multi`, `opensimplex2`, `pingpong`). Matching
-/// against the input with hyphens both converted to underscores *and*
-/// stripped entirely covers every previously-valid spelling
-/// (`ridged-multi` -> `ridged_multi`, `ping-pong` -> `pingpong`,
-/// `open-simplex2` -> `opensimplex2`) without hardcoding a per-name alias
-/// table.
+/// Also accepts kebab-case spellings of multi-word algorithm names (e.g.
+/// `ridged-multi`, `open-simplex2`, `ping-pong`), which differ from the
+/// wire-format snake_case names used everywhere else (`ridged_multi`,
+/// `opensimplex2`, `pingpong`). Matching against the input with hyphens
+/// both converted to underscores *and* stripped entirely covers every
+/// accepted spelling (`ridged-multi` -> `ridged_multi`, `ping-pong` ->
+/// `pingpong`, `open-simplex2` -> `opensimplex2`) without hardcoding a
+/// per-name alias table.
 fn parse_algorithm(s: &str) -> Result<String, String> {
     let underscored = s.replace('-', "_");
     let collapsed = s.replace('-', "");
@@ -200,10 +190,8 @@ mod tests {
         }
     }
 
-    /// Regression test: `--algorithm` used to be a `clap::ValueEnum` with no
-    /// `#[value(name = ...)]` overrides, which exposed clap's default
-    /// kebab-case value names for multi-word variants. These must keep
-    /// working so existing scripts/CLI invocations don't silently break.
+    /// Kebab-case spellings of multi-word algorithm names must keep working
+    /// so existing scripts/CLI invocations don't silently break.
     #[test]
     fn accepts_legacy_kebab_case_aliases() {
         let cases = [

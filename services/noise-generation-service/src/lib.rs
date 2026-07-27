@@ -1,6 +1,6 @@
 //! Noise generation service library.
 //!
-//! Module layout (previously all of this lived in one ~1560-line file):
+//! Module layout:
 //! - [`algorithms`]: the single source of truth for the set of supported
 //!   algorithms — wire names, the tagged [`AlgorithmParams`] enum, and
 //!   per-algorithm dimension support.
@@ -16,8 +16,7 @@
 //! - [`http`]: thin axum handlers.
 //! - [`openapi`]: the `utoipa` `ApiDoc` schema registration.
 //! - [`cli`]: `clap` CLI argument definitions, shared by the binary and by
-//!   `tests/cli_tests.rs` (via this public module, instead of the previous
-//!   `#[path = "../src/cli.rs"]` include hack).
+//!   `tests/cli_tests.rs` via this public module.
 
 // Range loops and casts are clearer for noise generation — allowed via the
 // `[lints.clippy]` table in Cargo.toml, which applies uniformly to the lib
@@ -37,10 +36,9 @@ pub mod resolve;
 pub mod service;
 pub mod shape;
 
-// Re-export the most commonly used items at the crate root so existing
-// callers (the binary, integration tests) don't need to know the internal
-// module layout — this mirrors the flat public surface the single-file
-// `lib.rs` used to expose.
+// Re-export the most commonly used items at the crate root so callers
+// (the binary, integration tests) don't need to know the internal module
+// layout.
 pub use algorithms::{AlgorithmParams, ALGORITHM_NAMES};
 pub use error::NoiseError;
 pub use http::{generate_noise, list_algorithms};
