@@ -60,7 +60,13 @@ describe('POST /generate', () => {
 			payload: {
 				provider: 'openai',
 				model: 'gpt-4o',
-				messages: [{ role: 'user', content: 'hello' }],
+				messages: [
+					{
+						id: 'msg-1',
+						role: 'user',
+						parts: [{ type: 'text', text: 'hello' }],
+					},
+				],
 			},
 		});
 
@@ -73,17 +79,97 @@ describe('POST /generate', () => {
 			{
 				role: 'user',
 				content: 'hello',
-				toolCallId: undefined,
-				toolName: undefined,
 			},
 		]);
+	});
+
+	it('defaults to the Vercel format when "format" is omitted', async () => {
+		const response = await app.inject({
+			method: 'POST',
+			url: '/generate',
+			payload: {
+				provider: 'openai',
+				model: 'gpt-4o',
+				messages: [
+					{
+						id: 'msg-1',
+						role: 'user',
+						parts: [{ type: 'text', text: 'hello' }],
+					},
+				],
+			},
+		});
+
+		expect(response.statusCode).to.equal(200);
+		expect(response.json()).to.have.property('finishReason');
+	});
+
+	it('accepts an OpenAI Chat Completions-format request', async () => {
+		const response = await app.inject({
+			method: 'POST',
+			url: '/generate',
+			payload: {
+				format: 'openai-chat',
+				provider: 'openai',
+				model: 'gpt-4o',
+				messages: [{ role: 'user', content: 'hello' }],
+			},
+		});
+
+		expect(response.statusCode).to.equal(200);
+		const body = response.json();
+		expect(body.object).to.equal('chat.completion');
+		expect(body.choices[0].message.role).to.equal('assistant');
+		expect(client.lastGenerateRequest?.messages).to.deep.equal([
+			{ role: 'user', content: 'hello', toolCallId: undefined },
+		]);
+	});
+
+	it('accepts an OpenAI Responses-format request', async () => {
+		const response = await app.inject({
+			method: 'POST',
+			url: '/generate',
+			payload: {
+				format: 'openai-responses',
+				provider: 'openai',
+				model: 'gpt-4o',
+				input: 'hello',
+			},
+		});
+
+		expect(response.statusCode).to.equal(200);
+		const body = response.json();
+		expect(body.object).to.equal('response');
+		expect(client.lastGenerateRequest?.messages).to.deep.equal([
+			{ role: 'user', content: 'hello' },
+		]);
+	});
+
+	it('rejects a request with an unknown format', async () => {
+		const response = await app.inject({
+			method: 'POST',
+			url: '/generate',
+			payload: {
+				format: 'not-a-real-format',
+				provider: 'openai',
+				model: 'gpt-4o',
+				messages: [{ role: 'user', content: 'hello' }],
+			},
+		});
+
+		expect(response.statusCode).to.equal(400);
 	});
 
 	it('rejects a request missing required fields with 400', async () => {
 		const response = await app.inject({
 			method: 'POST',
 			url: '/generate',
-			payload: { model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] },
+			payload: {
+				model: 'gpt-4o',
+				messages: [
+					{ id: 'msg-1', role: 'user', parts: [{ type: 'text', text: 'hi' }] },
+				],
+			},
 		});
 
 		expect(response.statusCode).to.equal(400);
@@ -102,7 +188,13 @@ describe('POST /generate', () => {
 			payload: {
 				provider: 'openai',
 				model: 'gpt-4o',
-				messages: [{ role: 'user', content: 'hello' }],
+				messages: [
+					{
+						id: 'msg-1',
+						role: 'user',
+						parts: [{ type: 'text', text: 'hello' }],
+					},
+				],
 			},
 		});
 
@@ -122,7 +214,13 @@ describe('POST /generate', () => {
 			payload: {
 				provider: 'mycompany',
 				model: 'custom-gpt-4',
-				messages: [{ role: 'user', content: 'hello' }],
+				messages: [
+					{
+						id: 'msg-1',
+						role: 'user',
+						parts: [{ type: 'text', text: 'hello' }],
+					},
+				],
 				customProvider: {
 					baseUrl: 'https://api.mycompany.com',
 					apiKey: 'sk-xxx',

@@ -17,21 +17,32 @@ export const ErrorResponseSchema = Type.Object(
 	}
 );
 
+/**
+ * Field definitions for `CustomProviderOverride`, exposed as a factory so
+ * callers that need to embed this shape multiple times *within a single
+ * compiled schema* (e.g. a `Type.Union` of several request variants) can
+ * get a fresh, `$id`-free copy each time. AJV rejects a schema document
+ * that contains the same `$id` more than once, which is exactly what
+ * happens if `CustomProviderOverrideSchema` below is reused as-is inside
+ * more than one branch of the same union.
+ */
+export const customProviderOverrideFields = () => ({
+	baseUrl: Type.String({
+		minLength: 1,
+		description:
+			'OpenAI-compatible base URL (including any version path, e.g. ' +
+			'"https://api.mycompany.com/v1") to call directly, bypassing LLM Gateway ' +
+			'routing for this request. "/chat/completions" or "/embeddings" is appended ' +
+			'automatically. Must not resolve to a loopback, link-local, or private address.',
+	}),
+	apiKey: Type.String({
+		minLength: 1,
+		description: 'API key/token for the custom provider endpoint.',
+	}),
+});
+
 export const CustomProviderOverrideSchema = Type.Object(
-	{
-		baseUrl: Type.String({
-			minLength: 1,
-			description:
-				'OpenAI-compatible base URL (including any version path, e.g. ' +
-				'"https://api.mycompany.com/v1") to call directly, bypassing LLM Gateway ' +
-				'routing for this request. "/chat/completions" or "/embeddings" is appended ' +
-				'automatically. Must not resolve to a loopback, link-local, or private address.',
-		}),
-		apiKey: Type.String({
-			minLength: 1,
-			description: 'API key/token for the custom provider endpoint.',
-		}),
-	},
+	customProviderOverrideFields(),
 	{
 		$id: 'CustomProviderOverride',
 		title: 'CustomProviderOverride',

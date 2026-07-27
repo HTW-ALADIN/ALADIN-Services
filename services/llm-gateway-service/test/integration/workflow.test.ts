@@ -140,9 +140,23 @@ describe('workflow: register a custom provider, then generate through the gatewa
 			system:
 				'You are a concise math assistant for an ALADIN workflow. Only answer with the final number.',
 			messages: [
-				{ role: 'user', content: 'What is 21 + 21?' },
-				{ role: 'assistant', content: '21 + 21 is 42.' },
-				{ role: 'user', content: 'Great — now multiply that result by 2.' },
+				{
+					id: 'msg-1',
+					role: 'user',
+					parts: [{ type: 'text', text: 'What is 21 + 21?' }],
+				},
+				{
+					id: 'msg-2',
+					role: 'assistant',
+					parts: [{ type: 'text', text: '21 + 21 is 42.' }],
+				},
+				{
+					id: 'msg-3',
+					role: 'user',
+					parts: [
+						{ type: 'text', text: 'Great — now multiply that result by 2.' },
+					],
+				},
 			],
 			temperature: 0.2,
 			maxOutputTokens: 64,

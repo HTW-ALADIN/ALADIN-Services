@@ -2,37 +2,38 @@
  * Vercel AI SDK format adapter.
  *
  * Translates between the wire format used by Vercel AI SDK frontends
- * (`useChat`/`generateText`-style messages and results) and this service's
- * internal, format-agnostic `GenerateRequest`/`GenerateResponse` types.
+ * (`useChat`-style UI messages) and this service's internal,
+ * format-agnostic `GenerateRequest`/`GenerateResponse` types.
  *
- * This is the only format implemented today; the adapter interface in
- * `./types.ts` exists so OpenAI- or Anthropic-shaped adapters can be added
- * later without touching the gateway client or provider registry.
+ * Messages use the official `UIMessage` shape from the `ai` package
+ * (a `parts` array of typed elements — text, file, reasoning, tool
+ * invocations, etc.) rather than a hand-rolled `content` string/array, so
+ * this adapter stays compatible with whatever `useChat()` actually sends.
+ *
+ * This is one of several format adapters; see `./index.ts` for the
+ * adapter registry and `./types.ts` for the shared `FormatAdapter`
+ * interface that lets the HTTP/CLI layers stay agnostic of the wire
+ * format in use.
  */
+import {
+	getToolName,
+	isFileUIPart,
+	isTextUIPart,
+	isToolUIPart,
+	type FileUIPart,
+	type UIMessage,
+} from 'ai';
 import type {
 	ChatMessage,
-	ContentPart,
 	CustomProviderOverride,
+	FilePart,
 	GenerateRequest,
 	GenerateResponse,
+	ImagePart,
 	ToolDefinition,
 } from '../types.js';
 import type { FormatAdapter } from './types.js';
-import { assertSafeCustomProviderBaseUrl } from '../url-safety.js';
-
-export interface VercelContentPart {
-	type: 'text' | 'image';
-	text?: string;
-	image?: string;
-	mediaType?: string;
-}
-
-export interface VercelMessage {
-	role: 'system' | 'user' | 'assistant' | 'tool';
-	content: string | VercelContentPart[];
-	toolCallId?: string;
-	toolName?: string;
-}
+import { validateCustomProviderOverride } from './shared.js';
 
 export interface VercelToolDefinition {
 	description?: string;
@@ -41,9 +42,12 @@ export interface VercelToolDefinition {
 }
 
 export interface VercelGenerateRequest {
+	/** Selects this adapter; optional, defaults to `'vercel'`. */
+	format?: 'vercel';
 	provider: string;
 	model: string;
-	messages: VercelMessage[];
+	/** Official Vercel AI SDK `UIMessage[]` shape (see the `ai` package). */
+	messages: UIMessage[];
 	system?: string;
 	tools?: Record<string, VercelToolDefinition>;
 	temperature?: number;
@@ -98,6 +102,7 @@ export class VercelFormatAdapter implements FormatAdapter<
 		if (!Array.isArray(input.messages) || input.messages.length === 0) {
 			throw new Error('"messages" is required and must be a non-empty array.');
 		}
+		input.messages.forEach(validateUIMessage);
 		if (input.customProvider !== undefined) {
 			validateCustomProviderOverride(input.customProvider);
 		}
@@ -105,7 +110,7 @@ export class VercelFormatAdapter implements FormatAdapter<
 		return {
 			provider: input.provider,
 			model: input.model,
-			messages: input.messages.map(toChatMessage),
+			messages: input.messages.flatMap(toChatMessages),
 			system: input.system,
 			tools: input.tools ? toToolDefinitions(input.tools) : undefined,
 			temperature: input.temperature,
@@ -136,47 +141,94 @@ export class VercelFormatAdapter implements FormatAdapter<
 	}
 }
 
-function validateCustomProviderOverride(
-	customProvider: CustomProviderOverride
-): void {
-	if (!customProvider || typeof customProvider !== 'object') {
+function validateUIMessage(message: UIMessage): void {
+	if (!message || typeof message !== 'object') {
+		throw new Error('Each message must be an object.');
+	}
+	if (typeof message.id !== 'string' || message.id.length === 0) {
+		throw new Error('Each message must have a non-empty string "id".');
+	}
+	if (
+		message.role !== 'system' &&
+		message.role !== 'user' &&
+		message.role !== 'assistant'
+	) {
 		throw new Error(
-			'"customProvider" must be an object with "baseUrl" and "apiKey".'
+			`Message "role" must be one of "system", "user", or "assistant", got "${String(message.role)}".`
 		);
 	}
-	if (!customProvider.baseUrl || typeof customProvider.baseUrl !== 'string') {
-		throw new Error(
-			'"customProvider.baseUrl" is required and must be a non-empty string.'
-		);
+	if (!Array.isArray(message.parts)) {
+		throw new Error('Each message must have a "parts" array.');
 	}
-	if (!customProvider.apiKey || typeof customProvider.apiKey !== 'string') {
-		throw new Error(
-			'"customProvider.apiKey" is required and must be a non-empty string.'
-		);
-	}
-	assertSafeCustomProviderBaseUrl(customProvider.baseUrl);
 }
 
-function toChatMessage(message: VercelMessage): ChatMessage {
+/**
+ * Converts a single `UIMessage` into one or more internal `ChatMessage`s.
+ *
+ * A `UIMessage` bundles everything about one turn - text, files, reasoning,
+ * and tool call/result lifecycles - into a single `parts` array (there is no
+ * separate "tool" role in `UIMessage`, unlike the internal `ChatMessage`
+ * type). Completed tool invocations are therefore split out into their own
+ * `role: 'tool'` `ChatMessage`s, mirroring how the AI SDK's own
+ * `convertToModelMessages` splits a `UIMessage` into multiple
+ * `ModelMessage`s.
+ *
+ * Notes on fidelity vs. the internal `ChatMessage` type:
+ * - Reasoning parts are intentionally dropped: they represent the model's
+ *   own prior "thinking" and the internal `ChatMessage`/`ContentPart` shape
+ *   has no dedicated slot for resending it.
+ * - Tool calls that haven't produced output yet (e.g. `input-streaming`,
+ *   `input-available`, `approval-requested`) aren't representable on the
+ *   internal assistant `ChatMessage` (it has no tool-call content part), so
+ *   only completed (`output-available`) invocations are carried through.
+ * - File parts are carried through for any `mediaType`, matching the AI
+ *   SDK's own `convertToModelMessages`: `image/*` becomes an `ImagePart`,
+ *   everything else (PDFs, etc.) becomes a `FilePart`. What a given
+ *   provider actually accepts is out of scope here.
+ */
+function toChatMessages(message: UIMessage): ChatMessage[] {
+	const text = message.parts
+		.filter(isTextUIPart)
+		.map((part) => part.text)
+		.join('');
+	const files = message.parts.filter(isFileUIPart).map(toFileContentPart);
+
+	const messages: ChatMessage[] = [];
+
+	if (text.length > 0 || files.length > 0) {
+		messages.push({
+			role: message.role,
+			content:
+				files.length > 0
+					? [...(text.length > 0 ? [{ type: 'text' as const, text }] : []), ...files]
+					: text,
+		});
+	}
+
+	for (const part of message.parts) {
+		if (!isToolUIPart(part)) continue;
+		if (part.state !== 'output-available') continue;
+		messages.push({
+			role: 'tool',
+			content: JSON.stringify(part.output),
+			toolCallId: part.toolCallId,
+			toolName: getToolName(part),
+		});
+	}
+
+	return messages;
+}
+
+function toFileContentPart(part: FileUIPart): ImagePart | FilePart {
+	if (part.mediaType.startsWith('image/')) {
+		return { type: 'image', image: part.url, mediaType: part.mediaType };
+	}
 	return {
-		role: message.role,
-		content: Array.isArray(message.content)
-			? message.content.map(toContentPart)
-			: message.content,
-		toolCallId: message.toolCallId,
-		toolName: message.toolName,
+		type: 'file',
+		data: part.url,
+		mediaType: part.mediaType,
+		filename: part.filename,
 	};
-}
-
-function toContentPart(part: VercelContentPart): ContentPart {
-	if (part.type === 'image') {
-		return {
-			type: 'image',
-			image: part.image ?? '',
-			mediaType: part.mediaType,
-		};
-	}
-	return { type: 'text', text: part.text ?? '' };
 }
 
 function toToolDefinitions(

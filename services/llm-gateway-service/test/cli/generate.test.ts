@@ -33,7 +33,13 @@ describe('generateCommand', () => {
 			JSON.stringify({
 				provider: 'openai',
 				model: 'gpt-4o',
-				messages: [{ role: 'user', content: 'hi there' }],
+				messages: [
+					{
+						id: 'msg-1',
+						role: 'user',
+						parts: [{ type: 'text', text: 'hi there' }],
+					},
+				],
 			})
 		);
 

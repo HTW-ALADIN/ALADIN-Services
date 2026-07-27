@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import '@fastify/swagger';
 import { GatewayClient } from '../../core/gateway-client.js';
-import { vercelFormatAdapter } from '../../core/format/vercel.js';
+import { getFormatAdapter } from '../../core/format/index.js';
 import { replyWithError } from '../reply-error.js';
 import {
 	EmbedRequestSchema,
@@ -31,10 +31,13 @@ const generateRoutes = (
 					tags: ['Generation'],
 					summary: 'Generate text (non-streaming) via LLM Gateway',
 					description:
-						'Accepts a Vercel AI SDK-style chat request and returns the full generated ' +
-						'response, including usage, cost, and finish reason. Supports an inline ' +
-						'`customProvider` override to call an OpenAI-compatible endpoint directly, ' +
-						'bypassing the gateway, without requiring prior provider registration.',
+						'Accepts a chat request and returns the full generated response, ' +
+						'including usage, cost, and finish reason. The wire format defaults to ' +
+						'the Vercel AI SDK `UIMessage` format; set "format" to "openai-chat" or ' +
+						'"openai-responses" to use an OpenAI-compatible wire format instead. ' +
+						'Supports an inline `customProvider` override to call an ' +
+						'OpenAI-compatible endpoint directly, bypassing the gateway, without ' +
+						'requiring prior provider registration.',
 					body: GenerateRequestSchema,
 					response: {
 						200: GenerateResponseSchema,
@@ -48,13 +51,11 @@ const generateRoutes = (
 			},
 			async (request, reply) => {
 				try {
-					const generateRequest = vercelFormatAdapter.parseRequest(
-						request.body
-					);
+					const format = (request.body as { format?: string }).format;
+					const adapter = getFormatAdapter(format);
+					const generateRequest = adapter.parseRequest(request.body);
 					const result = await client.generate(generateRequest);
-					return reply
-						.status(200)
-						.send(vercelFormatAdapter.formatResponse(result));
+					return reply.status(200).send(adapter.formatResponse(result));
 				} catch (err) {
 					return replyWithError(reply, err);
 				}

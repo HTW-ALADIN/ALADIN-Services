@@ -15,6 +15,7 @@
 		"cli": "tsx src/cli/index.ts",
 		"test": "mocha",
 		"test:coverage": "c8 mocha",
+		"test:integration:real": "mocha --no-config --node-option import=tsx --spec test/integration/real-provider.test.ts --timeout 60000",
 		"lint": "eslint ./src ./test ./scripts",
 		"lint:fix": "eslint ./src ./test ./scripts --fix",
 		"format": "prettier --write .",

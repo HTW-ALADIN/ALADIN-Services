@@ -8,7 +8,13 @@ describe('vercelFormatAdapter', () => {
 			const result = vercelFormatAdapter.parseRequest({
 				provider: 'openai',
 				model: 'gpt-4o',
-				messages: [{ role: 'user', content: 'hello' }],
+				messages: [
+					{
+						id: 'msg-1',
+						role: 'user',
+						parts: [{ type: 'text', text: 'hello' }],
+					},
+				],
 			});
 
 			expect(result).to.deep.equal({
@@ -18,8 +24,6 @@ describe('vercelFormatAdapter', () => {
 					{
 						role: 'user',
 						content: 'hello',
-						toolCallId: undefined,
-						toolName: undefined,
 					},
 				],
 				system: undefined,
@@ -33,11 +37,36 @@ describe('vercelFormatAdapter', () => {
 			});
 		});
 
+		it('joins multiple text parts within a single message', () => {
+			const result = vercelFormatAdapter.parseRequest({
+				provider: 'openai',
+				model: 'gpt-4o',
+				messages: [
+					{
+						id: 'msg-1',
+						role: 'user',
+						parts: [
+							{ type: 'text', text: 'hello ' },
+							{ type: 'text', text: 'world' },
+						],
+					},
+				],
+			});
+
+			expect(result.messages[0].content).to.equal('hello world');
+		});
+
 		it('translates tool definitions from a record into a list', () => {
 			const result = vercelFormatAdapter.parseRequest({
 				provider: 'openai',
 				model: 'gpt-4o',
-				messages: [{ role: 'user', content: 'what is the weather?' }],
+				messages: [
+					{
+						id: 'msg-1',
+						role: 'user',
+						parts: [{ type: 'text', text: 'what is the weather?' }],
+					},
+				],
 				tools: {
 					weather: {
 						description: 'Get the weather for a location',
@@ -61,18 +90,19 @@ describe('vercelFormatAdapter', () => {
 			]);
 		});
 
-		it('translates image content parts', () => {
+		it('translates file parts into image content parts', () => {
 			const result = vercelFormatAdapter.parseRequest({
 				provider: 'openai',
 				model: 'gpt-4o',
 				messages: [
 					{
+						id: 'msg-1',
 						role: 'user',
-						content: [
+						parts: [
 							{ type: 'text', text: 'describe this' },
 							{
-								type: 'image',
-								image: 'data:image/png;base64,AAA',
+								type: 'file',
+								url: 'data:image/png;base64,AAA',
 								mediaType: 'image/png',
 							},
 						],
@@ -90,11 +120,158 @@ describe('vercelFormatAdapter', () => {
 			]);
 		});
 
+		it('does not prepend an empty text part for an image-only message', () => {
+			const result = vercelFormatAdapter.parseRequest({
+				provider: 'openai',
+				model: 'gpt-4o',
+				messages: [
+					{
+						id: 'msg-1',
+						role: 'user',
+						parts: [
+							{
+								type: 'file',
+								url: 'data:image/png;base64,AAA',
+								mediaType: 'image/png',
+							},
+						],
+					},
+				],
+			});
+
+			expect(result.messages[0].content).to.deep.equal([
+				{
+					type: 'image',
+					image: 'data:image/png;base64,AAA',
+					mediaType: 'image/png',
+				},
+			]);
+		});
+
+		it('translates non-image file parts (e.g. PDFs) into file content parts', () => {
+			const result = vercelFormatAdapter.parseRequest({
+				provider: 'openai',
+				model: 'gpt-4o',
+				messages: [
+					{
+						id: 'msg-1',
+						role: 'user',
+						parts: [
+							{ type: 'text', text: 'see attached' },
+							{
+								type: 'file',
+								url: 'data:application/pdf;base64,AAA',
+								mediaType: 'application/pdf',
+								filename: 'report.pdf',
+							},
+						],
+					},
+				],
+			});
+
+			expect(result.messages[0].content).to.deep.equal([
+				{ type: 'text', text: 'see attached' },
+				{
+					type: 'file',
+					data: 'data:application/pdf;base64,AAA',
+					mediaType: 'application/pdf',
+					filename: 'report.pdf',
+				},
+			]);
+		});
+
+		it('translates a PDF-only message without a leading empty text part', () => {
+			const result = vercelFormatAdapter.parseRequest({
+				provider: 'openai',
+				model: 'gpt-4o',
+				messages: [
+					{
+						id: 'msg-1',
+						role: 'user',
+						parts: [
+							{
+								type: 'file',
+								url: 'data:application/pdf;base64,AAA',
+								mediaType: 'application/pdf',
+							},
+						],
+					},
+				],
+			});
+
+			expect(result.messages[0].content).to.deep.equal([
+				{
+					type: 'file',
+					data: 'data:application/pdf;base64,AAA',
+					mediaType: 'application/pdf',
+					filename: undefined,
+				},
+			]);
+		});
+
+		it('splits a completed tool part out into a separate tool-role message', () => {
+			const result = vercelFormatAdapter.parseRequest({
+				provider: 'openai',
+				model: 'gpt-4o',
+				messages: [
+					{
+						id: 'msg-1',
+						role: 'assistant',
+						parts: [
+							{ type: 'text', text: 'let me check' },
+							{
+								type: 'tool-weather',
+								toolCallId: 'call_1',
+								state: 'output-available',
+								input: { location: 'Berlin' },
+								output: { tempC: 20 },
+							} as any,
+						],
+					},
+				],
+			});
+
+			expect(result.messages).to.deep.equal([
+				{ role: 'assistant', content: 'let me check' },
+				{
+					role: 'tool',
+					content: JSON.stringify({ tempC: 20 }),
+					toolCallId: 'call_1',
+					toolName: 'weather',
+				},
+			]);
+		});
+
+		it('ignores tool parts that have not produced output yet', () => {
+			const result = vercelFormatAdapter.parseRequest({
+				provider: 'openai',
+				model: 'gpt-4o',
+				messages: [
+					{
+						id: 'msg-1',
+						role: 'assistant',
+						parts: [
+							{
+								type: 'tool-weather',
+								toolCallId: 'call_1',
+								state: 'input-available',
+								input: { location: 'Berlin' },
+							} as any,
+						],
+					},
+				],
+			});
+
+			expect(result.messages).to.deep.equal([]);
+		});
+
 		it('passes through the customProvider override', () => {
 			const result = vercelFormatAdapter.parseRequest({
 				provider: 'mycompany',
 				model: 'custom-gpt-4',
-				messages: [{ role: 'user', content: 'hi' }],
+				messages: [
+					{ id: 'msg-1', role: 'user', parts: [{ type: 'text', text: 'hi' }] },
+				],
 				customProvider: {
 					baseUrl: 'https://api.mycompany.com',
 					apiKey: 'sk-xxx',
@@ -112,7 +289,13 @@ describe('vercelFormatAdapter', () => {
 				vercelFormatAdapter.parseRequest({
 					provider: 'mycompany',
 					model: 'custom-gpt-4',
-					messages: [{ role: 'user', content: 'hi' }],
+					messages: [
+						{
+							id: 'msg-1',
+							role: 'user',
+							parts: [{ type: 'text', text: 'hi' }],
+						},
+					],
 					customProvider: {
 						baseUrl: 'http://169.254.169.254/latest/meta-data',
 						apiKey: 'sk-xxx',
@@ -126,7 +309,13 @@ describe('vercelFormatAdapter', () => {
 				vercelFormatAdapter.parseRequest({
 					provider: 'mycompany',
 					model: 'custom-gpt-4',
-					messages: [{ role: 'user', content: 'hi' }],
+					messages: [
+						{
+							id: 'msg-1',
+							role: 'user',
+							parts: [{ type: 'text', text: 'hi' }],
+						},
+					],
 					customProvider: { baseUrl: '', apiKey: 'sk-xxx' },
 				})
 			).to.throw('"customProvider.baseUrl" is required');
@@ -137,7 +326,13 @@ describe('vercelFormatAdapter', () => {
 				vercelFormatAdapter.parseRequest({
 					provider: 'mycompany',
 					model: 'custom-gpt-4',
-					messages: [{ role: 'user', content: 'hi' }],
+					messages: [
+						{
+							id: 'msg-1',
+							role: 'user',
+							parts: [{ type: 'text', text: 'hi' }],
+						},
+					],
 					customProvider: { baseUrl: 'https://api.mycompany.com', apiKey: '' },
 				})
 			).to.throw('"customProvider.apiKey" is required');
@@ -147,7 +342,9 @@ describe('vercelFormatAdapter', () => {
 			expect(() =>
 				vercelFormatAdapter.parseRequest({
 					model: 'gpt-4o',
-					messages: [{ role: 'user', content: 'hi' }],
+					messages: [
+						{ id: 'msg-1', role: 'user', parts: [{ type: 'text', text: 'hi' }] },
+					],
 				} as any)
 			).to.throw('"provider" is required');
 		});
@@ -156,7 +353,9 @@ describe('vercelFormatAdapter', () => {
 			expect(() =>
 				vercelFormatAdapter.parseRequest({
 					provider: 'openai',
-					messages: [{ role: 'user', content: 'hi' }],
+					messages: [
+						{ id: 'msg-1', role: 'user', parts: [{ type: 'text', text: 'hi' }] },
+					],
 				} as any)
 			).to.throw('"model" is required');
 		});
@@ -169,6 +368,42 @@ describe('vercelFormatAdapter', () => {
 					messages: [],
 				} as any)
 			).to.throw('"messages" is required');
+		});
+
+		it('throws when a message is missing an id', () => {
+			expect(() =>
+				vercelFormatAdapter.parseRequest({
+					provider: 'openai',
+					model: 'gpt-4o',
+					messages: [{ role: 'user', parts: [{ type: 'text', text: 'hi' }] }],
+				} as any)
+			).to.throw('must have a non-empty string "id"');
+		});
+
+		it('throws when a message role is invalid', () => {
+			expect(() =>
+				vercelFormatAdapter.parseRequest({
+					provider: 'openai',
+					model: 'gpt-4o',
+					messages: [
+						{
+							id: 'msg-1',
+							role: 'tool',
+							parts: [{ type: 'text', text: 'hi' }],
+						},
+					],
+				} as any)
+			).to.throw('Message "role" must be one of');
+		});
+
+		it('throws when a message is missing a parts array', () => {
+			expect(() =>
+				vercelFormatAdapter.parseRequest({
+					provider: 'openai',
+					model: 'gpt-4o',
+					messages: [{ id: 'msg-1', role: 'user', content: 'hi' }],
+				} as any)
+			).to.throw('must have a "parts" array');
 		});
 
 		it('throws when the input is not an object', () => {

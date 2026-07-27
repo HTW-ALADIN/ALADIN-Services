@@ -299,6 +299,97 @@ describe('GatewayClient', () => {
 			}
 		});
 
+		it('sends a data-URL file part as an inline OpenAI file content part', async () => {
+			const customServer = new MockOpenAIServer();
+			const customBaseUrl = await customServer.listen();
+			customServer.on('/chat/completions', (body) => {
+				expect(body.messages[0].content).to.deep.equal([
+					{ type: 'text', text: 'summarize this' },
+					{
+						type: 'file',
+						file: {
+							filename: 'report.pdf',
+							file_data: 'data:application/pdf;base64,AAA',
+						},
+					},
+				]);
+				return { status: 200, body: chatCompletionResponse() };
+			});
+
+			try {
+				const client = new GatewayClient({
+					baseUrl,
+					apiKey: 'test-key',
+					timeoutMs: 5000,
+				});
+				await client.generate(
+					baseRequest({
+						provider: 'mycompany',
+						model: 'custom-gpt-4',
+						messages: [
+							{
+								role: 'user',
+								content: [
+									{ type: 'text', text: 'summarize this' },
+									{
+										type: 'file',
+										data: 'data:application/pdf;base64,AAA',
+										mediaType: 'application/pdf',
+										filename: 'report.pdf',
+									},
+								],
+							},
+						],
+						customProvider: { baseUrl: customBaseUrl, apiKey: 'custom-key' },
+					})
+				);
+			} finally {
+				await customServer.close();
+			}
+		});
+
+		it('rejects a non-data-URL file part on the customProvider bypass path', async () => {
+			const client = new GatewayClient({
+				baseUrl,
+				apiKey: 'test-key',
+				timeoutMs: 5000,
+			});
+
+			let error: unknown;
+			try {
+				await client.generate(
+					baseRequest({
+						provider: 'mycompany',
+						model: 'custom-gpt-4',
+						messages: [
+							{
+								role: 'user',
+								content: [
+									{
+										type: 'file',
+										data: 'https://example.com/report.pdf',
+										mediaType: 'application/pdf',
+									},
+								],
+							},
+						],
+						customProvider: {
+							baseUrl: 'https://api.mycompany.com',
+							apiKey: 'custom-key',
+						},
+					})
+				);
+			} catch (err) {
+				error = err;
+			}
+
+			expect(error).to.be.instanceOf(GatewayRequestError);
+			expect((error as GatewayRequestError).status).to.equal(400);
+			expect((error as GatewayRequestError).message).to.match(
+				/must be a .*data URL/
+			);
+		});
+
 		it('maps tool calls and finish reason returned by a custom provider', async () => {
 			const customServer = new MockOpenAIServer();
 			const customBaseUrl = await customServer.listen();

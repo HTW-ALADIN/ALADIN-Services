@@ -350,6 +350,30 @@ function toOpenAIContentPart(part: ContentPart): unknown {
 	if (part.type === 'image') {
 		return { type: 'image_url', image_url: { url: part.image } };
 	}
+	if (part.type === 'file') {
+		// OpenAI's chat-completions file content part only accepts inline
+		// `file_data` (a data URL) or a pre-uploaded `file_id`; unlike images,
+		// it has no `file_url` variant. Rather than fetch a caller-supplied
+		// remote URL server-side (reopening the SSRF surface that
+		// `assertSafeCustomProviderBaseUrl` closes for `customProvider.baseUrl`
+		// itself, plus unbounded memory use for large files), reject anything
+		// that isn't already an inline data URL.
+		if (!part.data.startsWith('data:')) {
+			throw new GatewayRequestError(
+				'File attachments sent through a "customProvider" override must be a ' +
+					'data URL (e.g. "data:application/pdf;base64,..."); remote http(s) ' +
+					'URLs are not supported on the direct-bypass path.',
+				400
+			);
+		}
+		return {
+			type: 'file',
+			file: {
+				...(part.filename ? { filename: part.filename } : {}),
+				file_data: part.data,
+			},
+		};
+	}
 	return { type: 'text', text: part.text };
 }
 

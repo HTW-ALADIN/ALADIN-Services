@@ -21,7 +21,22 @@ export interface ImagePart {
 	mediaType?: string;
 }
 
-export type ContentPart = TextPart | ImagePart;
+/**
+ * A non-image file attachment (PDF, etc.), mirroring the Vercel AI SDK's
+ * `FilePart`/`FileUIPart` shape. `ImagePart` is kept as a separate variant
+ * for backward compatibility even though the AI SDK has deprecated it in
+ * favor of `FilePart` with an `image/*` `mediaType`.
+ */
+export interface FilePart {
+	type: 'file';
+	/** Data URL, http(s) URL, or base64 string. */
+	data: string;
+	/** IANA media type, e.g. "application/pdf". */
+	mediaType: string;
+	filename?: string;
+}
+
+export type ContentPart = TextPart | ImagePart | FilePart;
 
 export interface ChatMessage {
 	role: ChatRole;

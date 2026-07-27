@@ -120,13 +120,23 @@ Endpoints:
 | `POST` | `/embeddings` | Create embeddings via LLM Gateway                              |
 | `POST` | `/providers`  | Best-effort registration of a custom provider with the gateway |
 
-Example generation request:
+The wire format defaults to the Vercel AI SDK `UIMessage` format (a `parts` array per message, matching what
+`useChat()` sends). Set `"format": "openai-chat"` or `"format": "openai-responses"` to use an OpenAI-compatible
+format instead — see "Wire formats" below.
+
+Example generation request (default `vercel` format):
 
 ```json
 {
 	"provider": "openai",
 	"model": "gpt-4o",
-	"messages": [{ "role": "user", "content": "Summarize the purpose of ALADIN in one sentence." }],
+	"messages": [
+		{
+			"id": "msg-1",
+			"role": "user",
+			"parts": [{ "type": "text", "text": "Summarize the purpose of ALADIN in one sentence." }]
+		}
+	],
 	"system": "Answer concisely.",
 	"maxOutputTokens": 120
 }
@@ -138,10 +148,51 @@ Example one-shot custom provider call (no prior registration required):
 {
 	"provider": "mycompany",
 	"model": "custom-gpt-4",
-	"messages": [{ "role": "user", "content": "Hello from my custom provider!" }],
+	"messages": [
+		{
+			"id": "msg-1",
+			"role": "user",
+			"parts": [{ "type": "text", "text": "Hello from my custom provider!" }]
+		}
+	],
 	"customProvider": { "baseUrl": "https://api.mycompany.com", "apiKey": "sk-xxx" }
 }
 ```
+
+### Wire formats
+
+`POST /generate` accepts an optional `"format"` field, defaulting to `"vercel"` when omitted:
+
+| `format`             | Shape                                                                          |
+| --------------------- | ------------------------------------------------------------------------------ |
+| `vercel` (default)    | Vercel AI SDK `UIMessage[]` — `{ id, role, parts: [...] }` per message          |
+| `openai-chat`          | OpenAI Chat Completions — `{ role, content }` per message, like `/v1/chat/completions` |
+| `openai-responses`     | OpenAI Responses API — a string or item array `input`, like `/v1/responses`    |
+
+Example using the OpenAI Chat Completions format:
+
+```json
+{
+	"format": "openai-chat",
+	"provider": "openai",
+	"model": "gpt-4o",
+	"messages": [{ "role": "user", "content": "Summarize the purpose of ALADIN in one sentence." }]
+}
+```
+
+Example using the OpenAI Responses format:
+
+```json
+{
+	"format": "openai-responses",
+	"provider": "openai",
+	"model": "gpt-4o",
+	"input": "Summarize the purpose of ALADIN in one sentence."
+}
+```
+
+All three formats route through the same `provider`/`model`/`customProvider` fields; only the message shape and the
+response shape change.
 
 ## CLI
 
@@ -150,7 +201,7 @@ stdin and writes the full JSON response to stdout or a file:
 
 ```sh
 npm run cli -- health
-echo '{"provider":"openai","model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}' | npm run cli -- generate
+echo '{"provider":"openai","model":"gpt-4o","messages":[{"id":"msg-1","role":"user","parts":[{"type":"text","text":"hi"}]}]}' | npm run cli -- generate
 npm run cli -- generate request.json -o response.json
 npm run cli -- register-provider --name mycompany --base-url https://api.mycompany.com --api-key sk-xxx
 ```
