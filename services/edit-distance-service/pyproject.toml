@@ -35,5 +35,8 @@ graph = [
 requires = ["setuptools>=75.0.0"]
 build-backend = "setuptools.build_meta"
 
+[project.scripts]
+edit-distance-service = "cli:cli"
+
 [tool.setuptools.packages.find]
 where = ["src"]

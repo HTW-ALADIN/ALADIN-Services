@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from .models import (
@@ -33,11 +33,6 @@ diff-match-patch for text; NetworkX, GEDLIB, GMatch4py for graphs).
 ## Spec B (Tier 2) — Graph ED: + GMatch4py (100% family coverage)
 """,
 )
-
-
-# ─── In-memory result store for GED (async resource pattern) ──────────────────
-
-_ged_results: dict[str, GedResultResponse] = {}
 
 
 # ─── Error Handler ────────────────────────────────────────────────────────────
@@ -82,7 +77,7 @@ async def text_compare(request: dict[str, Any]) -> TextCompareResponse:
     if not algorithm:
         raise HTTPException(status_code=400, detail="Missing required field: 'algorithm'")
 
-    backend = request.get("backend", _get_default_backend(algorithm))
+    backend = _get_default_backend(algorithm)
     params = request.get("params", {})
     raw_inputs = request.get("inputs", [])
 
@@ -108,7 +103,7 @@ async def text_compare(request: dict[str, Any]) -> TextCompareResponse:
         algorithm=algorithm,
         backend=backend,
         result_type=result_type,
-        results=[r.model_dump() if hasattr(r, 'model_dump') else r for r in results],
+        results=[r.model_dump() for r in results],
         meta={"compute_time_ms": round(compute_ms, 2)},
     )
 
@@ -143,18 +138,22 @@ async def list_ged_algorithms() -> list[dict]:
     return GED_ALGORITHM_CATALOG
 
 
+_GED_DEFAULT_BACKEND = {
+    "ged_astar": "networkx",
+    "ged_heuristic": "gedlib",
+    "ged_hausdorff": "gmatch4py",
+    "ged_greedy": "gmatch4py",
+}
+
+
 @app.post("/v1/graphs/ged/compute")
 async def ged_compute(request: dict[str, Any]) -> JSONResponse:
-    """Compute the edit distance between one pair (or a batch of pairs) of graphs.
-
-    Returns 202 Accepted (async, with Location header) for expensive computations,
-    or 201 Created with the result inline for fast ones.
-    """
+    """Compute the edit distance between one pair (or a batch of pairs) of graphs."""
     algorithm = request.get("algorithm")
     if not algorithm:
         raise HTTPException(status_code=400, detail="Missing required field: 'algorithm'")
 
-    backend = request.get("backend", "networkx")
+    backend = _GED_DEFAULT_BACKEND.get(algorithm, "networkx")
     params = request.get("params", {})
     raw_graphs = request.get("graphs", [])
 
@@ -185,9 +184,10 @@ async def ged_compute(request: dict[str, Any]) -> JSONResponse:
     )
 
     # Synchronous implementation: always return 201 with the result inline.
-    return JSONResponse(
+    return Response(
+        content=response.model_dump_json(by_alias=True),
         status_code=201,
-        content=response.model_dump(by_alias=True),
+        media_type="application/json",
     )
 
 
@@ -203,49 +203,6 @@ async def health():
     return {"status": "ok", "service": "edit-distance-service"}
 
 
-# ─── CLI entry point helper ───────────────────────────────────────────────────
-
-def run_cli():
-    """CLI entry point for the edit-distance-service."""
-    import sys
-    import json
-
-    if len(sys.argv) < 2:
-        print("Usage: edit-distance-service <command>")
-        print("Commands: serve, list-text, list-ged, openapi")
-        sys.exit(1)
-
-    command = sys.argv[1]
-
-    if command == "serve":
-        import uvicorn
-        port = int(sys.argv[2]) if len(sys.argv) > 2 else 8000
-        uvicorn.run(app, host="0.0.0.0", port=port)
-    elif command == "list-text":
-        print(json.dumps(TEXT_ALGORITHM_CATALOG, indent=2))
-    elif command == "list-ged":
-        print(json.dumps(GED_ALGORITHM_CATALOG, indent=2))
-    elif command == "openapi":
-        from fastapi.openapi.utils import get_openapi
-        spec = get_openapi(
-            title=app.title,
-            version=app.version,
-            openapi_version=app.openapi_version,
-            description=app.description,
-            routes=app.routes,
-        )
-        output_file = sys.argv[2] if len(sys.argv) > 2 else None
-        text = json.dumps(spec, indent=2)
-        if output_file:
-            with open(output_file, "w") as f:
-                f.write(text)
-            print(f"OpenAPI spec written to {output_file}")
-        else:
-            print(text)
-    else:
-        print(f"Unknown command: {command}")
-        sys.exit(1)
-
-
 if __name__ == "__main__":
-    run_cli()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -56,19 +56,19 @@ def _networkx_ged_astar(pair: GraphPair, params: dict) -> GedPairResult:
     edge_del = params.get("edge_del_cost")
     edge_ins = params.get("edge_ins_cost")
 
-    def _make_cost_dict(base_cost, default_name):
+    def _make_cost_dict(base_cost):
         """Helper to create cost callable from optional float."""
         if base_cost is not None:
             return lambda n1, n2: base_cost
         return None
 
     # Handle cost functions
-    node_subst_fn = _make_cost_dict(node_subst, "node_subst")
-    node_del_fn = _make_cost_dict(node_del, "node_del")
-    node_ins_fn = _make_cost_dict(node_ins, "node_ins")
-    edge_subst_fn = _make_cost_dict(edge_subst, "edge_subst")
-    edge_del_fn = _make_cost_dict(edge_del, "edge_del")
-    edge_ins_fn = _make_cost_dict(edge_ins, "edge_ins")
+    node_subst_fn = _make_cost_dict(node_subst)
+    node_del_fn = _make_cost_dict(node_del)
+    node_ins_fn = _make_cost_dict(node_ins)
+    edge_subst_fn = _make_cost_dict(edge_subst)
+    edge_del_fn = _make_cost_dict(edge_del)
+    edge_ins_fn = _make_cost_dict(edge_ins)
 
     if mode == "exact":
         try:

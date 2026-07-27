@@ -30,7 +30,7 @@ class TestTextDiscovery:
 class TestTextCompare:
     def test_levenshtein_returns_200(self):
         resp = client.post("/v1/text/compare", json={
-            "algorithm": "levenshtein", "backend": "rapidfuzz",
+            "algorithm": "levenshtein",
             "params": {},
             "inputs": [{"id": "p1", "a": "kitten", "b": "sitting"}],
         })
@@ -42,7 +42,7 @@ class TestTextCompare:
 
     def test_phonetic_returns_200(self):
         resp = client.post("/v1/text/compare", json={
-            "algorithm": "phonetic_encoding", "backend": "jellyfish",
+            "algorithm": "phonetic_encoding",
             "params": {"scheme": "soundex"},
             "inputs": [{"id": "w1", "text": "Jellyfish"}],
         })
@@ -50,7 +50,7 @@ class TestTextCompare:
 
     def test_batch_returns_200(self):
         resp = client.post("/v1/text/compare", json={
-            "algorithm": "levenshtein", "backend": "rapidfuzz",
+            "algorithm": "levenshtein",
             "params": {},
             "inputs": [{"id": "p1", "a": "kitten", "b": "sitting"}, {"id": "p2", "a": "flaw", "b": "lawn"}],
         })
@@ -78,7 +78,7 @@ class TestGedDiscovery:
 class TestGedCompute:
     def test_networkx_returns_201(self):
         resp = client.post("/v1/graphs/ged/compute", json={
-            "algorithm": "ged_astar", "backend": "networkx",
+            "algorithm": "ged_astar",
             "params": {"mode": "exact", "timeout_ms": 5000},
             "graphs": [{"id": "pair-1", "g1": {"nodes": [{"id": "A"}, {"id": "B"}], "edges": [{"source": "A", "target": "B"}]}, "g2": {"nodes": [{"id": "A"}, {"id": "B"}, {"id": "C"}], "edges": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"}]}}],
         })

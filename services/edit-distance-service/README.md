@@ -45,13 +45,14 @@ The `inputs` field accepts an array. You may provide either a single pair or mul
 ```json
 {
   "algorithm": "levenshtein",
-  "backend": "rapidfuzz",
   "params": {},
   "inputs": [
     { "id": "pair-1", "a": "kitten", "b": "sitting" }
   ]
 }
 ```
+
+The backend is selected automatically based on the algorithm.
 
 | Field | Type | Description |
 |------|-----|-------------|
@@ -66,7 +67,6 @@ For `algorithm: "phonetic_encoding"` each input object has only a single `text` 
 ```json
 {
   "algorithm": "phonetic_encoding",
-  "backend": "jellyfish",
   "params": { "scheme": "soundex" },
   "inputs": [
     { "id": "w1", "text": "Jellyfish" },
@@ -87,7 +87,6 @@ You can process any number of pairs in a single request — the service computes
 ```json
 {
   "algorithm": "levenshtein",
-  "backend": "rapidfuzz",
   "params": {},
   "inputs": [
     { "id": "p1", "a": "kitten", "b": "sitting" },
@@ -157,7 +156,6 @@ Edge format:
 ```json
 {
   "algorithm": "ged_astar",
-  "backend": "networkx",
   "params": { "mode": "exact", "timeout_ms": 5000 },
   "graphs": [
     {
@@ -178,7 +176,6 @@ Multiple pairs can also be submitted in one request:
 ```json
 {
   "algorithm": "ged_astar",
-  "backend": "networkx",
   "params": { "mode": "exact", "timeout_ms": 5000 },
   "graphs": [
     { "id": "pair-1", "g1": { "nodes": [...] }, "g2": { "nodes": [...] } },
@@ -219,6 +216,8 @@ With `includeNodeMap: true` the response will include the optimal node-mapping p
 | `long_sequence_alignment` | edlib | Banded/bit-vector alignment + CIGAR | alignment |
 | `diff_patch` | diff_match_patch | Myers diff / edit-script + patch | edit_script |
 
+Backend is selected automatically per algorithm. The table shows available backends.
+
 ## Graph Algorithms
 
 | Algorithm Tag | Backend Options | Families | Result |
@@ -228,16 +227,17 @@ With `includeNodeMap: true` the response will include the optimal node-mapping p
 | `ged_hausdorff` | gmatch4py | Hausdorff Edit Distance | distance |
 | `ged_greedy` | gmatch4py | Greedy edit distance | distance |
 
+Backend is selected automatically per algorithm.
+
 ## Request/Response Examples
 
-### Levenshtein (RapidFuzz)
+### Levenshtein
 
 ```bash
 curl -X POST http://localhost:8000/v1/text/compare \
   -H "Content-Type: application/json" \
   -d '{
     "algorithm": "levenshtein",
-    "backend": "rapidfuzz",
     "params": {},
     "inputs": [
       {"id": "pair-1", "a": "kitten", "b": "sitting"}
@@ -259,14 +259,13 @@ Response:
 }
 ```
 
-### Jaro-Winkler (RapidFuzz)
+### Jaro-Winkler
 
 ```bash
 curl -X POST http://localhost:8000/v1/text/compare \
   -H "Content-Type: application/json" \
   -d '{
     "algorithm": "jaro_winkler",
-    "backend": "rapidfuzz",
     "params": {},
     "inputs": [
       {"id": "pair-1", "a": "MARTHA", "b": "MARHTA"}
@@ -295,7 +294,6 @@ curl -X POST http://localhost:8000/v1/text/compare \
   -H "Content-Type: application/json" \
   -d '{
     "algorithm": "levenshtein",
-    "backend": "rapidfuzz",
     "params": {},
     "inputs": [
       {"id": "p1", "a": "kitten", "b": "sitting"},
@@ -312,7 +310,6 @@ curl -X POST http://localhost:8000/v1/text/compare \
   -H "Content-Type: application/json" \
   -d '{
     "algorithm": "phonetic_encoding",
-    "backend": "jellyfish",
     "params": {"scheme": "soundex"},
     "inputs": [
       {"id": "w1", "text": "Jellyfish"}
@@ -341,7 +338,6 @@ curl -X POST http://localhost:8000/v1/text/compare \
   -H "Content-Type: application/json" \
   -d '{
     "algorithm": "diff_patch",
-    "backend": "diff_match_patch",
     "params": {},
     "inputs": [
       {"id": "p1", "a": "The quick brown fox", "b": "The slow brown fox"}
@@ -349,14 +345,13 @@ curl -X POST http://localhost:8000/v1/text/compare \
   }'
 ```
 
-### GED — exact mode (NetworkX)
+### GED — exact mode
 
 ```bash
 curl -X POST http://localhost:8000/v1/graphs/ged/compute \
   -H "Content-Type: application/json" \
   -d '{
     "algorithm": "ged_astar",
-    "backend": "networkx",
     "params": { "mode": "exact", "timeout_ms": 5000 },
     "graphs": [
       {
@@ -431,7 +426,7 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 curl http://localhost:8000/v1/text/algorithms
 curl -X POST http://localhost:8000/v1/text/compare \
   -H "Content-Type: application/json" \
-  -d '{"algorithm":"levenshtein","backend":"rapidfuzz","params":{},"inputs":[{"id":"p1","a":"kitten","b":"sitting"}]}'
+  -d '{"algorithm":"levenshtein","params":{},"inputs":[{"id":"p1","a":"kitten","b":"sitting"}]}'
 
 # 5. Smoke test
 bash tests/test_smoke.sh http://localhost:8000
@@ -442,7 +437,7 @@ bash tests/test_smoke.sh http://localhost:8000
 The service follows the same patterns as the `noise-generation-service`:
 
 - **Discriminated union request body** — one `POST` endpoint per domain, algorithm selected via `algorithm` field
-- **Backend is explicit** — different libraries can produce numerically different results for the same named algorithm
+- **Backend is auto-selected** — each algorithm maps to exactly one default backend; the `backend` field is no longer user-configurable
 - **Discovery endpoint** — `GET /v1/*/algorithms` exposes the full catalog at runtime
 - **Result shape varies** — response is a discriminated union on `result_type` (scalar_distance, sequence, phonetic_code, edit_script, alignment)
 - **Batching** — all compute endpoints accept arrays of inputs/graphs

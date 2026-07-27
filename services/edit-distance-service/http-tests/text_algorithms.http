@@ -10,7 +10,6 @@ Content-Type: application/json
 
 {
   "algorithm": "levenshtein",
-  "backend": "rapidfuzz",
   "params": {},
   "inputs": [
     { "id": "p1", "a": "kitten", "b": "sitting" },
@@ -24,7 +23,6 @@ Content-Type: application/json
 
 {
   "algorithm": "levenshtein",
-  "backend": "textdistance",
   "params": {},
   "inputs": [
     { "id": "p1", "a": "kitten", "b": "sitting" }
@@ -37,7 +35,6 @@ Content-Type: application/json
 
 {
   "algorithm": "levenshtein",
-  "backend": "jellyfish",
   "params": {},
   "inputs": [
     { "id": "p1", "a": "kitten", "b": "sitting" }
@@ -50,7 +47,6 @@ Content-Type: application/json
 
 {
   "algorithm": "damerau_levenshtein",
-  "backend": "rapidfuzz",
   "params": {},
   "inputs": [
     { "id": "p1", "a": "jellyfish", "b": "jellyfihs" }
@@ -63,7 +59,6 @@ Content-Type: application/json
 
 {
   "algorithm": "hamming",
-  "backend": "rapidfuzz",
   "params": {},
   "inputs": [
     { "id": "p1", "a": "karolin", "b": "kathrin" }
@@ -76,7 +71,6 @@ Content-Type: application/json
 
 {
   "algorithm": "jaro_winkler",
-  "backend": "rapidfuzz",
   "params": {},
   "inputs": [
     { "id": "p1", "a": "MARTHA", "b": "MARHTA" }
@@ -89,7 +83,6 @@ Content-Type: application/json
 
 {
   "algorithm": "osa",
-  "backend": "rapidfuzz",
   "params": {},
   "inputs": [
     { "id": "p1", "a": "ca", "b": "abc" }
@@ -102,7 +95,6 @@ Content-Type: application/json
 
 {
   "algorithm": "indel",
-  "backend": "rapidfuzz",
   "params": {},
   "inputs": [
     { "id": "p1", "a": "kitten", "b": "sitting" }
@@ -115,7 +107,6 @@ Content-Type: application/json
 
 {
   "algorithm": "lcs",
-  "backend": "textdistance",
   "params": {},
   "inputs": [
     { "id": "p1", "a": "kitten", "b": "sitting" }
@@ -128,7 +119,6 @@ Content-Type: application/json
 
 {
   "algorithm": "needleman_wunsch",
-  "backend": "textdistance",
   "params": { "gap_cost": 1.0 },
   "inputs": [
     { "id": "p1", "a": "kitten", "b": "sitting" }
@@ -141,7 +131,6 @@ Content-Type: application/json
 
 {
   "algorithm": "smith_waterman",
-  "backend": "textdistance",
   "params": {},
   "inputs": [
     { "id": "p1", "a": "kitten", "b": "sitting" }
@@ -154,7 +143,6 @@ Content-Type: application/json
 
 {
   "algorithm": "token_set_similarity",
-  "backend": "textdistance",
   "params": { "metric": "jaccard" },
   "inputs": [
     { "id": "p1", "a": "hello world", "b": "world hello" }
@@ -167,7 +155,6 @@ Content-Type: application/json
 
 {
   "algorithm": "ncd",
-  "backend": "textdistance",
   "params": { "qval": 1, "compressor": "zlib" },
   "inputs": [
     { "id": "p1", "a": "kitten", "b": "sitting" }
@@ -180,7 +167,6 @@ Content-Type: application/json
 
 {
   "algorithm": "phonetic_encoding",
-  "backend": "jellyfish",
   "params": { "scheme": "soundex" },
   "inputs": [
     { "id": "w1", "text": "Jellyfish" },
@@ -194,7 +180,6 @@ Content-Type: application/json
 
 {
   "algorithm": "long_sequence_alignment",
-  "backend": "edlib",
   "params": { "mode": "NW", "task": "distance" },
   "inputs": [
     { "id": "p1", "a": "kitten", "b": "sitting" }
@@ -207,7 +192,6 @@ Content-Type: application/json
 
 {
   "algorithm": "diff_patch",
-  "backend": "diff_match_patch",
   "params": {},
   "inputs": [
     { "id": "p1", "a": "The quick brown fox", "b": "The slow brown fox" }

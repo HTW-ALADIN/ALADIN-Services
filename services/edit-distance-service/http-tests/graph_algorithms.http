@@ -7,7 +7,6 @@ Content-Type: application/json
 
 {
   "algorithm": "ged_astar",
-  "backend": "networkx",
   "params": {
     "mode": "exact",
     "timeout_ms": 5000
@@ -49,7 +48,6 @@ Content-Type: application/json
 
 {
   "algorithm": "ged_astar",
-  "backend": "networkx",
   "params": {
     "mode": "anytime",
     "timeout_ms": 3000
@@ -87,7 +85,6 @@ Content-Type: application/json
 
 {
   "algorithm": "ged_hausdorff",
-  "backend": "gmatch4py",
   "params": {
     "node_del": 1.0,
     "node_ins": 1.0,
@@ -127,7 +124,6 @@ Content-Type: application/json
 
 {
   "algorithm": "ged_greedy",
-  "backend": "gmatch4py",
   "params": {
     "node_del": 1.0,
     "node_ins": 1.0,
