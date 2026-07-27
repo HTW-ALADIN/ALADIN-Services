@@ -308,12 +308,12 @@ export class DescriptionController {
 		// ---------------------------------------------------------------------
 
 		// ---- PGlite branch --------------------------------------------------
-		const connectionInfoAny = options.connectionInfo as any;
+		const connectionInfo = options.connectionInfo;
 		let databaseKey: string;
 		let schema: string;
 
-		if (connectionInfoAny?.type === 'pglite') {
-			const { databaseId } = connectionInfoAny;
+		if (connectionInfo.type === 'pglite') {
+			const { databaseId } = connectionInfo;
 			if (!databaseId || typeof databaseId !== 'string') {
 				res.status(400).json({ message: t('INVALID_CONNECTION_INFO', lang) });
 				return null;
@@ -322,16 +322,13 @@ export class DescriptionController {
 			schema = 'public';
 		} else {
 			// PostgreSQL path
-			const connectionError = validateConnectionInfo(
-				options.connectionInfo,
-				lang,
-			);
+			const connectionError = validateConnectionInfo(connectionInfo, lang);
 			if (connectionError) {
 				res.status(400).json({ message: connectionError });
 				return null;
 			}
 
-			const { host, port, schema: pgSchema } = options.connectionInfo;
+			const { host, port, schema: pgSchema } = connectionInfo;
 			databaseKey = generateDatabaseKey(host!, port!, pgSchema!);
 			schema = pgSchema!;
 		}

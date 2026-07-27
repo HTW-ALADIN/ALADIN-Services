@@ -1,0 +1,56 @@
+{
+	"name": "llm-gateway-service",
+	"version": "0.1.0",
+	"description": "HTTP and CLI wrapper around a self-hosted LLM Gateway instance, using the Vercel AI SDK.",
+	"private": true,
+	"type": "module",
+	"bin": {
+		"llm-gateway": "./dist/cli/index.js"
+	},
+	"scripts": {
+		"build": "tsc --noEmit",
+		"prestart": "npm run build",
+		"start": "npm run test",
+		"start:api": "tsx src/api/index.ts",
+		"cli": "tsx src/cli/index.ts",
+		"test": "mocha",
+		"test:coverage": "c8 mocha",
+		"test:integration:real": "mocha --no-config --node-option import=tsx --spec test/integration/real-provider.test.ts --timeout 60000",
+		"lint": "eslint ./src ./test ./scripts",
+		"lint:fix": "eslint ./src ./test ./scripts --fix",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"generate:openapi": "tsx scripts/generate-openapi.ts"
+	},
+	"dependencies": {
+		"@fastify/swagger": "^9.8.1",
+		"@fastify/swagger-ui": "^6.1.0",
+		"@llmgateway/ai-sdk-provider": "^3.8.1",
+		"@sinclair/typebox": "^0.34.52",
+		"ai": "^6.0.232",
+		"commander": "^15.0.0",
+		"fastify": "^5.10.0",
+		"zod": "^4.1.8"
+	},
+	"devDependencies": {
+		"@eslint/js": "^9.15.0",
+		"@types/chai": "^5.0.1",
+		"@types/mocha": "^10.0.10",
+		"@types/node": "^20.17.0",
+		"@types/sinon": "^17.0.3",
+		"c8": "^12.0.0",
+		"chai": "^5.1.2",
+		"eslint": "^9.15.0",
+		"eslint-plugin-mocha": "^10.5.0",
+		"globals": "^15.12.0",
+		"mocha": "^10.8.2",
+		"prettier": "^3.4.1",
+		"sinon": "^19.0.2",
+		"tsx": "^4.21.0",
+		"typescript": "^5.9.2",
+		"typescript-eslint": "^8.16.0"
+	},
+	"engines": {
+		"node": ">=20"
+	}
+}

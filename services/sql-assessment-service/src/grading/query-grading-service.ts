@@ -1,5 +1,5 @@
-import { DataSource } from 'typeorm';
 import { AST, Parser } from 'node-sql-parser';
+import { RowQueryFn } from '../shared/utils/database-utils';
 import { ComparisonResult } from '../shared/interfaces/index';
 import { AssembledFeedback } from '../shared/interfaces/feedback';
 import { ResultSetComparator } from './result-set-comparator';
@@ -35,7 +35,7 @@ export class SQLQueryGradingService {
 	public async gradeQuery(
 		referenceQuery: string,
 		studentQuery: string,
-		dataSource: DataSource,
+		runQuery: RowQueryFn,
 		databaseKey: string,
 		lang: SupportedLanguage = 'en',
 	): Promise<ComparisonResult> {
@@ -47,7 +47,7 @@ export class SQLQueryGradingService {
 		const [executable, execFeedback] =
 			await this.resultSetComparator.isExecutable(
 				studentQuery,
-				dataSource,
+				runQuery,
 				lang,
 			);
 
@@ -74,7 +74,7 @@ export class SQLQueryGradingService {
 		const [resultSetMatch, rsFeedback] = await this.resultSetComparator.compare(
 			referenceQuery,
 			studentQuery,
-			dataSource,
+			runQuery,
 			lang,
 		);
 
@@ -205,7 +205,7 @@ export class SQLQueryGradingService {
 			referenceAST,
 			astResult.studentAliasMap,
 			astResult.referenceAliasMap,
-			dataSource,
+			runQuery,
 			studentQuery,
 			referenceQuery,
 			lang,

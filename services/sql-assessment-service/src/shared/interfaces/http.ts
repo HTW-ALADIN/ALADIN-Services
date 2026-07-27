@@ -3,6 +3,33 @@ import { GenerationOptions, GptOptions, ITaskConfiguration } from './domain';
 import { AssembledFeedback } from './feedback';
 
 /**
+ * Connection info for an in-process PGlite database.
+ *
+ * PGlite instances are registered out-of-band (via `/analyze-database` or a
+ * configured init-SQL file) and referenced afterwards by `databaseId`.  The
+ * literal `type: 'pglite'` acts as the discriminant against
+ * {@link PostgresConnectionOptions} (whose `type` is `'postgres'`).
+ */
+export interface PGliteConnectionInfo {
+	type: 'pglite';
+	/** Stable identifier of a registered PGlite instance. */
+	databaseId: string;
+	/**
+	 * SQL used to (re-)initialise the instance.  Required by
+	 * `/analyze-database`; optional on downstream calls, which reuse the
+	 * already-registered instance.
+	 */
+	sqlContent?: string;
+}
+
+/**
+ * Backend-agnostic connection info accepted by every endpoint.  A discriminated
+ * union keyed on `type`: `'postgres'` selects {@link PostgresConnectionOptions}
+ * and `'pglite'` selects {@link PGliteConnectionInfo}.
+ */
+export type ConnectionInfo = PostgresConnectionOptions | PGliteConnectionInfo;
+
+/**
  * Statistics attached to a reference query, recording how prior student
  * cohorts have interacted with it.  All fields are optional — callers may
  * supply as much or as little context as they have available.
@@ -52,14 +79,14 @@ export interface GradingRequest {
 }
 
 export interface IRequestTaskOptions {
-	connectionInfo: PostgresConnectionOptions;
+	connectionInfo: ConnectionInfo;
 	taskConfiguration: ITaskConfiguration;
 	/** BCP 47 language code for error messages (e.g. "en", "de"). Defaults to "en". */
 	languageCode?: string;
 }
 
 export interface IRequestGradingOptions {
-	connectionInfo: PostgresConnectionOptions;
+	connectionInfo: ConnectionInfo;
 	gradingRequest: GradingRequest;
 	/** BCP 47 language code for error messages (e.g. "en", "de"). Defaults to "en". */
 	languageCode?: string;
@@ -94,7 +121,7 @@ export interface ComparisonResult {
 }
 
 export interface IRequestDescriptionOptions {
-	connectionInfo: PostgresConnectionOptions;
+	connectionInfo: ConnectionInfo;
 	/** Raw SQL query string to generate a description for. */
 	query: string;
 	/** Whether the query involves a self-join. Defaults to false. */
@@ -113,7 +140,7 @@ export interface DescriptionResponse {
 }
 
 export interface IRequestQueryOptions {
-	connectionInfo: PostgresConnectionOptions;
+	connectionInfo: ConnectionInfo;
 	/** Raw SQL SELECT query to execute against the registered database. */
 	query: string;
 	/** BCP 47 language code for error messages (e.g. "en", "de"). Defaults to "en". */
@@ -132,7 +159,7 @@ export interface QueryExecutionResult {
  * Flat (no nested gradingRequest) to keep individual comparison calls simple.
  */
 export interface IRequestComparisonOptions {
-	connectionInfo: PostgresConnectionOptions;
+	connectionInfo: ConnectionInfo;
 	/**
 	 * A single reference query string.
 	 * @deprecated Prefer `referenceQueries`.  When both are supplied,

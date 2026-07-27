@@ -1,0 +1,93 @@
+### llm-gateway-service — manual "real custom provider" checks
+#
+# Manual, HTTP-level counterpart to
+# `test/integration/real-provider.test.ts` (`npm run test:integration:real`):
+# calls the service's `POST /generate` with an inline `customProvider`
+# override, so the *service* bypasses LLM Gateway routing and talks to a
+# real OpenAI-compatible endpoint directly — same code path, same
+# credentials, just driven over HTTP instead of via GatewayClient/mocha.
+#
+# Requires:
+#   - The service running locally, e.g.:
+#       docker compose -f docker.dev.compose.yml up --build
+#     (or `npm run start:api` from this directory)
+#   - A `.env` file at the service root (this file's parent directory) with
+#     real credentials (see `.example.env` for the expected keys: API_KEY,
+#     BASE_ENDPOINT). Values below are read directly from it via
+#     `{{$dotenv ...}}` (VS Code REST Client) — nothing is duplicated or
+#     hardcoded here. `$dotenv` resolves relative to the VS Code workspace
+#     root, so open this service's folder directly in VS Code (not a
+#     parent/monorepo root) for it to find `.env`. If your client doesn't
+#     support `{{$dotenv ...}}`, replace `@providerApiKey` / `@providerBaseUrl`
+#     below with the literal values from `.env`.
+#
+# Model id is hardcoded to match the provider used in the automated test
+# (`qwen3.5-122b-a10b_ma`) — adjust if your `.env` points at a different
+# provider/deployment.
+
+@baseUrl = http://localhost:8002
+@model = qwen3.5-122b-a10b_ma
+@providerApiKey = {{$dotenv API_KEY}}
+@providerBaseUrl = {{$dotenv BASE_ENDPOINT}}
+
+###
+# @name health
+# Sanity check that the service is up before hitting the real provider.
+GET {{baseUrl}}/health
+
+###
+# @name generate_basic
+# Basic single-turn generation via the customProvider bypass.
+POST {{baseUrl}}/generate
+Content-Type: application/json
+
+{
+  "provider": "real-provider",
+  "model": "{{model}}",
+  "messages": [
+    { "role": "user", "content": "What is 2 + 2? Reply with only the number." }
+  ],
+  "customProvider": {
+    "baseUrl": "{{providerBaseUrl}}",
+    "apiKey": "{{providerApiKey}}"
+  }
+}
+
+###
+# @name generate_multi_turn_with_system
+# Multi-turn conversation with a system prompt, mirroring the second case in
+# test/integration/real-provider.test.ts.
+POST {{baseUrl}}/generate
+Content-Type: application/json
+
+{
+  "provider": "real-provider",
+  "model": "{{model}}",
+  "system": "You are a concise assistant. Only answer with the final number.",
+  "messages": [
+    { "role": "user", "content": "What is 21 + 21?" }
+  ],
+  "customProvider": {
+    "baseUrl": "{{providerBaseUrl}}",
+    "apiKey": "{{providerApiKey}}"
+  }
+}
+
+###
+# @name generate_invalid_model
+# Expects a non-2xx error response (propagated from the real provider)
+# for a model id that does not exist.
+POST {{baseUrl}}/generate
+Content-Type: application/json
+
+{
+  "provider": "real-provider",
+  "model": "this-model-definitely-does-not-exist-xyz",
+  "messages": [
+    { "role": "user", "content": "hello" }
+  ],
+  "customProvider": {
+    "baseUrl": "{{providerBaseUrl}}",
+    "apiKey": "{{providerApiKey}}"
+  }
+}

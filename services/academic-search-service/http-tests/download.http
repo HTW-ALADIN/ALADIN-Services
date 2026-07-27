@@ -1,0 +1,14 @@
+@baseUrl = http://localhost:8003
+
+### Download a bounded batch of PDFs
+POST {{baseUrl}}/v1/download
+Content-Type: application/json
+
+{
+  "items": [
+    { "provider": "arxiv", "paper_id": "1706.03762" }
+  ]
+}
+
+### Extract full text (academic-mcp-backed providers only)
+GET {{baseUrl}}/v1/fulltext?provider=pubmed&paper_id=32790614

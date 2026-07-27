@@ -721,6 +721,50 @@
           }
         }
       },
+      "PGliteConnectionInfo": {
+        "type": "object",
+        "description": "Connection info for an in-process PGlite database. The instance is registered out-of-band (via /analyze-database or a configured init-SQL file) and referenced afterwards by databaseId.\n",
+        "required": [
+          "type",
+          "databaseId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "pglite"
+            ],
+            "example": "pglite"
+          },
+          "databaseId": {
+            "type": "string",
+            "description": "Stable identifier of a registered PGlite instance.",
+            "example": "my-database"
+          },
+          "sqlContent": {
+            "type": "string",
+            "description": "SQL used to (re-)initialise the instance. Required by /analyze-database; optional on downstream calls, which reuse the already-registered instance.\n"
+          }
+        }
+      },
+      "ConnectionInfo": {
+        "description": "Backend-agnostic connection info. Discriminated on the `type` field: `postgres` selects PostgresConnectionInfo, `pglite` selects PGliteConnectionInfo.\n",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PostgresConnectionInfo"
+          },
+          {
+            "$ref": "#/components/schemas/PGliteConnectionInfo"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "postgres": "#/components/schemas/PostgresConnectionInfo",
+            "pglite": "#/components/schemas/PGliteConnectionInfo"
+          }
+        }
+      },
       "AliasMap": {
         "type": "object",
         "description": "Optional human-readable display names for tables and columns. Supplied at database analysis time; used in generated descriptions.\n",
@@ -757,7 +801,7 @@
         ],
         "properties": {
           "connectionInfo": {
-            "$ref": "#/components/schemas/PostgresConnectionInfo"
+            "$ref": "#/components/schemas/ConnectionInfo"
           },
           "aliasMap": {
             "$ref": "#/components/schemas/AliasMap"
@@ -845,7 +889,7 @@
         ],
         "properties": {
           "connectionInfo": {
-            "$ref": "#/components/schemas/PostgresConnectionInfo"
+            "$ref": "#/components/schemas/ConnectionInfo"
           },
           "taskConfiguration": {
             "$ref": "#/components/schemas/TaskConfiguration"
@@ -901,7 +945,7 @@
         ],
         "properties": {
           "connectionInfo": {
-            "$ref": "#/components/schemas/PostgresConnectionInfo"
+            "$ref": "#/components/schemas/ConnectionInfo"
           },
           "query": {
             "type": "string",
@@ -971,7 +1015,7 @@
         ],
         "properties": {
           "connectionInfo": {
-            "$ref": "#/components/schemas/PostgresConnectionInfo"
+            "$ref": "#/components/schemas/ConnectionInfo"
           },
           "gradingRequest": {
             "type": "object",
@@ -1059,7 +1103,7 @@
         ],
         "properties": {
           "connectionInfo": {
-            "$ref": "#/components/schemas/PostgresConnectionInfo"
+            "$ref": "#/components/schemas/ConnectionInfo"
           },
           "referenceQuery": {
             "type": "string",
@@ -1147,7 +1191,7 @@
         ],
         "properties": {
           "connectionInfo": {
-            "$ref": "#/components/schemas/PostgresConnectionInfo"
+            "$ref": "#/components/schemas/ConnectionInfo"
           },
           "query": {
             "type": "string",
