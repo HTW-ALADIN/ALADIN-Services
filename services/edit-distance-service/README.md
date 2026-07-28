@@ -8,9 +8,9 @@ Unified REST API for text edit distance and graph edit distance (GED) algorithms
 |--------|------|---------|
 | `GET` | `/health` | Health check |
 | `GET` | `/v1/text/algorithms` | List all text algorithms + available backends |
-| `POST` | `/v1/text/compare` | Compute text edit distance (synchronous) |
-| `GET` | `/v1/graphs/ged/algorithms` | List all GED algorithms + available backends |
-| `POST` | `/v1/graphs/ged/compute` | Compute graph edit distance (synchronous) |
+| `POST` | `/v1/text/distance` | Compute text edit distance (synchronous) |
+| `GET` | `/v1/graphs/algorithms` | List all GED algorithms + available backends |
+| `POST` | `/v1/graphs/distance` | Compute graph edit distance (synchronous) |
 
 ## Text Algorithms
 
@@ -43,35 +43,350 @@ Unified REST API for text edit distance and graph edit distance (GED) algorithms
 | `ged_hausdorff` | gmatch4py | Hausdorff Edit Distance (cheap upper bound) |
 | `ged_greedy` | gmatch4py | Greedy Edit Distance (fast approximation) |
 
-## Quick Examples
+## Examples
 
-### Levenshtein (Text)
+### Text Algorithms
+
+#### Levenshtein (RapidFuzz — default)
 ```bash
-curl -X POST http://localhost:8000/v1/text/compare \
+curl -s -X POST http://localhost:8000/v1/text/distance \
   -H "Content-Type: application/json" \
   -d '{
     "algorithm": "levenshtein",
     "params": {},
-    "inputs": [{"id": "p1", "a": "kitten", "b": "sitting"}]
-  }'
+    "inputs": [
+      {"id": "p1", "a": "kitten", "b": "sitting"}
+    ]
+  }' | jq .
 ```
 
-### GED A\* (Graph)
+#### Damerau-Levenshtein (RapidFuzz — default)
 ```bash
-curl -X POST http://localhost:8000/v1/graphs/ged/compute \
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "damerau_levenshtein",
+    "params": {},
+    "inputs": [
+      {"id": "p1", "a": "jellyfish", "b": "jellyfihs"}
+    ]
+  }' | jq .
+```
+
+#### Hamming (RapidFuzz — default)
+```bash
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "hamming",
+    "params": {},
+    "inputs": [
+      {"id": "p1", "a": "karolin", "b": "kathrin"}
+    ]
+  }' | jq .
+```
+
+#### Jaro-Winkler (RapidFuzz — default)
+```bash
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "jaro_winkler",
+    "params": {"variant": "jaro_winkler", "prefix_weight": 0.1},
+    "inputs": [
+      {"id": "p1", "a": "MARTHA", "b": "MARHTA"}
+    ]
+  }' | jq .
+```
+
+#### OSA — Optimal String Alignment (RapidFuzz — default)
+```bash
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "osa",
+    "params": {},
+    "inputs": [
+      {"id": "p1", "a": "ca", "b": "abc"}
+    ]
+  }' | jq .
+```
+
+#### Indel (RapidFuzz — default)
+```bash
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "indel",
+    "params": {},
+    "inputs": [
+      {"id": "p1", "a": "kitten", "b": "sitting"}
+    ]
+  }' | jq .
+```
+
+#### LCS — Longest Common Subsequence (textdistance — default)
+```bash
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "lcs",
+    "params": {},
+    "inputs": [
+      {"id": "p1", "a": "kitten", "b": "sitting"}
+    ]
+  }' | jq .
+```
+
+#### Needleman-Wunsch (textdistance — default)
+```bash
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "needleman_wunsch",
+    "params": {"gap_cost": 1.0},
+    "inputs": [
+      {"id": "p1", "a": "kitten", "b": "sitting"}
+    ]
+  }' | jq .
+```
+
+#### Gotoh (textdistance — default)
+```bash
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "gotoh",
+    "params": {},
+    "inputs": [
+      {"id": "p1", "a": "kitten", "b": "sitting"}
+    ]
+  }' | jq .
+```
+
+#### Smith-Waterman (textdistance — default)
+```bash
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "smith_waterman",
+    "params": {},
+    "inputs": [
+      {"id": "p1", "a": "kitten", "b": "sitting"}
+    ]
+  }' | jq .
+```
+
+#### Token Set Similarity (textdistance — default)
+```bash
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "token_set_similarity",
+    "params": {"metric": "jaccard"},
+    "inputs": [
+      {"id": "p1", "a": "hello world", "b": "world hello"}
+    ]
+  }' | jq .
+```
+
+#### NCD — Normalized Compression Distance (textdistance — default)
+```bash
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "ncd",
+    "params": {"qval": 1, "compressor": "zlib"},
+    "inputs": [
+      {"id": "p1", "a": "kitten", "b": "sitting"}
+    ]
+  }' | jq .
+```
+
+#### Phonetic Encoding (jellyfish — default)
+```bash
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "phonetic_encoding",
+    "params": {"scheme": "soundex"},
+    "inputs": [
+      {"id": "w1", "text": "Jellyfish"},
+      {"id": "w2", "text": "Jelyfsh"}
+    ]
+  }' | jq .
+```
+
+#### Long Sequence Alignment (edlib — default)
+```bash
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "long_sequence_alignment",
+    "params": {"mode": "NW", "task": "distance"},
+    "inputs": [
+      {"id": "p1", "a": "kitten", "b": "sitting"}
+    ]
+  }' | jq .
+```
+
+#### Diff/Patch (diff-match-patch — default)
+```bash
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "diff_patch",
+    "params": {},
+    "inputs": [
+      {"id": "p1", "a": "The quick brown fox", "b": "The slow brown fox"}
+    ]
+  }' | jq .
+```
+
+---
+
+### Graph Algorithms
+
+#### GED A* — NetworkX (default, exact mode)
+```bash
+curl -s -X POST http://localhost:8000/v1/graphs/distance \
   -H "Content-Type: application/json" \
   -d '{
     "algorithm": "ged_astar",
     "params": {"mode": "exact", "timeout_ms": 5000},
-    "graphs": [{
-      "id": "pair-1",
-      "g1": {"nodes": [{"id":"A"},{"id":"B"}], "edges": [{"source":"A","target":"B"}]},
-      "g2": {"nodes": [{"id":"A"},{"id":"B"},{"id":"C"}], "edges": [{"source":"A","target":"B"},{"source":"B","target":"C"}]}
-    }]
-  }'
+    "graphs": [
+      {
+        "id": "pair-1",
+        "g1": {
+          "nodes": [{"id": "A", "label": "A"}, {"id": "B", "label": "B"}, {"id": "C", "label": "C"}],
+          "edges": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"}]
+        },
+        "g2": {
+          "nodes": [{"id": "A", "label": "A"}, {"id": "B", "label": "B"}, {"id": "C", "label": "C"}],
+          "edges": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"}, {"source": "A", "target": "C"}]
+        }
+      }
+    ]
+  }' | jq .
 ```
 
-> Batching: Both endpoints accept arrays — multiple pairs per request are supported.
+#### GED A* — NetworkX (anytime mode)
+```bash
+curl -s -X POST http://localhost:8000/v1/graphs/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "ged_astar",
+    "params": {"mode": "anytime", "timeout_ms": 3000},
+    "graphs": [
+      {
+        "id": "pair-1",
+        "g1": {
+          "nodes": [{"id": "1", "label": "A"}, {"id": "2", "label": "B"}],
+          "edges": [{"source": "1", "target": "2"}]
+        },
+        "g2": {
+          "nodes": [{"id": "1", "label": "A"}, {"id": "2", "label": "B"}, {"id": "3", "label": "C"}],
+          "edges": [{"source": "1", "target": "2"}, {"source": "2", "target": "3"}]
+        }
+      }
+    ]
+  }' | jq .
+```
+
+#### GED A* — NetworkX (edit path mode)
+```bash
+curl -s -X POST http://localhost:8000/v1/graphs/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "ged_astar",
+    "params": {"mode": "path", "timeout_ms": 5000},
+    "graphs": [
+      {
+        "id": "pair-1",
+        "g1": {
+          "nodes": [{"id": "A", "label": "A"}, {"id": "B", "label": "B"}],
+          "edges": [{"source": "A", "target": "B"}]
+        },
+        "g2": {
+          "nodes": [{"id": "A", "label": "A"}, {"id": "B", "label": "B"}, {"id": "C", "label": "C"}],
+          "edges": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"}]
+        }
+      }
+    ]
+  }' | jq .
+```
+
+#### GED Heuristic — GEDLIB (default, BIPARTITE method)
+```bash
+curl -s -X POST http://localhost:8000/v1/graphs/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "ged_heuristic",
+    "params": {"method": "BIPARTITE"},
+    "graphs": [
+      {
+        "id": "pair-1",
+        "g1": {
+          "nodes": [{"id": "A", "label": "A"}, {"id": "B", "label": "B"}, {"id": "C", "label": "C"}],
+          "edges": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"}]
+        },
+        "g2": {
+          "nodes": [{"id": "A", "label": "A"}, {"id": "B", "label": "B"}, {"id": "C", "label": "C"}],
+          "edges": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"}, {"source": "A", "target": "C"}]
+        }
+      }
+    ]
+  }' | jq .
+```
+
+#### GED Hausdorff — GMatch4py (default)
+```bash
+curl -s -X POST http://localhost:8000/v1/graphs/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "ged_hausdorff",
+    "params": {"node_del": 1.0, "node_ins": 1.0, "edge_del": 1.0, "edge_ins": 1.0},
+    "graphs": [
+      {
+        "id": "pair-1",
+        "g1": {
+          "nodes": [{"id": "A", "label": "A"}, {"id": "B", "label": "B"}],
+          "edges": [{"source": "A", "target": "B"}]
+        },
+        "g2": {
+          "nodes": [{"id": "A", "label": "A"}, {"id": "B", "label": "B"}, {"id": "C", "label": "C"}],
+          "edges": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"}]
+        }
+      }
+    ]
+  }' | jq .
+```
+
+#### GED Greedy — GMatch4py (default)
+```bash
+curl -s -X POST http://localhost:8000/v1/graphs/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "ged_greedy",
+    "params": {"node_del": 1.0, "node_ins": 1.0, "edge_del": 1.0, "edge_ins": 1.0},
+    "graphs": [
+      {
+        "id": "pair-1",
+        "g1": {
+          "nodes": [{"id": "A", "label": "A"}, {"id": "B", "label": "B"}],
+          "edges": [{"source": "A", "target": "B"}]
+        },
+        "g2": {
+          "nodes": [{"id": "A", "label": "A"}, {"id": "B", "label": "B"}, {"id": "C", "label": "C"}],
+          "edges": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"}]
+        }
+      }
+    ]
+  }' | jq .
+```
+
+> **Batching:** Both endpoints accept arrays — multiple pairs per request are supported.
+> **Custom backends:** Override the default backend by adding `"backend": "<name>"` to the request body. Use `GET /v1/text/algorithms` or `GET /v1/graphs/algorithms` to discover all available algorithm/backend combinations.
 
 ## Result Types
 

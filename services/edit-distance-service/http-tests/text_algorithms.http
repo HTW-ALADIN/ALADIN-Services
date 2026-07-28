@@ -5,7 +5,7 @@ GET http://localhost:8000/health
 GET http://localhost:8000/v1/text/algorithms
 
 ### Levenshtein (RapidFuzz default)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -18,7 +18,7 @@ Content-Type: application/json
 }
 
 ### Levenshtein (textdistance)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -30,7 +30,7 @@ Content-Type: application/json
 }
 
 ### Levenshtein (jellyfish)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -42,7 +42,7 @@ Content-Type: application/json
 }
 
 ### Damerau-Levenshtein (RapidFuzz)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -54,7 +54,7 @@ Content-Type: application/json
 }
 
 ### Hamming distance (RapidFuzz)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -66,7 +66,7 @@ Content-Type: application/json
 }
 
 ### Jaro-Winkler similarity (RapidFuzz)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -78,7 +78,7 @@ Content-Type: application/json
 }
 
 ### OSA (Optimal String Alignment)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -90,7 +90,7 @@ Content-Type: application/json
 }
 
 ### Indel (LCS-based distance)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -102,7 +102,7 @@ Content-Type: application/json
 }
 
 ### LCS extraction (textdistance)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -114,7 +114,7 @@ Content-Type: application/json
 }
 
 ### Needleman-Wunsch global alignment
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -126,7 +126,7 @@ Content-Type: application/json
 }
 
 ### Smith-Waterman local alignment
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -138,7 +138,7 @@ Content-Type: application/json
 }
 
 ### Token set similarity (Jaccard)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -150,7 +150,7 @@ Content-Type: application/json
 }
 
 ### Normalized Compression Distance (NCD)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -162,7 +162,7 @@ Content-Type: application/json
 }
 
 ### Phonetic encoding (Soundex)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -175,7 +175,7 @@ Content-Type: application/json
 }
 
 ### Long sequence alignment (edlib)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {
@@ -187,7 +187,7 @@ Content-Type: application/json
 }
 
 ### Diff/Patch (diff-match-patch)
-POST http://localhost:8000/v1/text/compare
+POST http://localhost:8000/v1/text/distance
 Content-Type: application/json
 
 {

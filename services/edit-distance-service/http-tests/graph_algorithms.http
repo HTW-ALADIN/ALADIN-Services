@@ -1,8 +1,8 @@
 ### Graph Edit Distance - Discovery
-GET http://localhost:8000/v1/graphs/ged/algorithms
+GET http://localhost:8000/v1/graphs/algorithms
 
 ### GED A* (NetworkX, exact mode)
-POST http://localhost:8000/v1/graphs/ged/compute
+POST http://localhost:8000/v1/graphs/distance
 Content-Type: application/json
 
 {
@@ -43,7 +43,7 @@ Content-Type: application/json
 }
 
 ### GED A* (NetworkX, anytime mode)
-POST http://localhost:8000/v1/graphs/ged/compute
+POST http://localhost:8000/v1/graphs/distance
 Content-Type: application/json
 
 {
@@ -80,7 +80,7 @@ Content-Type: application/json
 }
 
 ### GED Hausdorff (GMatch4py)
-POST http://localhost:8000/v1/graphs/ged/compute
+POST http://localhost:8000/v1/graphs/distance
 Content-Type: application/json
 
 {
@@ -119,7 +119,7 @@ Content-Type: application/json
 }
 
 ### GED Greedy (GMatch4py)
-POST http://localhost:8000/v1/graphs/ged/compute
+POST http://localhost:8000/v1/graphs/distance
 Content-Type: application/json
 
 {
@@ -157,5 +157,5 @@ Content-Type: application/json
   ]
 }
 
-### NOTE: Results are returned inline by `POST /v1/graphs/ged/compute` and no separate
+### NOTE: Results are returned inline by `POST /v1/graphs/distance` and no separate
 ### resource GET/DELETE endpoints are available.

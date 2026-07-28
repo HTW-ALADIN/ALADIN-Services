@@ -32,32 +32,32 @@ curl -sf "$BASE_URL/v1/text/algorithms" | python3 -c "import sys,json; d=json.lo
 check "Text algorithms discovery" "$rc"
 
 # --- GED algorithms discovery ---
-curl -sf "$BASE_URL/v1/graphs/ged/algorithms" | python3 -c "import sys,json; d=json.load(sys.stdin); assert len(d)>0" && rc=0 || rc=$?
+curl -sf "$BASE_URL/v1/graphs/algorithms" | python3 -c "import sys,json; d=json.load(sys.stdin); assert len(d)>0" && rc=0 || rc=$?
 check "GED algorithms discovery" "$rc"
 
 # --- Levenshtein compute ---
-curl -sf -X POST "$BASE_URL/v1/text/compare" \
+curl -sf -X POST "$BASE_URL/v1/text/distance" \
     -H 'Content-Type: application/json' \
     -d '{"algorithm":"levenshtein","params":{},"inputs":[{"id":"p1","a":"kitten","b":"sitting"}]}' \
     | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['algorithm']=='levenshtein'; assert len(d['results'])==1" && rc=0 || rc=$?
 check "Levenshtein compute" "$rc"
 
 # --- Phonetic encoding ---
-curl -sf -X POST "$BASE_URL/v1/text/compare" \
+curl -sf -X POST "$BASE_URL/v1/text/distance" \
     -H 'Content-Type: application/json' \
     -d '{"algorithm":"phonetic_encoding","params":{"scheme":"soundex"},"inputs":[{"id":"w1","text":"Jellyfish"}]}' \
     | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['result_type']=='phonetic_code'" && rc=0 || rc=$?
 check "Phonetic encoding" "$rc"
 
 # --- GED compute (NetworkX) ---
-curl -sf -X POST "$BASE_URL/v1/graphs/ged/compute" \
+curl -sf -X POST "$BASE_URL/v1/graphs/distance" \
     -H 'Content-Type: application/json' \
     -d '{"algorithm":"ged_astar","params":{"mode":"exact","timeout_ms":5000},"graphs":[{"id":"p1","g1":{"nodes":[{"id":"A"},{"id":"B"}],"edges":[{"source":"A","target":"B"}]},"g2":{"nodes":[{"id":"A"},{"id":"B"},{"id":"C"}],"edges":[{"source":"A","target":"B"},{"source":"B","target":"C"}]}}]}' \
     | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['status']=='completed'; assert len(d['results'])==1" && rc=0 || rc=$?
 check "GED compute (NetworkX)" "$rc"
 
 # --- Diff/patch ---
-curl -sf -X POST "$BASE_URL/v1/text/compare" \
+curl -sf -X POST "$BASE_URL/v1/text/distance" \
     -H 'Content-Type: application/json' \
     -d '{"algorithm":"diff_patch","params":{},"inputs":[{"id":"p1","a":"The quick brown fox","b":"The slow brown fox"}]}' \
     | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['result_type']=='edit_script'" && rc=0 || rc=$?

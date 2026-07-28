@@ -53,8 +53,8 @@ async def list_text_algorithms() -> list[dict]:
     return TEXT_ALGORITHM_CATALOG
 
 
-@app.post("/v1/text/compare")
-async def text_compare(request: dict[str, Any]) -> TextCompareResponse:
+@app.post("/v1/text/distance")
+async def text_distance(request: dict[str, Any]) -> TextCompareResponse:
     """Compute a distance/similarity/transform for one pair or a batch of pairs.
 
     The request body is a discriminated union keyed by 'algorithm'.
@@ -127,7 +127,7 @@ def _get_default_backend(algorithm: str) -> str:
 # ─── PART B: Graph Edit Distance ──────────────────────────────────────────────
 
 
-@app.get("/v1/graphs/ged/algorithms")
+@app.get("/v1/graphs/algorithms")
 async def list_ged_algorithms() -> list[dict]:
     """Discovery: list all GED algorithm/backend/method combinations."""
     return GED_ALGORITHM_CATALOG
@@ -141,7 +141,7 @@ _GED_DEFAULT_BACKEND = {
 }
 
 
-@app.post("/v1/graphs/ged/compute")
+@app.post("/v1/graphs/distance")
 async def ged_compute(request: dict[str, Any]) -> JSONResponse:
     """Compute the edit distance between one pair (or a batch of pairs) of graphs."""
     algorithm = request.get("algorithm")
