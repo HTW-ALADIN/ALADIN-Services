@@ -1,7 +1,5 @@
 """Graph edit distance implementations using NetworkX, GEDLIB (via gedlibpy), and GMatch4py."""
 
-from __future__ import annotations
-
 import time
 from typing import Any
 
@@ -13,28 +11,20 @@ from ..models import (
 
 
 def _graph_ref_to_nx(graph_ref: GraphRef) -> Any:
-    """Convert a GraphRef (inline or by reference) to a networkx.Graph."""
+    """Convert a GraphRef to a networkx.Graph."""
     import networkx as nx
 
-    if graph_ref.nodes is not None:
-        G = nx.Graph()
-        for node in graph_ref.nodes:
-            nid = node.get("id", str(node))
-            attrs = {k: v for k, v in node.items() if k != "id"}
-            G.add_node(nid, **attrs)
-        if graph_ref.edges:
-            for edge in graph_ref.edges:
-                src = edge.get("source", edge.get("from"))
-                dst = edge.get("target", edge.get("to"))
-                attrs = {k: v for k, v in edge.items() if k not in ("source", "target", "from", "to")}
-                G.add_edge(src, dst, **attrs)
-        return G
-    elif graph_ref.graph_ref:
-        # Could resolve from companion graph-generation service
-        # For now, raise not implemented
-        raise NotImplementedError("Graph reference resolution not yet implemented")
-    else:
-        raise ValueError("GraphRef must have either 'nodes' or 'graph_ref'")
+    G = nx.Graph()
+    for node in (graph_ref.nodes or []):
+        nid = node.get("id", str(node))
+        attrs = {k: v for k, v in node.items() if k != "id"}
+        G.add_node(nid, **attrs)
+    for edge in (graph_ref.edges or []):
+        src = edge.get("source", edge.get("from"))
+        dst = edge.get("target", edge.get("to"))
+        attrs = {k: v for k, v in edge.items() if k not in ("source", "target", "from", "to")}
+        G.add_edge(src, dst, **attrs)
+    return G
 
 
 # ─── NetworkX Backend ─────────────────────────────────────────────────────────
@@ -45,157 +35,62 @@ def _networkx_ged_astar(pair: GraphPair, params: dict) -> GedPairResult:
     G1 = _graph_ref_to_nx(pair.g1)
     G2 = _graph_ref_to_nx(pair.g2)
     mode = params.get("mode", "exact")
-    timeout_ms = params.get("timeout_ms")
+    timeout_s = params.get("timeout_ms", 0) / 1000
+
+    def _cost(v):
+        return (lambda n1, n2: v) if v is not None else None
+
+    kwargs = {
+        "node_subst_cost": _cost(params.get("node_subst_cost")),
+        "node_del_cost": _cost(params.get("node_del_cost")),
+        "node_ins_cost": _cost(params.get("node_ins_cost")),
+        "edge_subst_cost": _cost(params.get("edge_subst_cost")),
+        "edge_del_cost": _cost(params.get("edge_del_cost")),
+        "edge_ins_cost": _cost(params.get("edge_ins_cost")),
+        "upper_bound": params.get("upper_bound"),
+    }
 
     t0 = time.perf_counter()
-
-    node_subst = params.get("node_subst_cost")
-    node_del = params.get("node_del_cost")
-    node_ins = params.get("node_ins_cost")
-    edge_subst = params.get("edge_subst_cost")
-    edge_del = params.get("edge_del_cost")
-    edge_ins = params.get("edge_ins_cost")
-
-    def _make_cost_dict(base_cost):
-        """Helper to create cost callable from optional float."""
-        if base_cost is not None:
-            return lambda n1, n2: base_cost
-        return None
-
-    # Handle cost functions
-    node_subst_fn = _make_cost_dict(node_subst)
-    node_del_fn = _make_cost_dict(node_del)
-    node_ins_fn = _make_cost_dict(node_ins)
-    edge_subst_fn = _make_cost_dict(edge_subst)
-    edge_del_fn = _make_cost_dict(edge_del)
-    edge_ins_fn = _make_cost_dict(edge_ins)
-
-    if mode == "exact":
-        try:
-            dist = nx.graph_edit_distance(
-                G1, G2,
-                node_subst_cost=node_subst_fn,
-                node_del_cost=node_del_fn,
-                node_ins_cost=node_ins_fn,
-                edge_subst_cost=edge_subst_fn,
-                edge_del_cost=edge_del_fn,
-                edge_ins_cost=edge_ins_fn,
-                upper_bound=params.get("upper_bound"),
-                timeout=timeout_ms / 1000 if timeout_ms else None,
-            )
+    try:
+        if mode == "exact":
+            dist = nx.graph_edit_distance(G1, G2, timeout=timeout_s or None, **kwargs)
             elapsed = (time.perf_counter() - t0) * 1000
-            return GedPairResult(
-                id=pair.id,
-                upper_bound=dist if dist is not None else float("inf"),
-                lower_bound=dist if dist is not None else 0.0,
-                exact=dist is not None,
-                runtime_ms=elapsed,
-            )
-        except Exception:
-            elapsed = (time.perf_counter() - t0) * 1000
-            return GedPairResult(
-                id=pair.id,
-                upper_bound=float("inf"),
-                lower_bound=0.0,
-                exact=False,
-                runtime_ms=elapsed,
-            )
-
-    elif mode == "path":
-        try:
-            paths = list(nx.optimal_edit_paths(
-                G1, G2,
-                node_subst_cost=node_subst_fn,
-                node_del_cost=node_del_fn,
-                node_ins_cost=node_ins_fn,
-                edge_subst_cost=edge_subst_fn,
-                edge_del_cost=edge_del_fn,
-                edge_ins_cost=edge_ins_fn,
-                upper_bound=params.get("upper_bound"),
-            ))
+            return GedPairResult(id=pair.id, upper_bound=dist if dist is not None else float("inf"),
+                                 lower_bound=dist if dist is not None else 0.0, exact=dist is not None, runtime_ms=elapsed)
+        elif mode == "path":
+            paths = list(nx.optimal_edit_paths(G1, G2, **kwargs))
             elapsed = (time.perf_counter() - t0) * 1000
             if paths:
-                # paths[0] = (edit_path, cost) where edit_path = list of (u, v) pairs
                 edit_path, cost = paths[0]
                 node_map = [[u, v] for u, v in edit_path if u is not None or v is not None]
             else:
-                cost = None
-                node_map = None
-            return GedPairResult(
-                id=pair.id,
-                upper_bound=cost if cost is not None else float("inf"),
-                lower_bound=cost if cost is not None else 0.0,
-                exact=cost is not None,
-                node_map=node_map,
-                runtime_ms=elapsed,
-            )
-        except Exception:
-            elapsed = (time.perf_counter() - t0) * 1000
-            return GedPairResult(
-                id=pair.id,
-                upper_bound=float("inf"),
-                lower_bound=0.0,
-                exact=False,
-                runtime_ms=elapsed,
-            )
-
-    elif mode == "anytime":
-        try:
-            gen = nx.optimize_graph_edit_distance(
-                G1, G2,
-                node_subst_cost=node_subst_fn,
-                node_del_cost=node_del_fn,
-                node_ins_cost=node_ins_fn,
-                edge_subst_cost=edge_subst_fn,
-                edge_del_cost=edge_del_fn,
-                edge_ins_cost=edge_ins_fn,
-                upper_bound=params.get("upper_bound"),
-            )
+                cost, node_map = None, None
+            return GedPairResult(id=pair.id, upper_bound=cost if cost is not None else float("inf"),
+                                 lower_bound=cost if cost is not None else 0.0, exact=cost is not None,
+                                 node_map=node_map, runtime_ms=elapsed)
+        else:  # anytime
+            gen = nx.optimize_graph_edit_distance(G1, G2, **kwargs)
             best = float("inf")
             for dist in gen:
                 best = dist
-                elapsed = (time.perf_counter() - t0) * 1000
-                if timeout_ms and elapsed >= timeout_ms:
+                if timeout_s and (time.perf_counter() - t0) * 1000 >= params["timeout_ms"]:
                     break
             elapsed = (time.perf_counter() - t0) * 1000
-            return GedPairResult(
-                id=pair.id,
-                upper_bound=best if best != float("inf") else float("inf"),
-                lower_bound=0.0,
-                exact=False,
-                runtime_ms=elapsed,
-            )
-        except Exception:
-            elapsed = (time.perf_counter() - t0) * 1000
-            return GedPairResult(
-                id=pair.id,
-                upper_bound=float("inf"),
-                lower_bound=0.0,
-                exact=False,
-                runtime_ms=elapsed,
-            )
-
-    elapsed = (time.perf_counter() - t0) * 1000
-    return GedPairResult(
-        id=pair.id,
-        upper_bound=float("inf"),
-        lower_bound=0.0,
-        exact=False,
-        runtime_ms=elapsed,
-    )
+            return GedPairResult(id=pair.id, upper_bound=best if best != float("inf") else float("inf"),
+                                 lower_bound=0.0, exact=False, runtime_ms=elapsed)
+    except Exception:
+        elapsed = (time.perf_counter() - t0) * 1000
+        return GedPairResult(id=pair.id, upper_bound=float("inf"), lower_bound=0.0, exact=False, runtime_ms=elapsed)
 
 
 # ─── GEDLIB Backend (via gedlibpy) ───────────────────────────────────────────
 
-def _gedlib_ged_astar(pair: GraphPair, params: dict) -> GedPairResult:
-    """GEDLIB exact/A* via MIP or F2 method."""
+def _gedlib_compute(pair: GraphPair, params: dict, *, is_exact: bool = False) -> GedPairResult:
+    """GEDLIB computation shared by ged_astar and ged_heuristic."""
     try:
         import gedlibpy
     except ImportError:
-        return GedPairResult(
-            id=pair.id, upper_bound=float("inf"), lower_bound=0.0,
-            exact=False, runtime_ms=0.0,
-        )
+        return GedPairResult(id=pair.id, upper_bound=float("inf"), lower_bound=0.0, exact=False, runtime_ms=0.0)
 
     G1 = _graph_ref_to_nx(pair.g1)
     G2 = _graph_ref_to_nx(pair.g2)
@@ -206,237 +101,61 @@ def _gedlib_ged_astar(pair: GraphPair, params: dict) -> GedPairResult:
         _ = env.add_graph(G1)
         _ = env.add_graph(G2)
         env.init()
-
-        method = params.get("method", "F2")
-        env.set_method(method)
+        env.set_method(params.get("method", "F2" if is_exact else "BIPARTITE"))
         env.run_method()
-
         ub = env.get_upper_bound()
         lb = env.get_lower_bound()
         elapsed = (time.perf_counter() - t0) * 1000
-
         node_map = None
         try:
             node_map = env.get_node_map()
         except Exception:
             pass
-
-        return GedPairResult(
-            id=pair.id,
-            upper_bound=ub,
-            lower_bound=lb,
-            exact=ub == lb,
-            node_map=node_map,
-            runtime_ms=elapsed,
-        )
+        return GedPairResult(id=pair.id, upper_bound=ub, lower_bound=lb, exact=is_exact and ub == lb,
+                             node_map=node_map, runtime_ms=elapsed)
     except Exception:
         elapsed = (time.perf_counter() - t0) * 1000
-        return GedPairResult(
-            id=pair.id,
-            upper_bound=float("inf"),
-            lower_bound=0.0,
-            exact=False,
-            runtime_ms=elapsed,
-        )
+        return GedPairResult(id=pair.id, upper_bound=float("inf"), lower_bound=0.0, exact=False, runtime_ms=elapsed)
 
 
-def _gedlib_ged_heuristic(pair: GraphPair, params: dict) -> GedPairResult:
-    """GEDLIB heuristic methods (BIPARTITE, IPFP, REFINE, etc.)."""
-    try:
-        import gedlibpy
-    except ImportError:
-        return GedPairResult(
-            id=pair.id, upper_bound=float("inf"), lower_bound=0.0,
-            exact=False, runtime_ms=0.0,
-        )
-
-    G1 = _graph_ref_to_nx(pair.g1)
-    G2 = _graph_ref_to_nx(pair.g2)
-
-    t0 = time.perf_counter()
-    try:
-        env = gedlibpy.GEDEnv()
-        _ = env.add_graph(G1)
-        _ = env.add_graph(G2)
-        env.init()
-
-        method = params.get("method", "BIPARTITE")
-        env.set_method(method)
-        env.run_method()
-
-        ub = env.get_upper_bound()
-        lb = env.get_lower_bound()
-        elapsed = (time.perf_counter() - t0) * 1000
-
-        node_map = None
-        try:
-            node_map = env.get_node_map()
-        except Exception:
-            pass
-
-        return GedPairResult(
-            id=pair.id,
-            upper_bound=ub,
-            lower_bound=lb,
-            exact=False,
-            node_map=node_map,
-            runtime_ms=elapsed,
-        )
-    except Exception:
-        elapsed = (time.perf_counter() - t0) * 1000
-        return GedPairResult(
-            id=pair.id,
-            upper_bound=float("inf"),
-            lower_bound=0.0,
-            exact=False,
-            runtime_ms=elapsed,
-        )
-
-
-# ─── GMatch4py Backend ───────────────────────────────────────────────────────
-
-def _gmatch4py_ged_heuristic(pair: GraphPair, params: dict) -> GedPairResult:
-    """GMatch4py BIPARTITE (BP2) heuristic."""
+def _gmatch4py_compute(pair: GraphPair, params: dict, cls_name: str) -> GedPairResult:
+    """GMatch4py computation shared by gmatch4py backends."""
     try:
         import gmatch4py as gm
     except ImportError:
-        return GedPairResult(
-            id=pair.id, upper_bound=float("inf"), lower_bound=0.0,
-            exact=False, runtime_ms=0.0,
-        )
+        return GedPairResult(id=pair.id, upper_bound=float("inf"), lower_bound=0.0, exact=False, runtime_ms=0.0)
 
     G1 = _graph_ref_to_nx(pair.g1)
     G2 = _graph_ref_to_nx(pair.g2)
 
     t0 = time.perf_counter()
     try:
-        costs = params.get("edit_costs", {})
-        ged = gm.GraphEditDistance(
-            costs.get("node_del", 1.0),
-            costs.get("node_ins", 1.0),
-            costs.get("edge_del", 1.0),
-            costs.get("edge_ins", 1.0),
-        )
-        # GMatch4py operates on lists of graphs
-        result_matrix = ged.compare([G1, G2], None)
-        distance = result_matrix[0][1]  # upper triangular
-        elapsed = (time.perf_counter() - t0) * 1000
-
-        return GedPairResult(
-            id=pair.id,
-            upper_bound=distance,
-            lower_bound=distance,
-            exact=False,
-            runtime_ms=elapsed,
-        )
-    except Exception:
-        elapsed = (time.perf_counter() - t0) * 1000
-        return GedPairResult(
-            id=pair.id,
-            upper_bound=float("inf"),
-            lower_bound=0.0,
-            exact=False,
-            runtime_ms=elapsed,
-        )
-
-
-def _gmatch4py_ged_hausdorff(pair: GraphPair, params: dict) -> GedPairResult:
-    """GMatch4py Hausdorff Edit Distance (HED)."""
-    try:
-        import gmatch4py as gm
-    except ImportError:
-        return GedPairResult(
-            id=pair.id, upper_bound=float("inf"), lower_bound=0.0,
-            exact=False, runtime_ms=0.0,
-        )
-
-    G1 = _graph_ref_to_nx(pair.g1)
-    G2 = _graph_ref_to_nx(pair.g2)
-
-    t0 = time.perf_counter()
-    try:
+        cls = getattr(gm, cls_name)
         p = params
-        hed = gm.HED(
-            p.get("node_del", 1.0),
-            p.get("node_ins", 1.0),
-            p.get("edge_del", 1.0),
-            p.get("edge_ins", 1.0),
-        )
-        result_matrix = hed.compare([G1, G2], None)
+        if cls_name in ("HED", "GreedyEditDistance"):
+            inst = cls(p.get("node_del", 1.0), p.get("node_ins", 1.0), p.get("edge_del", 1.0), p.get("edge_ins", 1.0))
+        else:
+            costs = params.get("edit_costs", {})
+            inst = cls(costs.get("node_del", 1.0), costs.get("node_ins", 1.0),
+                       costs.get("edge_del", 1.0), costs.get("edge_ins", 1.0))
+        result_matrix = inst.compare([G1, G2], None)
         distance = result_matrix[0][1]
         elapsed = (time.perf_counter() - t0) * 1000
-
-        return GedPairResult(
-            id=pair.id,
-            upper_bound=distance,
-            lower_bound=distance,
-            exact=False,
-            runtime_ms=elapsed,
-        )
+        return GedPairResult(id=pair.id, upper_bound=distance, lower_bound=distance, exact=False, runtime_ms=elapsed)
     except Exception:
         elapsed = (time.perf_counter() - t0) * 1000
-        return GedPairResult(
-            id=pair.id,
-            upper_bound=float("inf"),
-            lower_bound=0.0,
-            exact=False,
-            runtime_ms=elapsed,
-        )
-
-
-def _gmatch4py_ged_greedy(pair: GraphPair, params: dict) -> GedPairResult:
-    """GMatch4py Greedy Edit Distance."""
-    try:
-        import gmatch4py as gm
-    except ImportError:
-        return GedPairResult(
-            id=pair.id, upper_bound=float("inf"), lower_bound=0.0,
-            exact=False, runtime_ms=0.0,
-        )
-
-    G1 = _graph_ref_to_nx(pair.g1)
-    G2 = _graph_ref_to_nx(pair.g2)
-
-    t0 = time.perf_counter()
-    try:
-        p = params
-        greedy = gm.GreedyEditDistance(
-            p.get("node_del", 1.0),
-            p.get("node_ins", 1.0),
-            p.get("edge_del", 1.0),
-            p.get("edge_ins", 1.0),
-        )
-        result_matrix = greedy.compare([G1, G2], None)
-        distance = result_matrix[0][1]
-        elapsed = (time.perf_counter() - t0) * 1000
-
-        return GedPairResult(
-            id=pair.id,
-            upper_bound=distance,
-            lower_bound=distance,
-            exact=False,
-            runtime_ms=elapsed,
-        )
-    except Exception:
-        elapsed = (time.perf_counter() - t0) * 1000
-        return GedPairResult(
-            id=pair.id,
-            upper_bound=float("inf"),
-            lower_bound=0.0,
-            exact=False,
-            runtime_ms=elapsed,
-        )
+        return GedPairResult(id=pair.id, upper_bound=float("inf"), lower_bound=0.0, exact=False, runtime_ms=elapsed)
 
 
 # ─── Dispatcher ───────────────────────────────────────────────────────────────
 
 GED_BACKEND_DISPATCH = {
-    ("ged_astar", "networkx"): _networkx_ged_astar,
-    ("ged_astar", "gedlib"): _gedlib_ged_astar,
-    ("ged_heuristic", "gedlib"): _gedlib_ged_heuristic,
-    ("ged_heuristic", "gmatch4py"): _gmatch4py_ged_heuristic,
-    ("ged_hausdorff", "gmatch4py"): _gmatch4py_ged_hausdorff,
-    ("ged_greedy", "gmatch4py"): _gmatch4py_ged_greedy,
+    ("ged_astar", "networkx"): lambda p, params: _networkx_ged_astar(p, params),
+    ("ged_astar", "gedlib"): lambda p, params: _gedlib_compute(p, params, is_exact=True),
+    ("ged_heuristic", "gedlib"): lambda p, params: _gedlib_compute(p, params, is_exact=False),
+    ("ged_heuristic", "gmatch4py"): lambda p, params: _gmatch4py_compute(p, params, "GraphEditDistance"),
+    ("ged_hausdorff", "gmatch4py"): lambda p, params: _gmatch4py_compute(p, params, "HED"),
+    ("ged_greedy", "gmatch4py"): lambda p, params: _gmatch4py_compute(p, params, "GreedyEditDistance"),
 }
 
 

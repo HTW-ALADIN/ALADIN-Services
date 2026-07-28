@@ -1,7 +1,5 @@
 """Text edit distance implementations using RapidFuzz, textdistance, jellyfish, edlib, and diff-match-patch."""
 
-from __future__ import annotations
-
 import time
 from typing import Any
 
@@ -150,22 +148,14 @@ def _textdistance_needleman_wunsch(pair: InputPair, params: dict) -> AlignmentRe
 
 def _textdistance_gotoh(pair: InputPair, params: dict) -> ScalarDistanceResult:
     import textdistance
-    try:
-        d = textdistance.gotoh(pair.a, pair.b)
-    except Exception:
-        # numpy may be missing; fallback to Levenshtein distance
-        d = textdistance.levenshtein(pair.a, pair.b)
+    d = textdistance.gotoh(pair.a, pair.b)
     max_len = max(len(pair.a), len(pair.b))
     return ScalarDistanceResult(id=pair.id, value=d, normalized=d / max_len if max_len > 0 else 0.0)
 
 
 def _textdistance_smith_waterman(pair: InputPair, params: dict) -> ScalarDistanceResult:
     import textdistance
-    try:
-        d = textdistance.smith_waterman(pair.a, pair.b)
-    except Exception:
-        # numpy may be missing; fallback to Levenshtein distance
-        d = textdistance.levenshtein(pair.a, pair.b)
+    d = textdistance.smith_waterman(pair.a, pair.b)
     max_len = max(len(pair.a), len(pair.b))
     return ScalarDistanceResult(id=pair.id, value=d, normalized=d / max_len if max_len > 0 else 0.0)
 
@@ -237,16 +227,14 @@ def _jellyfish_phonetic(input_item: InputPhonetic, params: dict) -> PhoneticCode
     import jellyfish
     scheme = params.get("scheme", "soundex")
     text = input_item.text
-    codes = {}
-    if scheme == "soundex":
-        codes["soundex"] = jellyfish.soundex(text)
-    elif scheme == "metaphone":
-        codes["metaphone"] = jellyfish.metaphone(text)
-    elif scheme == "nysiis":
-        codes["nysiis"] = jellyfish.nysiis(text)
-    elif scheme == "match_rating":
-        codes["match_rating"] = text  # match_rating_comparison needs two strings
-    return PhoneticCodeResult(id=input_item.id, codes=codes)
+    fn = {
+        "soundex": jellyfish.soundex,
+        "metaphone": jellyfish.metaphone,
+        "nysiis": jellyfish.nysiis,
+    }.get(scheme)
+    if fn is None:
+        raise ValueError(f"Unknown phonetic scheme: {scheme}")
+    return PhoneticCodeResult(id=input_item.id, codes={scheme: fn(text)})
 
 
 # ─── edlib Backend ───────────────────────────────────────────────────────────

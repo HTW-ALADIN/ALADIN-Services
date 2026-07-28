@@ -1,14 +1,9 @@
 """Pydantic models for the edit distance service API."""
 
-from __future__ import annotations
-
-import math
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, model_serializer
 
-
-# ─── Shared Envelope ──────────────────────────────────────────────────────────
 
 class InputPair(BaseModel):
     """A single input pair for text comparison."""
@@ -23,12 +18,10 @@ class InputPhonetic(BaseModel):
     text: str
 
 
-# ─── Text Edit Distance - Response Models ─────────────────────────────────────
-
 class ScalarDistanceResult(BaseModel):
     id: str
     value: float
-    normalized: Optional[float] = None
+    normalized: float | None = None
 
 
 class SequenceResult(BaseModel):
@@ -45,14 +38,14 @@ class PhoneticCodeResult(BaseModel):
 class EditScriptResult(BaseModel):
     id: str
     diffs: list[list[Any]]
-    levenshtein: Optional[int] = None
+    levenshtein: int | None = None
 
 
 class AlignmentResult(BaseModel):
     id: str
     edit_distance: int
-    locations: Optional[list[list[Optional[int]]]] = None
-    cigar: Optional[str] = None
+    locations: list[list[int | None]] | None = None
+    cigar: str | None = None
 
 
 class TextCompareResponse(BaseModel):
@@ -63,13 +56,11 @@ class TextCompareResponse(BaseModel):
     meta: dict[str, Any] = Field(default_factory=lambda: {"compute_time_ms": 0})
 
 
-# ─── Graph Edit Distance - Request Models ─────────────────────────────────────
-
 class GraphRef(BaseModel):
     """Reference to a graph, either inline or from graph-generation service."""
-    graph_ref: Optional[str] = None
-    nodes: Optional[list[dict]] = None
-    edges: Optional[list[dict]] = None
+    graph_ref: str | None = None
+    nodes: list[dict] | None = None
+    edges: list[dict] | None = None
 
 
 class GraphPair(BaseModel):
@@ -78,18 +69,17 @@ class GraphPair(BaseModel):
     g2: GraphRef
 
 
-# ─── Graph Edit Distance - Response Models ────────────────────────────────────
-
 class GedPairResult(BaseModel):
     id: str
     upper_bound: float
     lower_bound: float
     exact: bool = False
-    node_map: Optional[list[list[int]]] = None
+    node_map: list[list[int]] | None = None
     runtime_ms: float = 0.0
 
     @model_serializer
     def _clean(self) -> dict:
+        import math
         return {
             "id": self.id,
             "upper_bound": None if math.isinf(self.upper_bound) else self.upper_bound,
@@ -107,4 +97,3 @@ class GedResultResponse(BaseModel):
     backend: str
     params: dict[str, Any] = Field(default_factory=dict)
     results: list[GedPairResult]
-    links: dict[str, str] = Field(default_factory=dict, alias="_links")

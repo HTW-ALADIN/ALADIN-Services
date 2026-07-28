@@ -1,7 +1,5 @@
 """FastAPI application for the Edit Distance Service."""
 
-from __future__ import annotations
-
 import uuid
 from typing import Any
 
@@ -21,17 +19,7 @@ from .graph import compute_ged
 app = FastAPI(
     title="Edit Distance Service",
     version="0.1.0",
-    description="""Unified microservice for text edit distance and graph edit distance algorithms.
-
-Provides a single compute endpoint per domain with a discriminated-union request body.
-Supports multiple backends per algorithm family (RapidFuzz, textdistance, jellyfish, edlib,
-diff-match-patch for text; NetworkX, GEDLIB, GMatch4py for graphs).
-
-## Spec A (Tier 1) — Text ED: RapidFuzz + textdistance + jellyfish (87% family coverage)
-## Spec B (Tier 2) — Text ED: + edlib + diff-match-patch (100% family coverage)
-## Spec A (Tier 1) — Graph ED: NetworkX + GEDLIB (80% family coverage)
-## Spec B (Tier 2) — Graph ED: + GMatch4py (100% family coverage)
-""",
+    description="Unified microservice for text edit distance and graph edit distance algorithms.",
 )
 
 
@@ -42,7 +30,6 @@ class ProblemDetail(BaseModel):
     title: str
     status: int
     detail: str
-    invalid_params: list[dict[str, str]] = []
 
 
 @app.exception_handler(HTTPException)
@@ -170,8 +157,6 @@ async def ged_compute(request: dict[str, Any]) -> JSONResponse:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Computation error: {str(e)}")
 
-    # Build result object and return inline. No separate resource is created
-    # (GET/DELETE by result id are intentionally not exposed).
     result_id = f"ged_{uuid.uuid4().hex[:12]}"
     response = GedResultResponse(
         id=result_id,
@@ -180,23 +165,14 @@ async def ged_compute(request: dict[str, Any]) -> JSONResponse:
         backend=backend,
         params=params,
         results=results,
-        links={},
     )
 
-    # Synchronous implementation: always return 201 with the result inline.
     return Response(
-        content=response.model_dump_json(by_alias=True),
+        content=response.model_dump_json(),
         status_code=201,
         media_type="application/json",
     )
 
-
-# Note: GET/DELETE by result id have been removed. Results are returned
-# inline by `POST /v1/graphs/ged/compute` and not stored as retrievable
-# server-side resources.
-
-
-# ─── Health Check ─────────────────────────────────────────────────────────────
 
 @app.get("/health")
 async def health():
