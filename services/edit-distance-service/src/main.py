@@ -7,14 +7,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
+from .graph import GED_ALGORITHM_CATALOG, compute_ged
 from .models import (
     GedResultResponse,
     TextCompareResponse,
 )
 from .text import ALGORITHM_CATALOG as TEXT_ALGORITHM_CATALOG
 from .text import compute_text
-from .graph import GED_ALGORITHM_CATALOG
-from .graph import compute_ged
 
 app = FastAPI(
     title="Edit Distance Service",
@@ -24,6 +23,7 @@ app = FastAPI(
 
 
 # ─── Error Handler ────────────────────────────────────────────────────────────
+
 
 class ProblemDetail(BaseModel):
     type: str = "about:blank"
@@ -46,6 +46,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 # ─── PART A: Text Edit Distance ───────────────────────────────────────────────
 
+
 @app.get("/v1/text/algorithms")
 async def list_text_algorithms() -> list[dict]:
     """Discovery: list all algorithm/backend combinations with metadata."""
@@ -62,7 +63,9 @@ async def text_compare(request: dict[str, Any]) -> TextCompareResponse:
     """
     algorithm = request.get("algorithm")
     if not algorithm:
-        raise HTTPException(status_code=400, detail="Missing required field: 'algorithm'")
+        raise HTTPException(
+            status_code=400, detail="Missing required field: 'algorithm'"
+        )
 
     backend = _get_default_backend(algorithm)
     params = request.get("params", {})
@@ -74,23 +77,27 @@ async def text_compare(request: dict[str, Any]) -> TextCompareResponse:
     # Handle phonetic encoding separately (different input shape)
     if algorithm == "phonetic_encoding":
         from .models import InputPhonetic
+
         inputs = [InputPhonetic(**inp) for inp in raw_inputs]
     else:
         from .models import InputPair
+
         inputs = [InputPair(**inp) for inp in raw_inputs]
 
     try:
-        results, result_type, compute_ms = compute_text(algorithm, backend, inputs, params)
+        results, result_type, compute_ms = compute_text(
+            algorithm, backend, inputs, params
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Computation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Computation error: {e!s}")
 
     return TextCompareResponse(
         algorithm=algorithm,
         backend=backend,
         result_type=result_type,
-        results=[r.model_dump() for r in results],
+        results=results,
         meta={"compute_time_ms": round(compute_ms, 2)},
     )
 
@@ -119,6 +126,7 @@ def _get_default_backend(algorithm: str) -> str:
 
 # ─── PART B: Graph Edit Distance ──────────────────────────────────────────────
 
+
 @app.get("/v1/graphs/ged/algorithms")
 async def list_ged_algorithms() -> list[dict]:
     """Discovery: list all GED algorithm/backend/method combinations."""
@@ -138,7 +146,9 @@ async def ged_compute(request: dict[str, Any]) -> JSONResponse:
     """Compute the edit distance between one pair (or a batch of pairs) of graphs."""
     algorithm = request.get("algorithm")
     if not algorithm:
-        raise HTTPException(status_code=400, detail="Missing required field: 'algorithm'")
+        raise HTTPException(
+            status_code=400, detail="Missing required field: 'algorithm'"
+        )
 
     backend = _GED_DEFAULT_BACKEND.get(algorithm, "networkx")
     params = request.get("params", {})
@@ -148,6 +158,7 @@ async def ged_compute(request: dict[str, Any]) -> JSONResponse:
         raise HTTPException(status_code=400, detail="Missing required field: 'graphs'")
 
     from .models import GraphPair
+
     graphs = [GraphPair(**g) for g in raw_graphs]
 
     try:
@@ -155,7 +166,7 @@ async def ged_compute(request: dict[str, Any]) -> JSONResponse:
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Computation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Computation error: {e!s}")
 
     result_id = f"ged_{uuid.uuid4().hex[:12]}"
     response = GedResultResponse(
@@ -181,4 +192,5 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

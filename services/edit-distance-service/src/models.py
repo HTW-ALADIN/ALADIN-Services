@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, model_serializer
 
 class InputPair(BaseModel):
     """A single input pair for text comparison."""
+
     id: str
     a: str
     b: str
@@ -14,6 +15,7 @@ class InputPair(BaseModel):
 
 class InputPhonetic(BaseModel):
     """A single input for phonetic encoding."""
+
     id: str
     text: str
 
@@ -37,7 +39,7 @@ class PhoneticCodeResult(BaseModel):
 
 class EditScriptResult(BaseModel):
     id: str
-    diffs: list[list[Any]]
+    diffs: list[list[int | str]]
     levenshtein: int | None = None
 
 
@@ -48,16 +50,26 @@ class AlignmentResult(BaseModel):
     cigar: str | None = None
 
 
+ResultModel = (
+    ScalarDistanceResult
+    | SequenceResult
+    | PhoneticCodeResult
+    | EditScriptResult
+    | AlignmentResult
+)
+
+
 class TextCompareResponse(BaseModel):
     algorithm: str
     backend: str
     result_type: str
-    results: list[Any]
+    results: list[ResultModel]
     meta: dict[str, Any] = Field(default_factory=lambda: {"compute_time_ms": 0})
 
 
 class GraphRef(BaseModel):
     """Reference to a graph, either inline or from graph-generation service."""
+
     graph_ref: str | None = None
     nodes: list[dict] | None = None
     edges: list[dict] | None = None
@@ -80,6 +92,7 @@ class GedPairResult(BaseModel):
     @model_serializer
     def _clean(self) -> dict:
         import math
+
         return {
             "id": self.id,
             "upper_bound": None if math.isinf(self.upper_bound) else self.upper_bound,
