@@ -102,7 +102,7 @@ def _networkx_ged_astar(pair: GraphPair, params: dict[str, Any]) -> GedPairResul
                 exact=False,
                 runtime_ms=elapsed,
             )
-    except Exception:
+    except Exception:  # noqa: BLE001
         elapsed = (time.perf_counter() - t0) * 1000
         return GedPairResult(
             id=pair.id,
@@ -148,7 +148,7 @@ def _gedlib_compute(
         node_map = None
         try:
             node_map = env.get_node_map()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
         return GedPairResult(
             id=pair.id,
@@ -158,7 +158,7 @@ def _gedlib_compute(
             node_map=node_map,
             runtime_ms=elapsed,
         )
-    except Exception:
+    except Exception:  # noqa: BLE001
         elapsed = (time.perf_counter() - t0) * 1000
         return GedPairResult(
             id=pair.id,
@@ -216,7 +216,7 @@ def _gmatch4py_compute(
             exact=False,
             runtime_ms=elapsed,
         )
-    except Exception:
+    except Exception:  # noqa: BLE001
         elapsed = (time.perf_counter() - t0) * 1000
         return GedPairResult(
             id=pair.id,

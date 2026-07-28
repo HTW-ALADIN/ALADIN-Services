@@ -90,7 +90,7 @@ async def text_distance(request: dict[str, Any]) -> TextCompareResponse:
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Computation error: {e!s}")
 
     return TextCompareResponse(
@@ -165,7 +165,7 @@ async def ged_compute(request: dict[str, Any]) -> JSONResponse:
         results = compute_ged(algorithm, backend, graphs, params)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Computation error: {e!s}")
 
     result_id = f"ged_{uuid.uuid4().hex[:12]}"

@@ -89,18 +89,18 @@ jobs:
 
           # Smoke test: GED algorithms discovery
           echo "=== GED algorithms ==="
-          curl -sf http://localhost:8000/v1/graphs/ged/algorithms | python -c "import sys,json; d=json.load(sys.stdin); assert len(d)>0, 'No GED algorithms'; print(f'Found {len(d)} GED algorithms')"
+          curl -sf http://localhost:8000/v1/graphs/algorithms | python -c "import sys,json; d=json.load(sys.stdin); assert len(d)>0, 'No GED algorithms'; print(f'Found {len(d)} GED algorithms')"
 
           # Smoke test: Levenshtein compute
           echo "=== Levenshtein compute ==="
-          curl -sf -X POST http://localhost:8000/v1/text/compare \
+          curl -sf -X POST http://localhost:8000/v1/text/distance \
             -H 'Content-Type: application/json' \
             -d '{"algorithm":"levenshtein","params":{},"inputs":[{"id":"p1","a":"kitten","b":"sitting"}]}' \
             | python -c "import sys,json; d=json.load(sys.stdin); assert d['algorithm']=='levenshtein'; assert len(d['results'])==1; print('Levenshtein: OK')"
 
           # Smoke test: GED compute
           echo "=== GED compute ==="
-          curl -sf -X POST http://localhost:8000/v1/graphs/ged/compute \
+          curl -sf -X POST http://localhost:8000/v1/graphs/distance \
             -H 'Content-Type: application/json' \
             -d '{"algorithm":"ged_astar","params":{"mode":"exact","timeout_ms":5000},"graphs":[{"id":"p1","g1":{"nodes":[{"id":"A"},{"id":"B"}],"edges":[{"source":"A","target":"B"}]},"g2":{"nodes":[{"id":"A"},{"id":"B"},{"id":"C"}],"edges":[{"source":"A","target":"B"},{"source":"B","target":"C"}]}}]}' \
             | python -c "import sys,json; d=json.load(sys.stdin); assert d['status']=='completed'; assert len(d['results'])==1; print('GED compute: OK')"
