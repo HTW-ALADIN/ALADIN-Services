@@ -17,45 +17,21 @@ class TextCompareRequest(BaseModel):
 
 
 class GedComputeRequest(BaseModel):
-    """Request body for /v1/graphs/distance."""
-
     algorithm: str
     backend: str | None = None
     params: dict[str, Any] = Field(default_factory=dict)
     graphs: list[dict[str, Any]]
 
 
-class CatalogEntry(BaseModel):
-    """Single entry in the algorithm discovery catalog."""
-
-    algorithm: str
-    backend: str
-    families: list[str]
-    result_type: str
-    description: str
-    method_options: list[str] | None = None
-    params_schema: dict[str, Any] | None = None
-
-
-# ─── Input Models ─────────────────────────────────────────────────────────────
-
-
 class InputPair(BaseModel):
-    """A single input pair for text comparison."""
-
     id: str
     a: str
     b: str
 
 
 class InputPhonetic(BaseModel):
-    """A single input for phonetic encoding."""
-
     id: str
     text: str
-
-
-# ─── Result Models ────────────────────────────────────────────────────────────
 
 
 class ScalarDistanceResult(BaseModel):
@@ -106,9 +82,6 @@ class TextCompareResponse(BaseModel):
 
 
 class GraphRef(BaseModel):
-    """Reference to a graph, either inline or from graph-generation service."""
-
-    graph_ref: str | None = None
     nodes: list[dict] | None = None
     edges: list[dict] | None = None
 

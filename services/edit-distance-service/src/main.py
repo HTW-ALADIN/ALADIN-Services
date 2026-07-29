@@ -4,7 +4,6 @@ import uuid
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from .graph import GED_ALGORITHM_CATALOG, compute_ged
 from .models import (
@@ -26,26 +25,20 @@ app = FastAPI(
 # ─── Error Handler ────────────────────────────────────────────────────────────
 
 
-class ProblemDetail(BaseModel):
-    type: str = "about:blank"
-    title: str
-    status: int
-    detail: str
-
-
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
-        content=ProblemDetail(
-            title=exc.detail or str(exc.status_code),
-            status=exc.status_code,
-            detail=exc.detail or "",
-        ).model_dump(),
+        content={
+            "type": "about:blank",
+            "title": exc.detail or str(exc.status_code),
+            "status": exc.status_code,
+            "detail": exc.detail or "",
+        },
     )
 
 
-# ─── Default-Backend maps ────────────────────────────────────────────────────
+# ─── PART A: Text Edit Distance ───────────────────────────────────────────────
 
 _DEFAULT_TEXT_BACKEND: dict[str, str] = {
     "levenshtein": "rapidfuzz",

@@ -1,7 +1,9 @@
 services:
   edit-distance-service:
     container_name: edit-distance-service
-    build: .
+    build:
+      context: ../..
+      dockerfile: services/edit-distance-service/Dockerfile
     ports:
       - "8000:8000"
     environment:

@@ -13,8 +13,6 @@ from ..models import (
     SequenceResult,
 )
 
-# ─── RapidFuzz Backend ────────────────────────────────────────────────────────
-
 
 def _rapidfuzz_levenshtein(
     pair: InputPair, params: dict[str, Any]
@@ -395,7 +393,7 @@ def _diff_match_patch_diff(pair: InputPair, params: dict[str, Any]) -> EditScrip
 
     dmp = diff_match_patch()
     checklines = params.get("checklines", True)
-    deadline = params.get("deadline", None)
+    deadline = params.get("deadline")
     diffs = dmp.diff_main(pair.a, pair.b, checklines=checklines, deadline=deadline)
     dmp.diff_cleanupSemantic(diffs)
     lev = dmp.diff_levenshtein(diffs)

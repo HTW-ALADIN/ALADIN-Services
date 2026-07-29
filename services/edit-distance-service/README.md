@@ -426,7 +426,7 @@ services/edit-distance-service/
 ├── src/
 │   ├── main.py             # FastAPI app (REST endpoints)
 │   ├── models.py           # Pydantic models (request/response)
-│   ├── cli.py              # Click CLI (list, compare, health, ged-compare)
+│   ├── cli.py              # Click CLI (list, compare, health, ged, batch)
 │   ├── text/__init__.py    # Text ED implementations + dispatcher
 │   └── graph/__init__.py   # Graph ED implementations + dispatcher
 ├── tests/
@@ -439,6 +439,61 @@ services/edit-distance-service/
     ├── text_algorithms.http
     └── graph_algorithms.http
 ```
+
+## CLI
+
+The service ships with a Click-based CLI (`edit-distance`) that mirrors every REST endpoint.
+
+```bash
+# Install with CLI dependencies
+pip install -e ".[dev]"
+
+# Start the service (in another terminal)
+make start
+
+# Health check
+edit-distance health
+
+# List algorithms
+edit-distance list-text
+edit-distance list-graphs
+
+# Compute Levenshtein distance (default example)
+edit-distance text-distance levenshtein
+
+# Compute with explicit inputs
+edit-distance text-distance levenshtein \
+  -i '{"id":"p1","a":"kitten","b":"sitting"}' \
+  -i '{"id":"p2","a":"kitten","b":"kittens"}'
+
+# Compute from a JSON file
+edit-distance text-distance levenshtein -f inputs.json
+
+# Override backend and pass parameters (shorthand: true/false/null + numbers)
+edit-distance text-distance levenshtein --backend jellyfish -p score_cutoff=5
+
+# Complex params via JSON (arrays, objects, booleans)
+edit-distance text-distance levenshtein -p '{"weights": [1, 1, 1], "processor": null}'
+
+# GED example (shorthand)
+edit-distance ged-distance ged_astar -p mode=exact -p timeout_ms=5000
+
+# GED example (full JSON)  
+edit-distance ged-distance ged_astar -p '{"mode":"exact","timeout_ms":5000}'
+
+# Point at a different host
+edit-distance --base http://my-host:8000 health
+```
+
+Set `EDIT_DISTANCE_BASE_URL` to avoid repeating `--base`.
+
+| Command | Description |
+|---------|-------------|
+| `edit-distance health` | Check service health |
+| `edit-distance list-text` | List text algorithm/backend combinations |
+| `edit-distance list-graphs` | List GED algorithm/backend combinations |
+| `edit-distance text-distance <algo>` | Compute text edit distance |
+| `edit-distance ged-distance <algo>` | Compute graph edit distance |
 
 ## Make Commands
 
