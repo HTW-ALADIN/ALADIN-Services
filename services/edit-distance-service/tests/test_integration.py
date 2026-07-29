@@ -57,9 +57,9 @@ class TestTextCompare:
         assert resp.status_code == 200
         assert len(resp.json()["results"]) == 2
 
-    def test_missing_algorithm_returns_400(self):
+    def test_missing_algorithm_returns_422(self):
         resp = client.post("/v1/text/distance", json={"inputs": [{"id": "p1", "a": "a", "b": "b"}]})
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_unknown_algorithm_returns_400(self):
         resp = client.post("/v1/text/distance", json={"algorithm": "nonexistent", "inputs": [{"id": "p1", "a": "a", "b": "b"}]})
@@ -76,25 +76,20 @@ class TestGedDiscovery:
 
 
 class TestGedCompute:
-    def test_networkx_returns_201(self):
+    def test_networkx_returns_200(self):
         resp = client.post("/v1/graphs/distance", json={
             "algorithm": "ged_astar",
             "params": {"mode": "exact", "timeout_ms": 5000},
             "graphs": [{"id": "pair-1", "g1": {"nodes": [{"id": "A"}, {"id": "B"}], "edges": [{"source": "A", "target": "B"}]}, "g2": {"nodes": [{"id": "A"}, {"id": "B"}, {"id": "C"}], "edges": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"}]}}],
         })
-        assert resp.status_code == 201
+        assert resp.status_code == 200
         data = resp.json()
         assert data["algorithm"] == "ged_astar"
-        assert data["status"] == "completed"
         assert len(data["results"]) == 1
         assert "id" in data
 
-    def test_missing_algorithm_returns_400(self):
+    def test_missing_algorithm_returns_422(self):
         resp = client.post("/v1/graphs/distance", json={
             "graphs": [{"id": "p1", "g1": {"nodes": [{"id": "A"}]}, "g2": {"nodes": [{"id": "B"}]}}],
         })
-        assert resp.status_code == 400
-
-
-class TestGedResultLifecycle:
-    pass
+        assert resp.status_code == 422

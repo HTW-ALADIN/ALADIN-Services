@@ -4,6 +4,41 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_serializer
 
+# ─── Request Models ───────────────────────────────────────────────────────────
+
+
+class TextCompareRequest(BaseModel):
+    """Request body for /v1/text/distance."""
+
+    algorithm: str
+    backend: str | None = None  # None = use default
+    params: dict[str, Any] = Field(default_factory=dict)
+    inputs: list[dict[str, Any]]
+
+
+class GedComputeRequest(BaseModel):
+    """Request body for /v1/graphs/distance."""
+
+    algorithm: str
+    backend: str | None = None
+    params: dict[str, Any] = Field(default_factory=dict)
+    graphs: list[dict[str, Any]]
+
+
+class CatalogEntry(BaseModel):
+    """Single entry in the algorithm discovery catalog."""
+
+    algorithm: str
+    backend: str
+    families: list[str]
+    result_type: str
+    description: str
+    method_options: list[str] | None = None
+    params_schema: dict[str, Any] | None = None
+
+
+# ─── Input Models ─────────────────────────────────────────────────────────────
+
 
 class InputPair(BaseModel):
     """A single input pair for text comparison."""
@@ -18,6 +53,9 @@ class InputPhonetic(BaseModel):
 
     id: str
     text: str
+
+
+# ─── Result Models ────────────────────────────────────────────────────────────
 
 
 class ScalarDistanceResult(BaseModel):
@@ -105,7 +143,6 @@ class GedPairResult(BaseModel):
 
 class GedResultResponse(BaseModel):
     id: str
-    status: str
     algorithm: str
     backend: str
     params: dict[str, Any] = Field(default_factory=dict)

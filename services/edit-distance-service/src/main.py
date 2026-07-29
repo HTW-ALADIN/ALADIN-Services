@@ -1,15 +1,16 @@
 """FastAPI application for the Edit Distance Service."""
 
 import uuid
-from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .graph import GED_ALGORITHM_CATALOG, compute_ged
 from .models import (
+    GedComputeRequest,
     GedResultResponse,
+    TextCompareRequest,
     TextCompareResponse,
 )
 from .text import ALGORITHM_CATALOG as TEXT_ALGORITHM_CATALOG
@@ -44,6 +45,33 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
 
 
+# ─── Default-Backend maps ────────────────────────────────────────────────────
+
+_DEFAULT_TEXT_BACKEND: dict[str, str] = {
+    "levenshtein": "rapidfuzz",
+    "damerau_levenshtein": "rapidfuzz",
+    "hamming": "rapidfuzz",
+    "jaro_winkler": "rapidfuzz",
+    "osa": "rapidfuzz",
+    "indel": "rapidfuzz",
+    "lcs": "textdistance",
+    "needleman_wunsch": "textdistance",
+    "gotoh": "textdistance",
+    "smith_waterman": "textdistance",
+    "token_set_similarity": "textdistance",
+    "ncd": "textdistance",
+    "phonetic_encoding": "jellyfish",
+    "long_sequence_alignment": "edlib",
+    "diff_patch": "diff_match_patch",
+}
+
+_DEFAULT_GED_BACKEND: dict[str, str] = {
+    "ged_astar": "networkx",
+    "ged_heuristic": "gedlib",
+    "ged_hausdorff": "gmatch4py",
+    "ged_greedy": "gmatch4py",
+}
+
 # ─── PART A: Text Edit Distance ───────────────────────────────────────────────
 
 
@@ -54,22 +82,17 @@ async def list_text_algorithms() -> list[dict]:
 
 
 @app.post("/v1/text/distance")
-async def text_distance(request: dict[str, Any]) -> TextCompareResponse:
+async def text_distance(request: TextCompareRequest) -> TextCompareResponse:
     """Compute a distance/similarity/transform for one pair or a batch of pairs.
 
     The request body is a discriminated union keyed by 'algorithm'.
     See the /v1/text/algorithms endpoint for the full catalog of supported
     algorithm/backend combinations and their parameter schemas.
     """
-    algorithm = request.get("algorithm")
-    if not algorithm:
-        raise HTTPException(
-            status_code=400, detail="Missing required field: 'algorithm'"
-        )
-
-    backend = _get_default_backend(algorithm)
-    params = request.get("params", {})
-    raw_inputs = request.get("inputs", [])
+    algorithm = request.algorithm
+    backend = request.backend or _DEFAULT_TEXT_BACKEND.get(algorithm, "rapidfuzz")
+    params = request.params
+    raw_inputs = request.inputs
 
     if not raw_inputs:
         raise HTTPException(status_code=400, detail="Missing required field: 'inputs'")
@@ -102,28 +125,6 @@ async def text_distance(request: dict[str, Any]) -> TextCompareResponse:
     )
 
 
-def _get_default_backend(algorithm: str) -> str:
-    """Return the default backend for a given algorithm."""
-    defaults = {
-        "levenshtein": "rapidfuzz",
-        "damerau_levenshtein": "rapidfuzz",
-        "hamming": "rapidfuzz",
-        "jaro_winkler": "rapidfuzz",
-        "osa": "rapidfuzz",
-        "indel": "rapidfuzz",
-        "lcs": "textdistance",
-        "needleman_wunsch": "textdistance",
-        "gotoh": "textdistance",
-        "smith_waterman": "textdistance",
-        "token_set_similarity": "textdistance",
-        "ncd": "textdistance",
-        "phonetic_encoding": "jellyfish",
-        "long_sequence_alignment": "edlib",
-        "diff_patch": "diff_match_patch",
-    }
-    return defaults.get(algorithm, "rapidfuzz")
-
-
 # ─── PART B: Graph Edit Distance ──────────────────────────────────────────────
 
 
@@ -133,26 +134,13 @@ async def list_ged_algorithms() -> list[dict]:
     return GED_ALGORITHM_CATALOG
 
 
-_GED_DEFAULT_BACKEND = {
-    "ged_astar": "networkx",
-    "ged_heuristic": "gedlib",
-    "ged_hausdorff": "gmatch4py",
-    "ged_greedy": "gmatch4py",
-}
-
-
 @app.post("/v1/graphs/distance")
-async def ged_compute(request: dict[str, Any]) -> JSONResponse:
+async def ged_compute(request: GedComputeRequest) -> GedResultResponse:
     """Compute the edit distance between one pair (or a batch of pairs) of graphs."""
-    algorithm = request.get("algorithm")
-    if not algorithm:
-        raise HTTPException(
-            status_code=400, detail="Missing required field: 'algorithm'"
-        )
-
-    backend = _GED_DEFAULT_BACKEND.get(algorithm, "networkx")
-    params = request.get("params", {})
-    raw_graphs = request.get("graphs", [])
+    algorithm = request.algorithm
+    backend = request.backend or _DEFAULT_GED_BACKEND.get(algorithm, "networkx")
+    params = request.params
+    raw_graphs = request.graphs
 
     if not raw_graphs:
         raise HTTPException(status_code=400, detail="Missing required field: 'graphs'")
@@ -169,28 +157,16 @@ async def ged_compute(request: dict[str, Any]) -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Computation error: {e!s}")
 
     result_id = f"ged_{uuid.uuid4().hex[:12]}"
-    response = GedResultResponse(
+
+    return GedResultResponse(
         id=result_id,
-        status="completed",
         algorithm=algorithm,
         backend=backend,
         params=params,
         results=results,
     )
 
-    return Response(
-        content=response.model_dump_json(),
-        status_code=201,
-        media_type="application/json",
-    )
-
 
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "edit-distance-service"}
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)

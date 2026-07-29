@@ -197,8 +197,9 @@ def _textdistance_needleman_wunsch(
 ) -> AlignmentResult:
     import textdistance
 
-    # NeedlemanWunsch is a class in textdistance, call it as a function
-    d = textdistance.needleman_wunsch(pair.a, pair.b)
+    gap_cost = params.get("gap_cost", 1.0)
+    alg = textdistance.NeedlemanWunsch(gap_cost=gap_cost)
+    d = alg(pair.a, pair.b)
     return AlignmentResult(id=pair.id, edit_distance=int(d), cigar=None)
 
 
@@ -336,7 +337,18 @@ def _jellyfish_phonetic(
 def _edlib_levenshtein(pair: InputPair, params: dict[str, Any]) -> ScalarDistanceResult:
     import edlib
 
-    result = edlib.align(pair.a, pair.b, mode="NW", task="distance")
+    mode = params.get("mode", "NW")
+    task = params.get("task", "distance")
+    k = params.get("k")
+    additional_equalities = params.get("additional_equalities")
+
+    kwargs = {"mode": mode, "task": task}
+    if k is not None:
+        kwargs["k"] = k
+    if additional_equalities:
+        kwargs["additionalEqualities"] = additional_equalities
+
+    result = edlib.align(pair.a, pair.b, **kwargs)
     d = result["editDistance"]
     max_len = max(len(pair.a), len(pair.b))
     return ScalarDistanceResult(
@@ -352,13 +364,13 @@ def _edlib_long_sequence_alignment(
     mode = params.get("mode", "NW")
     task = params.get("task", "distance")
     k = params.get("k")
-    additional_equalites = params.get("additional_equalites")
+    additional_equalities = params.get("additional_equalities")
 
     kwargs = {"mode": mode, "task": task}
     if k is not None:
         kwargs["k"] = k
-    if additional_equalites:
-        kwargs["additionalEqualities"] = additional_equalites
+    if additional_equalities:
+        kwargs["additionalEqualities"] = additional_equalities
 
     result = edlib.align(pair.a, pair.b, **kwargs)
 

@@ -30,6 +30,17 @@ def _graph_ref_to_nx(graph_ref: GraphRef) -> nx.Graph:
     return G
 
 
+def _make_label_aware_cost(
+    default_cost: float,
+) -> Callable[[dict, dict], float]:
+    """Create a cost function that returns 0 for matching labels, else default_cost."""
+
+    def _cost(n1_attrs: dict, n2_attrs: dict) -> float:
+        return 0.0 if n1_attrs == n2_attrs else default_cost
+
+    return _cost
+
+
 # ─── NetworkX Backend ─────────────────────────────────────────────────────────
 
 
@@ -41,16 +52,33 @@ def _networkx_ged_astar(pair: GraphPair, params: dict[str, Any]) -> GedPairResul
     mode = params.get("mode", "exact")
     timeout_s = params.get("timeout_ms", 0) / 1000
 
-    def _cost(v: float | None) -> Callable | None:
-        return (lambda n1, n2: v) if v is not None else None
+    # Build label-aware cost functions from explicit costs or defaults
+    node_subst = params.get("node_subst_cost")
+    node_del = params.get("node_del_cost")
+    node_ins = params.get("node_ins_cost")
+    edge_subst = params.get("edge_subst_cost")
+    edge_del = params.get("edge_del_cost")
+    edge_ins = params.get("edge_ins_cost")
 
     kwargs = {
-        "node_subst_cost": _cost(params.get("node_subst_cost")),
-        "node_del_cost": _cost(params.get("node_del_cost")),
-        "node_ins_cost": _cost(params.get("node_ins_cost")),
-        "edge_subst_cost": _cost(params.get("edge_subst_cost")),
-        "edge_del_cost": _cost(params.get("edge_del_cost")),
-        "edge_ins_cost": _cost(params.get("edge_ins_cost")),
+        "node_subst_cost": _make_label_aware_cost(node_subst)
+        if node_subst is not None
+        else _make_label_aware_cost(1.0),
+        "node_del_cost": _make_label_aware_cost(node_del)
+        if node_del is not None
+        else None,
+        "node_ins_cost": _make_label_aware_cost(node_ins)
+        if node_ins is not None
+        else None,
+        "edge_subst_cost": _make_label_aware_cost(edge_subst)
+        if edge_subst is not None
+        else _make_label_aware_cost(1.0),
+        "edge_del_cost": _make_label_aware_cost(edge_del)
+        if edge_del is not None
+        else None,
+        "edge_ins_cost": _make_label_aware_cost(edge_ins)
+        if edge_ins is not None
+        else None,
         "upper_bound": params.get("upper_bound"),
     }
 
