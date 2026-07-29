@@ -30,13 +30,21 @@ def _graph_ref_to_nx(graph_ref: GraphRef) -> nx.Graph:
         for link in graph_ref.links or []:
             src = link.get("source", link.get("from"))
             dst = link.get("target", link.get("to"))
-            attrs = {k: v for k, v in link.items() if k not in ("source", "target", "from", "to")}
+            attrs = {
+                k: v
+                for k, v in link.items()
+                if k not in ("source", "target", "from", "to")
+            }
             G.add_edge(src, dst, **attrs)
         # Also handle the 'edges' field when 'links' is absent (legacy compat)
         for edge in graph_ref.edges or []:
             src = edge.get("source", edge.get("from"))
             dst = edge.get("target", edge.get("to"))
-            attrs = {k: v for k, v in edge.items() if k not in ("source", "target", "from", "to")}
+            attrs = {
+                k: v
+                for k, v in edge.items()
+                if k not in ("source", "target", "from", "to")
+            }
             G.add_edge(src, dst, **attrs)
         return G
 
