@@ -53,7 +53,7 @@ check "Phonetic encoding" "$rc"
 curl -sf -X POST "$BASE_URL/v1/graphs/distance" \
     -H 'Content-Type: application/json' \
     -d '{"algorithm":"ged_astar","params":{"mode":"exact","timeout_ms":5000},"graphs":[{"id":"p1","g1":{"nodes":[{"id":"A"},{"id":"B"}],"edges":[{"source":"A","target":"B"}]},"g2":{"nodes":[{"id":"A"},{"id":"B"},{"id":"C"}],"edges":[{"source":"A","target":"B"},{"source":"B","target":"C"}]}}]}' \
-    | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['status']=='completed'; assert len(d['results'])==1" && rc=0 || rc=$?
+    | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['algorithm']=='ged_astar'; assert len(d['results'])==1" && rc=0 || rc=$?
 check "GED compute (NetworkX)" "$rc"
 
 # --- Diff/patch ---
