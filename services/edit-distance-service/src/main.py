@@ -78,27 +78,16 @@ async def list_text_algorithms() -> list[dict]:
 async def text_distance(request: TextCompareRequest) -> TextCompareResponse:
     """Compute a distance/similarity/transform for one pair or a batch of pairs.
 
-    The request body is a discriminated union keyed by 'algorithm'.
     See the /v1/text/algorithms endpoint for the full catalog of supported
     algorithm/backend combinations and their parameter schemas.
     """
     algorithm = request.algorithm
     backend = request.backend or _DEFAULT_TEXT_BACKEND.get(algorithm, "rapidfuzz")
     params = request.params
-    raw_inputs = request.inputs
+    inputs = request.inputs
 
-    if not raw_inputs:
+    if not inputs:
         raise HTTPException(status_code=400, detail="Missing required field: 'inputs'")
-
-    # Handle phonetic encoding separately (different input shape)
-    if algorithm == "phonetic_encoding":
-        from .models import InputPhonetic
-
-        inputs = [InputPhonetic(**inp) for inp in raw_inputs]
-    else:
-        from .models import InputPair
-
-        inputs = [InputPair(**inp) for inp in raw_inputs]
 
     try:
         results, result_type, compute_ms = compute_text(
@@ -133,14 +122,10 @@ async def ged_compute(request: GedComputeRequest) -> GedResultResponse:
     algorithm = request.algorithm
     backend = request.backend or _DEFAULT_GED_BACKEND.get(algorithm, "networkx")
     params = request.params
-    raw_graphs = request.graphs
+    graphs = request.graphs
 
-    if not raw_graphs:
+    if not graphs:
         raise HTTPException(status_code=400, detail="Missing required field: 'graphs'")
-
-    from .models import GraphPair
-
-    graphs = [GraphPair(**g) for g in raw_graphs]
 
     try:
         results = compute_ged(algorithm, backend, graphs, params)

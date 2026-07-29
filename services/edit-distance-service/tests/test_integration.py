@@ -93,3 +93,21 @@ class TestGedCompute:
             "graphs": [{"id": "p1", "g1": {"nodes": [{"id": "A"}]}, "g2": {"nodes": [{"id": "B"}]}}],
         })
         assert resp.status_code == 422
+
+    def test_networkx_adjacency_matrix(self):
+        resp = client.post("/v1/graphs/distance", json={
+            "algorithm": "ged_astar",
+            "params": {"mode": "exact", "timeout_ms": 5000},
+            "graphs": [{"id": "pair-1", "g1": {"format": "adjacency_matrix", "matrix": [[0,1],[1,0]], "node_labels": ["A","B"]}, "g2": {"format": "adjacency_matrix", "matrix": [[0,1,1],[1,0,1],[1,1,0]], "node_labels": ["A","B","C"]}}],
+        })
+        assert resp.status_code == 200
+        assert len(resp.json()["results"]) == 1
+
+    def test_networkx_node_link(self):
+        resp = client.post("/v1/graphs/distance", json={
+            "algorithm": "ged_astar",
+            "params": {"mode": "exact", "timeout_ms": 5000},
+            "graphs": [{"id": "pair-1", "g1": {"format": "node_link", "nodes": [{"id":"A"}, {"id":"B"}], "links": [{"source":"A","target":"B"}]}, "g2": {"format": "node_link", "nodes": [{"id":"A"}, {"id":"B"}, {"id":"C"}], "links": [{"source":"A","target":"B"}, {"source":"B","target":"C"}]}}],
+        })
+        assert resp.status_code == 200
+        assert len(resp.json()["results"]) == 1

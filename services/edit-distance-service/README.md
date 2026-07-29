@@ -385,8 +385,114 @@ curl -s -X POST http://localhost:8000/v1/graphs/distance \
   }' | jq .
 ```
 
+#### GED A* — adjacency matrix format
+```bash
+curl -s -X POST http://localhost:8000/v1/graphs/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "ged_astar",
+    "params": {"mode": "exact", "timeout_ms": 5000},
+    "graphs": [
+      {
+        "id": "pair-1",
+        "g1": {
+          "format": "adjacency_matrix",
+          "matrix": [[0, 1, 1], [1, 0, 1], [1, 1, 0]],
+          "node_labels": ["A", "B", "C"]
+        },
+        "g2": {
+          "format": "adjacency_matrix",
+          "matrix": [[0, 1], [1, 0]],
+          "node_labels": ["A", "B"]
+        }
+      }
+    ]
+  }' | jq .
+```
+
+#### GED A* — networkx node-link format
+```bash
+curl -s -X POST http://localhost:8000/v1/graphs/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "ged_astar",
+    "params": {"mode": "exact", "timeout_ms": 5000},
+    "graphs": [
+      {
+        "id": "pair-1",
+        "g1": {
+          "format": "node_link",
+          "nodes": [{"id": "A", "attr": "red"}, {"id": "B", "attr": "blue"}],
+          "links": [{"source": "A", "target": "B", "weight": 1}]
+        },
+        "g2": {
+          "format": "node_link",
+          "nodes": [{"id": "A", "attr": "red"}, {"id": "B", "attr": "green"}, {"id": "C", "attr": "blue"}],
+          "links": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"}]
+        }
+      }
+    ]
+  }' | jq .
+```
+
 > **Batching:** Both endpoints accept arrays — multiple pairs per request are supported.
 > **Custom backends:** Override the default backend by adding `"backend": "<name>"` to the request body. Use `GET /v1/text/algorithms` or `GET /v1/graphs/algorithms` to discover all available algorithm/backend combinations.
+
+## Input Formats
+
+### Text (inputs array)
+
+Each element is either a **pair** or a **phonetic encoding** request:
+
+| Type | Fields |
+|------|--------|
+| `InputPair` | `id`, `a` (first string), `b` (second string) |
+| `InputPhonetic` | `id`, `text` (single word) |
+
+The service distinguishes them automatically — phonetic algorithms expect `InputPhonetic`, all others expect `InputPair`.
+
+### Graph (graphs array)
+
+Each element is a `GraphPair` with `id`, `g1`, `g2`.  
+Three input formats are supported, selected via the optional `format` field:
+
+#### Default — nodes + edges (explicit)
+
+```json
+{
+  "g1": {
+    "nodes": [{"id": "A", "label": "A"}, {"id": "B", "label": "B"}],
+    "edges": [{"source": "A", "target": "B"}]
+  }
+}
+```
+
+Node attrs beyond `id` become vertex labels. Edge attrs beyond source/target become edge labels.
+
+#### `"format": "node_link"` — networkx JSON
+
+Same structure as the [networkx node-link format](https://networkx.org/documentation/stable/reference/readwrite/json_graph.html), using `links` instead of `edges`:
+
+```json
+{
+  "format": "node_link",
+  "nodes": [{"id": "A", "label": "cat"}, {"id": "B", "label": "dog"}],
+  "links": [{"source": "A", "target": "B", "weight": 1.0}],
+  "directed": false
+}
+```
+
+#### `"format": "adjacency_matrix"` — dense matrix
+
+```json
+{
+  "format": "adjacency_matrix",
+  "matrix": [[0, 1, 0], [1, 0, 1], [0, 1, 0]],
+  "node_labels": ["A", "B", "C"]
+}
+```
+
+Omitting `node_labels` auto-generates `["0", "1", …]`. Only the upper triangle is used (undirected). Zero entries → no edge.
 
 ## Result Types
 

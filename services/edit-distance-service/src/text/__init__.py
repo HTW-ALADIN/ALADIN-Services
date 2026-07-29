@@ -435,7 +435,7 @@ BACKEND_DISPATCH = {
 def compute_text(
     algorithm: str,
     backend: str,
-    inputs: list[InputPair] | list[InputPhonetic],
+    inputs: list[InputPair | InputPhonetic],
     params: dict[str, Any],
 ) -> tuple[list[Any], str, float]:
     """Compute text edit distance for a batch of inputs.

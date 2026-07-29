@@ -13,7 +13,47 @@ from ..models import (
 
 
 def _graph_ref_to_nx(graph_ref: GraphRef) -> nx.Graph:
-    """Convert a GraphRef to a networkx.Graph."""
+    """Convert a GraphRef to a networkx.Graph.
+
+    Supports three formats: default (nodes+edges), node_link (networkx JSON),
+    and adjacency_matrix.
+    """
+    fmt = graph_ref.format
+
+    # networkx node-link format
+    if fmt == "node_link":
+        G = nx.Graph() if not graph_ref.directed else nx.DiGraph()
+        for node in graph_ref.nodes or []:
+            nid = node.get("id", str(node))
+            attrs = {k: v for k, v in node.items() if k != "id"}
+            G.add_node(nid, **attrs)
+        for link in graph_ref.links or []:
+            src = link.get("source", link.get("from"))
+            dst = link.get("target", link.get("to"))
+            attrs = {k: v for k, v in link.items() if k not in ("source", "target", "from", "to")}
+            G.add_edge(src, dst, **attrs)
+        # Also handle the 'edges' field when 'links' is absent (legacy compat)
+        for edge in graph_ref.edges or []:
+            src = edge.get("source", edge.get("from"))
+            dst = edge.get("target", edge.get("to"))
+            attrs = {k: v for k, v in edge.items() if k not in ("source", "target", "from", "to")}
+            G.add_edge(src, dst, **attrs)
+        return G
+
+    # adjacency matrix
+    if fmt == "adjacency_matrix":
+        G = nx.Graph()
+        mat = graph_ref.matrix or []
+        labels = graph_ref.node_labels or [str(i) for i in range(len(mat))]
+        for i in range(len(mat)):
+            G.add_node(labels[i])
+        for i in range(len(mat)):
+            for j in range(len(mat[i])):
+                if mat[i][j] != 0 and i <= j:
+                    G.add_edge(labels[i], labels[j], weight=float(mat[i][j]))
+        return G
+
+    # default (nodes+edges)
     G = nx.Graph()
     for node in graph_ref.nodes or []:
         nid = node.get("id", str(node))
