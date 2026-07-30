@@ -1,0 +1,764 @@
+openapi: 3.1.0
+info:
+  title: SageMath Wrapper Service
+  version: 0.1.0
+paths:
+  /v1/sat/solve:
+    post:
+      tags:
+      - sat
+      summary: Sat Solve
+      operationId: sat_solve_v1_sat_solve_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SatSolveRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SatSolveResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/determinant:
+    post:
+      tags:
+      - linalg
+      summary: Det Endpoint
+      operationId: det_endpoint_v1_linalg_determinant_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatrixRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinalgResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/inverse:
+    post:
+      tags:
+      - linalg
+      summary: Inv Endpoint
+      operationId: inv_endpoint_v1_linalg_inverse_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatrixRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinalgResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/eigenvalues:
+    post:
+      tags:
+      - linalg
+      summary: Eig Endpoint
+      operationId: eig_endpoint_v1_linalg_eigenvalues_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatrixRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinalgResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/solve:
+    post:
+      tags:
+      - linalg
+      summary: Solve Endpoint
+      operationId: solve_endpoint_v1_linalg_solve_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinearSystemRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinalgResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/qr:
+    post:
+      tags:
+      - linalg
+      summary: Qr Endpoint
+      operationId: qr_endpoint_v1_linalg_qr_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatrixRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinalgResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/lu:
+    post:
+      tags:
+      - linalg
+      summary: Lu Endpoint
+      operationId: lu_endpoint_v1_linalg_lu_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatrixRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinalgResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/cholesky:
+    post:
+      tags:
+      - linalg
+      summary: Cholesky Endpoint
+      operationId: cholesky_endpoint_v1_linalg_cholesky_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatrixRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinalgResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/svd:
+    post:
+      tags:
+      - linalg
+      summary: Svd Endpoint
+      operationId: svd_endpoint_v1_linalg_svd_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatrixRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinalgResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/matrix-exp:
+    post:
+      tags:
+      - linalg
+      summary: Matrix Exp Endpoint
+      operationId: matrix_exp_endpoint_v1_linalg_matrix_exp_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatrixRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinalgResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/right-kernel:
+    post:
+      tags:
+      - linalg
+      summary: Right Kernel Endpoint
+      operationId: right_kernel_endpoint_v1_linalg_right_kernel_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatrixRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinalgResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/left-kernel:
+    post:
+      tags:
+      - linalg
+      summary: Left Kernel Endpoint
+      operationId: left_kernel_endpoint_v1_linalg_left_kernel_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatrixRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinalgResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/charpoly:
+    post:
+      tags:
+      - linalg
+      summary: Charpoly Endpoint
+      operationId: charpoly_endpoint_v1_linalg_charpoly_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatrixRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinalgResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/optimize/milp:
+    post:
+      tags:
+      - optimize
+      summary: Milp Endpoint
+      operationId: milp_endpoint_v1_optimize_milp_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MilpRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilpResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/optimize/find-root:
+    post:
+      tags:
+      - optimize
+      summary: Find Root Endpoint
+      operationId: find_root_endpoint_v1_optimize_find_root_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FindRootRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilpResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/optimize/minimize:
+    post:
+      tags:
+      - optimize
+      summary: Minimize Endpoint
+      operationId: minimize_endpoint_v1_optimize_minimize_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MinimizeRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilpResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/maxima/evaluate:
+    post:
+      tags:
+      - maxima
+      summary: Maxima Evaluate
+      operationId: maxima_evaluate_v1_maxima_evaluate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaximaEvaluateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaximaEvaluateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /healthz:
+    get:
+      summary: Healthz
+      operationId: healthz_healthz_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+components:
+  schemas:
+    ConstraintModel:
+      properties:
+        coeffs:
+          additionalProperties:
+            type: number
+          type: object
+          title: Coeffs
+        min:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Min
+        max:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Max
+      type: object
+      required:
+      - coeffs
+      title: ConstraintModel
+    FindRootRequest:
+      properties:
+        expression:
+          type: string
+          title: Expression
+          description: Symbolic expression
+        variable:
+          type: string
+          title: Variable
+          description: Variable name
+          default: x
+        a:
+          type: number
+          title: A
+          description: Interval start
+        b:
+          type: number
+          title: B
+          description: Interval end
+      type: object
+      required:
+      - expression
+      - a
+      - b
+      title: FindRootRequest
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    LinalgResponse:
+      properties:
+        result:
+          anyOf:
+          - items: {}
+            type: array
+          - type: number
+          - type: 'null'
+          title: Result
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      title: LinalgResponse
+    LinearSystemRequest:
+      properties:
+        a:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: A
+          description: Coefficient matrix
+        b:
+          items:
+            type: number
+          type: array
+          title: B
+          description: Right-hand side vector
+      type: object
+      required:
+      - a
+      - b
+      title: LinearSystemRequest
+    MatrixRequest:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+          description: Square matrix
+      type: object
+      required:
+      - matrix
+      title: MatrixRequest
+    MaximaEvaluateRequest:
+      properties:
+        expression:
+          type: string
+          title: Expression
+          description: Symbolic expression
+        operation:
+          type: string
+          title: Operation
+          description: 'Operation: simplify, differentiate, integrate, solve, limit,
+            series, laplace'
+        variable:
+          type: string
+          title: Variable
+          description: Variable name
+          default: x
+        bounds:
+          anyOf:
+          - items:
+              type: number
+            type: array
+          - type: 'null'
+          title: Bounds
+          description: 'For limit: [point]; for series: [point, order]; for integrate:
+            [a, b]'
+      type: object
+      required:
+      - expression
+      - operation
+      title: MaximaEvaluateRequest
+    MaximaEvaluateResponse:
+      properties:
+        result:
+          anyOf:
+          - type: string
+          - type: number
+          - items: {}
+            type: array
+          - type: 'null'
+          title: Result
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      title: MaximaEvaluateResponse
+    MilpRequest:
+      properties:
+        variables:
+          items:
+            type: string
+          type: array
+          title: Variables
+        objective:
+          additionalProperties:
+            type: number
+          type: object
+          title: Objective
+        maximize:
+          type: boolean
+          title: Maximize
+          default: true
+        constraints:
+          items:
+            $ref: '#/components/schemas/ConstraintModel'
+          type: array
+          title: Constraints
+        var_types:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Var Types
+        solver:
+          type: string
+          title: Solver
+          description: MILP solver name
+          default: GLPK
+      type: object
+      required:
+      - variables
+      - objective
+      title: MilpRequest
+    MilpResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+        objective_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Objective Value
+        values:
+          anyOf:
+          - additionalProperties:
+              type: number
+            type: object
+          - type: 'null'
+          title: Values
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      required:
+      - status
+      title: MilpResponse
+    MinimizeRequest:
+      properties:
+        expression:
+          type: string
+          title: Expression
+          description: Symbolic expression
+        variables:
+          items:
+            type: string
+          type: array
+          title: Variables
+          description: Variable names
+        x0:
+          items:
+            type: number
+          type: array
+          title: X0
+          description: Initial guess
+        objective_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Objective Value
+        values:
+          anyOf:
+          - additionalProperties:
+              type: number
+            type: object
+          - type: 'null'
+          title: Values
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      required:
+      - expression
+      - variables
+      - x0
+      title: MinimizeRequest
+    SatSolveRequest:
+      properties:
+        clauses:
+          items:
+            items:
+              type: integer
+            type: array
+          type: array
+          title: Clauses
+          description: DIMACS CNF clauses
+        solver:
+          type: string
+          title: Solver
+          description: SAT solver name
+          default: picosat
+      type: object
+      required:
+      - clauses
+      title: SatSolveRequest
+    SatSolveResponse:
+      properties:
+        satisfiable:
+          type: boolean
+          title: Satisfiable
+        assignment:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Assignment
+        solver:
+          type: string
+          title: Solver
+      type: object
+      required:
+      - satisfiable
+      - solver
+      title: SatSolveResponse
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
