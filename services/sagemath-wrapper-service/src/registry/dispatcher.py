@@ -16,8 +16,10 @@ def execute_operation(op: OperationSpec, payload: dict) -> dict:
     Returns a dict with ``ok``, ``result``, and ``error`` keys.
     """
     # Validate payload against input_schema
+    # Strip None values from Pydantic model_dump (optional fields not sent)
+    cleaned = {k: v for k, v in payload.items() if v is not None}
     try:
-        jsonschema.validate(payload, op.input_schema)
+        jsonschema.validate(cleaned, op.input_schema)
     except jsonschema.exceptions.ValidationError as exc:
         return {"ok": False, "result": None, "error": exc.message}
 
@@ -25,14 +27,14 @@ def execute_operation(op: OperationSpec, payload: dict) -> dict:
         module_path, func_name = op.function_ref.split(":", 1)
         fn = getattr(importlib.import_module(module_path), func_name)
         try:
-            result = fn(**payload)
+            result = fn(**cleaned)
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "result": None, "error": str(exc)}
         return {"ok": True, "result": result, "error": None}
 
     if op.kind == "template":
         try:
-            code = render_template(op.sage_template, payload)
+            code = render_template(op.sage_template, cleaned)
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "result": None, "error": str(exc)}
 

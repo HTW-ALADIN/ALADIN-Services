@@ -302,6 +302,26 @@ sagemath-wrapper serve
 CLI commands are dynamically generated from `registry/*.yaml` — adding a new
 YAML entry automatically makes it available as a CLI subcommand.
 
+## HTTP Tests (REST Client)
+
+The `http-tests/` directory contains `.http` files for testing all REST API
+endpoints directly from VS Code (requires the
+[REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)
+extension).
+
+1. Start the service:
+   ```sh
+   make start
+   # or: make docker-build && make docker-run
+   ```
+2. Open one of the `.http` files and click **Send Request** above each request.
+
+| File | Endpoints covered |
+|------|------------------|
+| `http-tests/health.http` | `GET /healthz` |
+| `http-tests/linalg.http` | All 17 `/v1/linalg/…` endpoints |
+| `http-tests/operations.http` | `/v1/sat/solve`, `/v1/optimize/…`, `/v1/maxima/evaluate` |
+
 ## Hardware Requirements
 
 | Resource | Minimum | Recommended |
