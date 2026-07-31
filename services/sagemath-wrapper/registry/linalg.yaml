@@ -1,0 +1,314 @@
+- id: linalg.determinant
+  summary: Determinant of a square matrix
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: scalar
+  timeout_s: 5.0
+  function_ref: "core.linalg:determinant"
+
+- id: linalg.inverse
+  summary: Inverse of a square matrix
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: matrix
+  timeout_s: 5.0
+  function_ref: "core.linalg:inverse"
+
+- id: linalg.eigenvalues
+  summary: Eigenvalues of a square matrix
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: vector
+  timeout_s: 5.0
+  function_ref: "core.linalg:eigenvalues"
+
+- id: linalg.solve
+  summary: Solve a linear system A·x = b
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      a:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+      b:
+        type: array
+        items:
+          type: number
+    required: [a, b]
+  output_type: vector
+  timeout_s: 5.0
+  function_ref: "core.linalg:solve_linear_system"
+
+- id: linalg.qr
+  summary: QR decomposition
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: object
+  timeout_s: 5.0
+  function_ref: "core.linalg:qr"
+
+- id: linalg.lu
+  summary: LU decomposition with pivoting
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: object
+  timeout_s: 5.0
+  function_ref: "core.linalg:lu"
+
+- id: linalg.cholesky
+  summary: Cholesky decomposition
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: matrix
+  timeout_s: 5.0
+  function_ref: "core.linalg:cholesky"
+
+- id: linalg.svd
+  summary: Singular value decomposition
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: object
+  timeout_s: 5.0
+  function_ref: "core.linalg:svd"
+
+- id: linalg.matrix-exp
+  summary: Matrix exponential
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: matrix
+  timeout_s: 5.0
+  function_ref: "core.linalg:matrix_exp"
+
+- id: linalg.right-kernel
+  summary: Right kernel (nullspace)
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: matrix
+  timeout_s: 5.0
+  function_ref: "core.linalg:right_kernel"
+
+- id: linalg.left-kernel
+  summary: Left kernel
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: matrix
+  timeout_s: 5.0
+  function_ref: "core.linalg:left_kernel"
+
+- id: linalg.charpoly
+  summary: Characteristic polynomial
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: scalar
+  timeout_s: 5.0
+  function_ref: "core.linalg:charpoly"
+
+# ── Template entries (no new Python code needed) ──────────────────────────────
+
+- id: linalg.kernel
+  summary: Right kernel (nullspace) basis matrix
+  kind: template
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: matrix
+  timeout_s: 5.0
+  sage_template: |
+    A = Matrix({{ matrix|sage_literal }})
+    __result__ = A.kernel().basis_matrix().rows()
+
+- id: linalg.echelon_form
+  summary: Row echelon form of a matrix
+  kind: template
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: matrix
+  timeout_s: 5.0
+  sage_template: |
+    A = Matrix({{ matrix|sage_literal }})
+    __result__ = A.echelon_form().rows()
+
+- id: linalg.rank
+  summary: Rank of a matrix
+  kind: template
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: scalar
+  timeout_s: 5.0
+  sage_template: |
+    A = Matrix({{ matrix|sage_literal }})
+    __result__ = A.rank()
+
+- id: linalg.matrix_vector_product
+  summary: Matrix-vector product A * v
+  kind: template
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+      vector:
+        type: array
+        items:
+          type: number
+    required: [matrix, vector]
+  output_type: vector
+  timeout_s: 5.0
+  sage_template: |
+    A = Matrix({{ matrix|sage_literal }})
+    v = vector({{ vector|sage_literal }})
+    __result__ = list(A * v)
+
+- id: linalg.vector_matrix_product
+  summary: Vector-matrix product v * A
+  kind: template
+  input_schema:
+    type: object
+    properties:
+      vector:
+        type: array
+        items:
+          type: number
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [vector, matrix]
+  output_type: vector
+  timeout_s: 5.0
+  sage_template: |
+    v = vector({{ vector|sage_literal }})
+    A = Matrix({{ matrix|sage_literal }})
+    __result__ = list(v * A)

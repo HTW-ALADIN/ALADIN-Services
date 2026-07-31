@@ -3,42 +3,17 @@ info:
   title: SageMath Wrapper Service
   version: 0.1.0
 paths:
-  /v1/sat/solve:
-    post:
-      tags:
-      - sat
-      summary: Sat Solve
-      operationId: sat_solve_v1_sat_solve_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SatSolveRequest'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SatSolveResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /v1/linalg/determinant:
     post:
       tags:
-      - linalg
-      summary: Det Endpoint
-      operationId: det_endpoint_v1_linalg_determinant_post
+      - operations
+      summary: Linalg.Determinant
+      operationId: linalg_determinant_v1_linalg_determinant_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MatrixRequest'
+              $ref: '#/components/schemas/determinant_request'
         required: true
       responses:
         '200':
@@ -46,7 +21,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LinalgResponse'
+                title: Response Linalg Determinant V1 Linalg Determinant Post
         '422':
           description: Validation Error
           content:
@@ -56,14 +31,14 @@ paths:
   /v1/linalg/inverse:
     post:
       tags:
-      - linalg
-      summary: Inv Endpoint
-      operationId: inv_endpoint_v1_linalg_inverse_post
+      - operations
+      summary: Linalg.Inverse
+      operationId: linalg_inverse_v1_linalg_inverse_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MatrixRequest'
+              $ref: '#/components/schemas/inverse_request'
         required: true
       responses:
         '200':
@@ -71,7 +46,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LinalgResponse'
+                title: Response Linalg Inverse V1 Linalg Inverse Post
         '422':
           description: Validation Error
           content:
@@ -81,14 +56,14 @@ paths:
   /v1/linalg/eigenvalues:
     post:
       tags:
-      - linalg
-      summary: Eig Endpoint
-      operationId: eig_endpoint_v1_linalg_eigenvalues_post
+      - operations
+      summary: Linalg.Eigenvalues
+      operationId: linalg_eigenvalues_v1_linalg_eigenvalues_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MatrixRequest'
+              $ref: '#/components/schemas/eigenvalues_request'
         required: true
       responses:
         '200':
@@ -96,7 +71,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LinalgResponse'
+                title: Response Linalg Eigenvalues V1 Linalg Eigenvalues Post
         '422':
           description: Validation Error
           content:
@@ -106,14 +81,14 @@ paths:
   /v1/linalg/solve:
     post:
       tags:
-      - linalg
-      summary: Solve Endpoint
-      operationId: solve_endpoint_v1_linalg_solve_post
+      - operations
+      summary: Linalg.Solve
+      operationId: linalg_solve_v1_linalg_solve_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LinearSystemRequest'
+              $ref: '#/components/schemas/src__api__dynamic_routes__linalg__solve_request'
         required: true
       responses:
         '200':
@@ -121,7 +96,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LinalgResponse'
+                title: Response Linalg Solve V1 Linalg Solve Post
         '422':
           description: Validation Error
           content:
@@ -131,14 +106,14 @@ paths:
   /v1/linalg/qr:
     post:
       tags:
-      - linalg
-      summary: Qr Endpoint
-      operationId: qr_endpoint_v1_linalg_qr_post
+      - operations
+      summary: Linalg.Qr
+      operationId: linalg_qr_v1_linalg_qr_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MatrixRequest'
+              $ref: '#/components/schemas/qr_request'
         required: true
       responses:
         '200':
@@ -146,7 +121,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LinalgResponse'
+                title: Response Linalg Qr V1 Linalg Qr Post
         '422':
           description: Validation Error
           content:
@@ -156,14 +131,14 @@ paths:
   /v1/linalg/lu:
     post:
       tags:
-      - linalg
-      summary: Lu Endpoint
-      operationId: lu_endpoint_v1_linalg_lu_post
+      - operations
+      summary: Linalg.Lu
+      operationId: linalg_lu_v1_linalg_lu_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MatrixRequest'
+              $ref: '#/components/schemas/lu_request'
         required: true
       responses:
         '200':
@@ -171,7 +146,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LinalgResponse'
+                title: Response Linalg Lu V1 Linalg Lu Post
         '422':
           description: Validation Error
           content:
@@ -181,14 +156,14 @@ paths:
   /v1/linalg/cholesky:
     post:
       tags:
-      - linalg
-      summary: Cholesky Endpoint
-      operationId: cholesky_endpoint_v1_linalg_cholesky_post
+      - operations
+      summary: Linalg.Cholesky
+      operationId: linalg_cholesky_v1_linalg_cholesky_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MatrixRequest'
+              $ref: '#/components/schemas/cholesky_request'
         required: true
       responses:
         '200':
@@ -196,7 +171,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LinalgResponse'
+                title: Response Linalg Cholesky V1 Linalg Cholesky Post
         '422':
           description: Validation Error
           content:
@@ -206,14 +181,14 @@ paths:
   /v1/linalg/svd:
     post:
       tags:
-      - linalg
-      summary: Svd Endpoint
-      operationId: svd_endpoint_v1_linalg_svd_post
+      - operations
+      summary: Linalg.Svd
+      operationId: linalg_svd_v1_linalg_svd_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MatrixRequest'
+              $ref: '#/components/schemas/svd_request'
         required: true
       responses:
         '200':
@@ -221,7 +196,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LinalgResponse'
+                title: Response Linalg Svd V1 Linalg Svd Post
         '422':
           description: Validation Error
           content:
@@ -231,14 +206,14 @@ paths:
   /v1/linalg/matrix-exp:
     post:
       tags:
-      - linalg
-      summary: Matrix Exp Endpoint
-      operationId: matrix_exp_endpoint_v1_linalg_matrix_exp_post
+      - operations
+      summary: Linalg.Matrix-Exp
+      operationId: linalg_matrix_exp_v1_linalg_matrix_exp_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MatrixRequest'
+              $ref: '#/components/schemas/matrix-exp_request'
         required: true
       responses:
         '200':
@@ -246,7 +221,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LinalgResponse'
+                title: Response Linalg Matrix Exp V1 Linalg Matrix Exp Post
         '422':
           description: Validation Error
           content:
@@ -256,14 +231,14 @@ paths:
   /v1/linalg/right-kernel:
     post:
       tags:
-      - linalg
-      summary: Right Kernel Endpoint
-      operationId: right_kernel_endpoint_v1_linalg_right_kernel_post
+      - operations
+      summary: Linalg.Right-Kernel
+      operationId: linalg_right_kernel_v1_linalg_right_kernel_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MatrixRequest'
+              $ref: '#/components/schemas/right-kernel_request'
         required: true
       responses:
         '200':
@@ -271,7 +246,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LinalgResponse'
+                title: Response Linalg Right Kernel V1 Linalg Right Kernel Post
         '422':
           description: Validation Error
           content:
@@ -281,14 +256,14 @@ paths:
   /v1/linalg/left-kernel:
     post:
       tags:
-      - linalg
-      summary: Left Kernel Endpoint
-      operationId: left_kernel_endpoint_v1_linalg_left_kernel_post
+      - operations
+      summary: Linalg.Left-Kernel
+      operationId: linalg_left_kernel_v1_linalg_left_kernel_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MatrixRequest'
+              $ref: '#/components/schemas/left-kernel_request'
         required: true
       responses:
         '200':
@@ -296,7 +271,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LinalgResponse'
+                title: Response Linalg Left Kernel V1 Linalg Left Kernel Post
         '422':
           description: Validation Error
           content:
@@ -306,14 +281,14 @@ paths:
   /v1/linalg/charpoly:
     post:
       tags:
-      - linalg
-      summary: Charpoly Endpoint
-      operationId: charpoly_endpoint_v1_linalg_charpoly_post
+      - operations
+      summary: Linalg.Charpoly
+      operationId: linalg_charpoly_v1_linalg_charpoly_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MatrixRequest'
+              $ref: '#/components/schemas/charpoly_request'
         required: true
       responses:
         '200':
@@ -321,24 +296,24 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LinalgResponse'
+                title: Response Linalg Charpoly V1 Linalg Charpoly Post
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /v1/optimize/milp:
+  /v1/linalg/kernel:
     post:
       tags:
-      - optimize
-      summary: Milp Endpoint
-      operationId: milp_endpoint_v1_optimize_milp_post
+      - operations
+      summary: Linalg.Kernel
+      operationId: linalg_kernel_v1_linalg_kernel_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MilpRequest'
+              $ref: '#/components/schemas/kernel_request'
         required: true
       responses:
         '200':
@@ -346,24 +321,24 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MilpResponse'
+                title: Response Linalg Kernel V1 Linalg Kernel Post
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /v1/optimize/find-root:
+  /v1/linalg/echelon_form:
     post:
       tags:
-      - optimize
-      summary: Find Root Endpoint
-      operationId: find_root_endpoint_v1_optimize_find_root_post
+      - operations
+      summary: Linalg.Echelon Form
+      operationId: linalg_echelon_form_v1_linalg_echelon_form_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/FindRootRequest'
+              $ref: '#/components/schemas/echelon_form_request'
         required: true
       responses:
         '200':
@@ -371,24 +346,24 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MilpResponse'
+                title: Response Linalg Echelon Form V1 Linalg Echelon Form Post
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /v1/optimize/minimize:
+  /v1/linalg/rank:
     post:
       tags:
-      - optimize
-      summary: Minimize Endpoint
-      operationId: minimize_endpoint_v1_optimize_minimize_post
+      - operations
+      summary: Linalg.Rank
+      operationId: linalg_rank_v1_linalg_rank_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MinimizeRequest'
+              $ref: '#/components/schemas/rank_request'
         required: true
       responses:
         '200':
@@ -396,7 +371,59 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MilpResponse'
+                title: Response Linalg Rank V1 Linalg Rank Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/matrix_vector_product:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Matrix Vector Product
+      operationId: linalg_matrix_vector_product_v1_linalg_matrix_vector_product_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/matrix_vector_product_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Matrix Vector Product V1 Linalg Matrix Vector
+                  Product Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/vector_matrix_product:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Vector Matrix Product
+      operationId: linalg_vector_matrix_product_v1_linalg_vector_matrix_product_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/vector_matrix_product_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Vector Matrix Product V1 Linalg Vector Matrix
+                  Product Post
         '422':
           description: Validation Error
           content:
@@ -406,14 +433,14 @@ paths:
   /v1/maxima/evaluate:
     post:
       tags:
-      - maxima
-      summary: Maxima Evaluate
+      - operations
+      summary: Maxima.Evaluate
       operationId: maxima_evaluate_v1_maxima_evaluate_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MaximaEvaluateRequest'
+              $ref: '#/components/schemas/evaluate_request'
         required: true
       responses:
         '200':
@@ -421,7 +448,107 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MaximaEvaluateResponse'
+                title: Response Maxima Evaluate V1 Maxima Evaluate Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/optimize/milp:
+    post:
+      tags:
+      - operations
+      summary: Optimize.Milp
+      operationId: optimize_milp_v1_optimize_milp_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/milp_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Optimize Milp V1 Optimize Milp Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/optimize/find-root:
+    post:
+      tags:
+      - operations
+      summary: Optimize.Find-Root
+      operationId: optimize_find_root_v1_optimize_find_root_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/find-root_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Optimize Find Root V1 Optimize Find Root Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/optimize/minimize:
+    post:
+      tags:
+      - operations
+      summary: Optimize.Minimize
+      operationId: optimize_minimize_v1_optimize_minimize_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/minimize_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Optimize Minimize V1 Optimize Minimize Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/sat/solve:
+    post:
+      tags:
+      - operations
+      summary: Sat.Solve
+      operationId: sat_solve_v1_sat_solve_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/src__api__dynamic_routes__sat__solve_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Sat Solve V1 Sat Solve Post
         '422':
           description: Validation Error
           content:
@@ -440,52 +567,6 @@ paths:
               schema: {}
 components:
   schemas:
-    ConstraintModel:
-      properties:
-        coeffs:
-          additionalProperties:
-            type: number
-          type: object
-          title: Coeffs
-        min:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Min
-        max:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Max
-      type: object
-      required:
-      - coeffs
-      title: ConstraintModel
-    FindRootRequest:
-      properties:
-        expression:
-          type: string
-          title: Expression
-          description: Symbolic expression
-        variable:
-          type: string
-          title: Variable
-          description: Variable name
-          default: x
-        a:
-          type: number
-          title: A
-          description: Interval start
-        b:
-          type: number
-          title: B
-          description: Interval end
-      type: object
-      required:
-      - expression
-      - a
-      - b
-      title: FindRootRequest
     HTTPValidationError:
       properties:
         detail:
@@ -495,247 +576,6 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
-    LinalgResponse:
-      properties:
-        result:
-          anyOf:
-          - items: {}
-            type: array
-          - type: number
-          - type: 'null'
-          title: Result
-        error:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Error
-      type: object
-      title: LinalgResponse
-    LinearSystemRequest:
-      properties:
-        a:
-          items:
-            items:
-              type: number
-            type: array
-          type: array
-          title: A
-          description: Coefficient matrix
-        b:
-          items:
-            type: number
-          type: array
-          title: B
-          description: Right-hand side vector
-      type: object
-      required:
-      - a
-      - b
-      title: LinearSystemRequest
-    MatrixRequest:
-      properties:
-        matrix:
-          items:
-            items:
-              type: number
-            type: array
-          type: array
-          title: Matrix
-          description: Square matrix
-      type: object
-      required:
-      - matrix
-      title: MatrixRequest
-    MaximaEvaluateRequest:
-      properties:
-        expression:
-          type: string
-          title: Expression
-          description: Symbolic expression
-        operation:
-          type: string
-          title: Operation
-          description: 'Operation: simplify, differentiate, integrate, solve, limit,
-            series, laplace'
-        variable:
-          type: string
-          title: Variable
-          description: Variable name
-          default: x
-        bounds:
-          anyOf:
-          - items:
-              type: number
-            type: array
-          - type: 'null'
-          title: Bounds
-          description: 'For limit: [point]; for series: [point, order]; for integrate:
-            [a, b]'
-      type: object
-      required:
-      - expression
-      - operation
-      title: MaximaEvaluateRequest
-    MaximaEvaluateResponse:
-      properties:
-        result:
-          anyOf:
-          - type: string
-          - type: number
-          - items: {}
-            type: array
-          - type: 'null'
-          title: Result
-        error:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Error
-      type: object
-      title: MaximaEvaluateResponse
-    MilpRequest:
-      properties:
-        variables:
-          items:
-            type: string
-          type: array
-          title: Variables
-        objective:
-          additionalProperties:
-            type: number
-          type: object
-          title: Objective
-        maximize:
-          type: boolean
-          title: Maximize
-          default: true
-        constraints:
-          items:
-            $ref: '#/components/schemas/ConstraintModel'
-          type: array
-          title: Constraints
-        var_types:
-          anyOf:
-          - additionalProperties:
-              type: string
-            type: object
-          - type: 'null'
-          title: Var Types
-        solver:
-          type: string
-          title: Solver
-          description: MILP solver name
-          default: GLPK
-      type: object
-      required:
-      - variables
-      - objective
-      title: MilpRequest
-    MilpResponse:
-      properties:
-        status:
-          type: string
-          title: Status
-        objective_value:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Objective Value
-        values:
-          anyOf:
-          - additionalProperties:
-              type: number
-            type: object
-          - type: 'null'
-          title: Values
-        error:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Error
-      type: object
-      required:
-      - status
-      title: MilpResponse
-    MinimizeRequest:
-      properties:
-        expression:
-          type: string
-          title: Expression
-          description: Symbolic expression
-        variables:
-          items:
-            type: string
-          type: array
-          title: Variables
-          description: Variable names
-        x0:
-          items:
-            type: number
-          type: array
-          title: X0
-          description: Initial guess
-        objective_value:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Objective Value
-        values:
-          anyOf:
-          - additionalProperties:
-              type: number
-            type: object
-          - type: 'null'
-          title: Values
-        error:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Error
-      type: object
-      required:
-      - expression
-      - variables
-      - x0
-      title: MinimizeRequest
-    SatSolveRequest:
-      properties:
-        clauses:
-          items:
-            items:
-              type: integer
-            type: array
-          type: array
-          title: Clauses
-          description: DIMACS CNF clauses
-        solver:
-          type: string
-          title: Solver
-          description: SAT solver name
-          default: picosat
-      type: object
-      required:
-      - clauses
-      title: SatSolveRequest
-    SatSolveResponse:
-      properties:
-        satisfiable:
-          type: boolean
-          title: Satisfiable
-        assignment:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          title: Assignment
-        solver:
-          type: string
-          title: Solver
-      type: object
-      required:
-      - satisfiable
-      - solver
-      title: SatSolveResponse
     ValidationError:
       properties:
         loc:
@@ -762,3 +602,386 @@ components:
       - msg
       - type
       title: ValidationError
+    charpoly_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.charpoly_request
+    cholesky_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.cholesky_request
+    determinant_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.determinant_request
+    echelon_form_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.echelon_form_request
+    eigenvalues_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.eigenvalues_request
+    evaluate_request:
+      properties:
+        expression:
+          type: string
+          title: Expression
+        operation:
+          type: string
+          enum:
+          - simplify
+          - differentiate
+          - integrate
+          - solve
+          - limit
+          - series
+          - laplace
+          title: Operation
+          default: simplify
+        variable:
+          type: string
+          title: Variable
+          default: x
+        bounds:
+          anyOf:
+          - items:
+              type: number
+            type: array
+          - type: 'null'
+          title: Bounds
+      type: object
+      required:
+      - expression
+      title: maxima.evaluate_request
+    find-root_request:
+      properties:
+        expression:
+          type: string
+          title: Expression
+        variable:
+          type: string
+          title: Variable
+        a:
+          type: number
+          title: A
+        b:
+          type: number
+          title: B
+      type: object
+      required:
+      - expression
+      - variable
+      - a
+      - b
+      title: optimize.find-root_request
+    inverse_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.inverse_request
+    kernel_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.kernel_request
+    left-kernel_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.left-kernel_request
+    lu_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.lu_request
+    matrix-exp_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.matrix-exp_request
+    matrix_vector_product_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+        vector:
+          items:
+            type: number
+          type: array
+          title: Vector
+      type: object
+      required:
+      - matrix
+      - vector
+      title: linalg.matrix_vector_product_request
+    milp_request:
+      properties:
+        variables:
+          items:
+            type: string
+          type: array
+          title: Variables
+        objective:
+          additionalProperties:
+            type: number
+          type: object
+          title: Objective
+        maximize:
+          type: boolean
+          title: Maximize
+          default: true
+        constraints:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Constraints
+        var_types:
+          anyOf:
+          - additionalProperties:
+              type: string
+              enum:
+              - real
+              - integer
+            type: object
+          - type: 'null'
+          title: Var Types
+        solver:
+          type: string
+          enum:
+          - GLPK
+          - PPL
+          - CBC
+          - InteractiveLP
+          - CPLEX
+          - CVXOPT
+          title: Solver
+          default: GLPK
+      type: object
+      required:
+      - variables
+      - objective
+      - constraints
+      title: optimize.milp_request
+    minimize_request:
+      properties:
+        expression:
+          type: string
+          title: Expression
+        variables:
+          items:
+            type: string
+          type: array
+          title: Variables
+        x0:
+          items:
+            type: number
+          type: array
+          title: X0
+      type: object
+      required:
+      - expression
+      - variables
+      - x0
+      title: optimize.minimize_request
+    qr_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.qr_request
+    rank_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.rank_request
+    right-kernel_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.right-kernel_request
+    src__api__dynamic_routes__linalg__solve_request:
+      properties:
+        a:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: A
+        b:
+          items:
+            type: number
+          type: array
+          title: B
+      type: object
+      required:
+      - a
+      - b
+      title: linalg.solve_request
+    src__api__dynamic_routes__sat__solve_request:
+      properties:
+        clauses:
+          items:
+            items:
+              type: integer
+            type: array
+          type: array
+          title: Clauses
+        solver:
+          type: string
+          enum:
+          - picosat
+          - cryptominisat
+          - glucose
+          title: Solver
+          default: picosat
+      type: object
+      required:
+      - clauses
+      title: sat.solve_request
+    svd_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.svd_request
+    vector_matrix_product_request:
+      properties:
+        vector:
+          items:
+            type: number
+          type: array
+          title: Vector
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - vector
+      - matrix
+      title: linalg.vector_matrix_product_request

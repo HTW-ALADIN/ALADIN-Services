@@ -1,14 +1,17 @@
+import os
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from src.api.routers import linalg, maxima, optimize, sat
+from src.api.dynamic_routes import register_routes
+from src.registry.loader import load_registry
 
 app = FastAPI(title="SageMath Wrapper Service")
 
-app.include_router(sat.router)
-app.include_router(linalg.router)
-app.include_router(optimize.router)
-app.include_router(maxima.router)
+# Load all registry YAMLs and register routes dynamically
+_registry_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "registry")
+_operations = load_registry(_registry_path)
+register_routes(app, _operations)
 
 
 @app.exception_handler(ValueError)

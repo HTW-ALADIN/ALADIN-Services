@@ -6,7 +6,9 @@ import sys
 from pathlib import Path
 
 # Ensure src/ is importable when run as a script
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+_project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_project_root / "src"))
+sys.path.insert(0, str(_project_root))
 
 import yaml
 from src.api.main import app

@@ -44,7 +44,19 @@ def run_sandboxed(fn, args, timeout_s=5.0):
     os.waitpid(pid, 0)
     parent_conn.close()
     return {"ok": False, "result": None, "error": "timeout"}
-    os.kill(pid, signal.SIGKILL)
-    os.waitpid(pid, 0)
-    parent_conn.close()
-    return {"ok": False, "result": None, "error": "timeout"}
+
+
+def run_sandboxed_code(code: str, timeout_s: float = 5.0) -> dict:
+    """Execute *code* in a sandboxed subprocess and extract ``__result__``.
+
+    The code must set a variable ``__result__`` with the return value.
+    Raises ``ValueError`` if ``__result__`` is not set.
+    """
+    def _run():
+        ns: dict = {}
+        exec(code, ns)  # noqa: S102
+        if "__result__" not in ns:
+            raise ValueError("__result__ not set by template")
+        return ns["__result__"]
+
+    return run_sandboxed(_run, {}, timeout_s=timeout_s)

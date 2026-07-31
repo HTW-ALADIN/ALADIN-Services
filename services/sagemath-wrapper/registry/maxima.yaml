@@ -1,0 +1,25 @@
+- id: maxima.evaluate
+  summary: Evaluate a symbolic expression
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      expression:
+        type: string
+      operation:
+        type: string
+        enum: [simplify, differentiate, integrate, solve, limit, series, laplace]
+        default: simplify
+      variable:
+        type: string
+        default: x
+      bounds:
+        type: array
+        items:
+          type: number
+        minItems: 2
+        maxItems: 2
+    required: [expression]
+  output_type: object
+  timeout_s: 3.0
+  function_ref: "core.maxima:evaluate"

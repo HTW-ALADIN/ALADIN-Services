@@ -1,0 +1,74 @@
+- id: optimize.milp
+  summary: Solve a mixed-integer linear program
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      variables:
+        type: array
+        items:
+          type: string
+      objective:
+        type: object
+        additionalProperties:
+          type: number
+      maximize:
+        type: boolean
+        default: true
+      constraints:
+        type: array
+        items:
+          type: object
+      var_types:
+        type: object
+        additionalProperties:
+          type: string
+          enum: [real, integer]
+      solver:
+        type: string
+        enum: [GLPK, PPL, CBC, InteractiveLP, CPLEX, CVXOPT]
+        default: GLPK
+    required: [variables, objective, constraints]
+  output_type: object
+  timeout_s: 10.0
+  function_ref: "core.optimize:solve_milp"
+
+- id: optimize.find-root
+  summary: Find a root of an expression in an interval
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      expression:
+        type: string
+      variable:
+        type: string
+      a:
+        type: number
+      b:
+        type: number
+    required: [expression, variable, a, b]
+  output_type: scalar
+  timeout_s: 5.0
+  function_ref: "core.optimize:find_root"
+
+- id: optimize.minimize
+  summary: Unconstrained minimization of an expression
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      expression:
+        type: string
+      variables:
+        type: array
+        items:
+          type: string
+      x0:
+        type: array
+        items:
+          type: number
+    required: [expression, variables, x0]
+  output_type: vector
+  timeout_s: 10.0
+  function_ref: "core.optimize:minimize"

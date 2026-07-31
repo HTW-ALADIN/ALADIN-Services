@@ -75,7 +75,7 @@ jobs:
   build:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    needs: generate-openapi
+    needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     permissions:
       contents: read
@@ -103,3 +103,28 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  docker-smoke-test:
+    name: Docker Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t sagemath-wrapper:test services/sagemath-wrapper
+      - name: Start container
+        run: docker run -d --name sagemath-smoke -p 8000:8000 sagemath-wrapper:test
+      - name: Wait for health endpoint
+        run: |
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8000/healthz 2>/dev/null | grep -q '"status":"ok"'; then
+              echo "Container is healthy"
+              exit 0
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+          echo "Container did not become healthy"
+          exit 1
+      - name: Cleanup
+        if: always()
+        run: docker rm -f sagemath-smoke || true
