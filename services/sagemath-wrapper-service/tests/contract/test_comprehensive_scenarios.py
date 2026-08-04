@@ -368,6 +368,7 @@ class TestCrossCutting:
                   "/v1/linalg/kernel", "/v1/linalg/echelon_form", "/v1/linalg/rank",
                   "/v1/linalg/matrix_vector_product", "/v1/linalg/vector_matrix_product",
                   "/v1/linalg/eigenvectors_left", "/v1/linalg/eigenvectors_right",
+                  "/v1/linalg/evaluate",
                   "/v1/optimize/milp", "/v1/optimize/find-root", "/v1/optimize/minimize",
                   "/v1/maxima/evaluate", "/healthz"]:
             assert p in paths, f"Fehlt: {p}"
@@ -421,3 +422,16 @@ class TestTemplateEndpoints:
         r = client.post("/v1/linalg/matrix_vector_product", json={
             "matrix": [[1, 2], [3, 4]], "vector": [1, 1]})
         assert r.json() == [3.0, 7.0]
+
+    def test_evaluate_expression(self, monkeypatch):
+        """linalg.evaluate with named matrices and an expression."""
+        from src.registry import dispatcher as disp
+        mock_result = [[-2.0, 1.0], [1.5, -0.5]]
+        monkeypatch.setattr(disp, "run_code",
+                            lambda c, timeout_s=5.0, prepend_sage_import=True: {"ok": True, "result": mock_result, "error": None})
+        r = client.post("/v1/linalg/evaluate", json={
+            "matrices": {"A": [[1, 2], [3, 4]]},
+            "expression": "A.inverse()"
+        })
+        assert r.status_code == 200
+        assert r.json() == mock_result

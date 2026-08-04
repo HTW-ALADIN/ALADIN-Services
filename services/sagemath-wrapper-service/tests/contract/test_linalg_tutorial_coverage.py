@@ -152,6 +152,66 @@ class TestLinalgTutorialCoverage:
         assert 4 in eigvals, f"expected eigenvalue 4 in {result}"
         assert -2 in eigvals, f"expected eigenvalue -2 in {result}"
 
+    @needs_sage
+    def test_evaluate_matrix_chain_expression(self):
+        """Evaluate A*B*C*A^4 - 5*(B-C) + A.inverse() with named matrices."""
+        A_val = [[1, 2], [3, 4]]
+        B_val = [[5, 6], [7, 8]]
+        C_val = [[1, -1], [0, 2]]
+        resp = client.post("/v1/linalg/evaluate", json={
+            "matrices": {"A": A_val, "B": B_val, "C": C_val},
+            "expression": "A * B * C * A^4 - 5*(B - C) + A.inverse()",
+        })
+        assert resp.status_code == 200, resp.text
+        result = resp.json()
+        if isinstance(result, dict) and "result" in result:
+            result = result["result"]
+        assert isinstance(result, list) and len(result) > 0, f"got {type(result)}: {result}"
+        assert all(isinstance(row, list) for row in result), "expected matrix (list of lists)"
+
+    @needs_sage
+    def test_evaluate_with_vectors(self):
+        """Evaluate a matrix-vector expression with named vectors."""
+        resp = client.post("/v1/linalg/evaluate", json={
+            "matrices": {"A": [[1, 2, 3], [3, 2, 1], [1, 1, 1]]},
+            "vectors": {"w": [1, 1, -4]},
+            "expression": "w * A",
+        })
+        assert resp.status_code == 200, resp.text
+        result = resp.json()
+        if isinstance(result, dict) and "result" in result:
+            result = result["result"]
+        assert result == [0, 0, 0], f"got {result}"
+
+    def test_evaluate_endpoint_in_openapi(self):
+        """linalg.evaluate appears in OpenAPI paths."""
+        resp = client.get("/openapi.json")
+        assert resp.status_code == 200
+        paths = resp.json()["paths"]
+        assert "/v1/linalg/evaluate" in paths, f"missing evaluate path in {list(paths)}"
+        # The expression field should be typed as string
+        post_op = paths["/v1/linalg/evaluate"]["post"]
+        ref = post_op["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+        schema_name = ref.rsplit("/", 1)[-1]
+        schema = resp.json()["components"]["schemas"][schema_name]
+        assert "expression" in schema.get("properties", {}), "expression field missing"
+        assert schema["properties"]["expression"]["type"] == "string", "expression not string"
+
+    def test_evaluate_missing_expression_is_422(self):
+        """evaluate without expression returns 422."""
+        resp = client.post("/v1/linalg/evaluate", json={"matrices": {"A": [[1, 2], [3, 4]]}})
+        assert resp.status_code == 422, resp.text
+
+    def test_evaluate_expression_only_is_accepted(self):
+        """evaluate with only expression (no matrices/vectors) is accepted."""
+        # This is a valid request — the expression may be a literal like 42
+        # We mock run_code to avoid actual SageMath execution
+        from unittest.mock import patch
+        from src.registry import dispatcher as disp
+        with patch.object(disp, "run_code", return_value={"ok": True, "result": 42, "error": None}):
+            resp = client.post("/v1/linalg/evaluate", json={"expression": "42"})
+        assert resp.status_code == 200, resp.text
+
     def test_new_entries_have_typed_openapi_schema(self):
         """All new paths have concrete types in OpenAPI, not generic blobs."""
         resp = client.get("/openapi.json")
@@ -166,6 +226,7 @@ class TestLinalgTutorialCoverage:
             "/v1/linalg/vector_matrix_product",
             "/v1/linalg/eigenvectors_left",
             "/v1/linalg/eigenvectors_right",
+            "/v1/linalg/evaluate",
         ]
 
         for path in new_paths:

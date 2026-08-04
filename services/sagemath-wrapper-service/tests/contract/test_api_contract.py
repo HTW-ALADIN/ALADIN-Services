@@ -141,6 +141,7 @@ def test_openapi_json_is_served_and_valid():
     assert "/v1/linalg/vector_matrix_product" in paths
     assert "/v1/linalg/eigenvectors_left" in paths
     assert "/v1/linalg/eigenvectors_right" in paths
+    assert "/v1/linalg/evaluate" in paths
     assert "/v1/optimize/milp" in paths
     assert "/v1/optimize/find-root" in paths
     assert "/v1/optimize/minimize" in paths

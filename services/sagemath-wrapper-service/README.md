@@ -6,7 +6,7 @@ resource-limited SageMath process.
 
 ## Included algorithms
 
-The service currently exposes 24 operations. Each registry ID maps to
+The service currently exposes 25 operations. Each registry ID maps to
 `POST /v1/<id-with-dots-replaced-by-slashes>`; `/docs` contains the exact
 request schema.
 
@@ -33,6 +33,7 @@ request schema.
 | `linalg.rank` | Matrix rank | scalar |
 | `linalg.matrix_vector_product` | Matrix-vector product | vector |
 | `linalg.vector_matrix_product` | Vector-matrix product | vector |
+| `linalg.evaluate` | Evaluate a SageMath matrix expression | matrix, vector, or scalar |
 
 ### Optimisation, symbolic mathematics and SAT
 
@@ -51,7 +52,7 @@ The following SageMath APIs are currently exposed through the HTTP/CLI interface
 | Area | SageMath classes / methods used | Endpoints |
 |------|-------------------------------|-----------|
 | **SAT solving** | `sage.sat.solvers.dimacs.{PicoSAT, CryptoMiniSat, GlucoseSyrup}` — `.add_clause()`, `solver_obj()` | 1 (`/v1/sat/solve`) |
-| **Linear algebra** | `sage.all.matrix(RDF, ...)`, `Matrix(...)`, `vector(RDF, ...)`, `vector(...)` — `.determinant()`, `.inverse()`, `.eigenvalues()`, `.eigenvectors_left()`, `.eigenvectors_right()`, `.solve_right()`, `.QR()`, `.LU()`, `.cholesky()`, `.SVD()`, `.exp()`, `.right_kernel()`, `.left_kernel()`, `.charpoly()`, `.kernel()`, `.echelon_form()`, `.rank()` | 19 (`determinant`, `inverse`, `eigenvalues`, `eigenvectors_left`, `eigenvectors_right`, `solve`, `qr`, `lu`, `cholesky`, `svd`, `matrix-exp`, `right-kernel`, `left-kernel`, `charpoly`, `kernel`, `echelon_form`, `rank`, `matrix_vector_product`, `vector_matrix_product`) |
+| **Linear algebra** | `sage.all.matrix(RDF, ...)`, `Matrix(...)`, `vector(RDF, ...)`, `vector(...)` — `.determinant()`, `.inverse()`, `.eigenvalues()`, `.eigenvectors_left()`, `.eigenvectors_right()`, `.solve_right()`, `.QR()`, `.LU()`, `.cholesky()`, `.SVD()`, `.exp()`, `.right_kernel()`, `.left_kernel()`, `.charpoly()`, `.kernel()`, `.echelon_form()`, `.rank()`, `eval()` | 20 (`determinant`, `inverse`, `eigenvalues`, `eigenvectors_left`, `eigenvectors_right`, `solve`, `qr`, `lu`, `cholesky`, `svd`, `matrix-exp`, `right-kernel`, `left-kernel`, `charpoly`, `kernel`, `echelon_form`, `rank`, `matrix_vector_product`, `vector_matrix_product`, `evaluate`) |
 | **Mixed-integer linear programming** | `sage.numerical.mip.MixedIntegerLinearProgram` — `.new_variable()`, `.set_objective()`, `.add_constraint()`, `.solve()`, `.get_values()`, `.set_integer()` | 1 (`/v1/optimize/milp`) |
 | **Symbolic calculus** | `sage.all.SR()`, `var()` — `.simplify_full()`, `.diff()`, `.integrate()` (indefinite + definite) | 1 (`/v1/maxima/evaluate` with 3 operations) |
 
@@ -95,6 +96,16 @@ curl -X POST http://localhost:8000/v1/linalg/determinant \
 curl -X POST http://localhost:8000/v1/sat/solve \
   -H 'Content-Type: application/json' \
   -d '{"clauses": [[1, 2], [-1, 2], [1, -2]]}'
+```
+
+```sh
+# Evaluate a SageMath matrix expression with named matrices and vectors
+curl -X POST http://localhost:8000/v1/linalg/evaluate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "matrices": {"A": [[1,2],[3,4]], "B": [[5,6],[7,8]], "C": [[1,-1],[0,2]]},
+    "expression": "A * B * C * A^4 - 5*(B - C) + A.inverse()"
+  }'
 ```
 
 The authoritative API documentation is served by the running service:

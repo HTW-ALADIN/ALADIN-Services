@@ -366,3 +366,51 @@
             "eigenvectors": [list(v) for v in eigvecs],
             "multiplicity": mult
         })
+
+- id: linalg.evaluate
+  summary: Evaluate a SageMath matrix expression with named matrices and vectors
+  kind: template
+  input_schema:
+    type: object
+    properties:
+      matrices:
+        type: object
+        description: "Named matrices as {name: [[row], ...]}"
+        additionalProperties:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+      vectors:
+        type: object
+        description: "Named vectors as {name: [...]}"
+        additionalProperties:
+          type: array
+          items:
+            type: number
+      expression:
+        type: string
+        description: "SageMath expression using the named matrices/vectors"
+    required: [expression]
+  output_type: object
+  timeout_s: 30.0
+  sage_template: |
+    {% if matrices is defined %}
+    {% for name, data in matrices.items() %}
+    {{ name }} = Matrix({{ data|sage_literal }})
+    {% endfor %}
+    {% endif %}
+    {% if vectors is defined %}
+    {% for name, data in vectors.items() %}
+    {{ name }} = vector({{ data|sage_literal }})
+    {% endfor %}
+    {% endif %}
+    _result = eval({{ expression|sage_literal }})
+    try:
+        __result__ = [list(row) for row in _result.rows()]
+    except AttributeError:
+        try:
+            __result__ = list(_result)
+        except TypeError:
+            __result__ = _result
