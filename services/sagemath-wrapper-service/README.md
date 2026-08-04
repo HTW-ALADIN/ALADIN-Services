@@ -6,7 +6,7 @@ resource-limited SageMath process.
 
 ## Included algorithms
 
-The service currently exposes 22 operations. Each registry ID maps to
+The service currently exposes 24 operations. Each registry ID maps to
 `POST /v1/<id-with-dots-replaced-by-slashes>`; `/docs` contains the exact
 request schema.
 
@@ -16,7 +16,9 @@ request schema.
 | --- | --- | --- |
 | `linalg.determinant` | Determinant of a square matrix | scalar |
 | `linalg.inverse` | Inverse of a square matrix | matrix |
-| `linalg.eigenvalues` | Eigenvalues of a square matrix | vector |
+| `linalg.eigenvalues` | Eigenvalues (exact, supports complex numbers) | vector (complex as `[real, imag]`) |
+| `linalg.eigenvectors_left` | Left eigenvectors with eigenvalues & multiplicities | `[{eigenvalue, eigenvectors, multiplicity}]` |
+| `linalg.eigenvectors_right` | Right eigenvectors with eigenvalues & multiplicities | `[{eigenvalue, eigenvectors, multiplicity}]` |
 | `linalg.solve` | Solve `A · x = b` | vector |
 | `linalg.qr` | QR decomposition | `{Q, R}` |
 | `linalg.lu` | LU decomposition with pivoting | `{P, L, U}` |
@@ -49,7 +51,7 @@ The following SageMath APIs are currently exposed through the HTTP/CLI interface
 | Area | SageMath classes / methods used | Endpoints |
 |------|-------------------------------|-----------|
 | **SAT solving** | `sage.sat.solvers.dimacs.{PicoSAT, CryptoMiniSat, GlucoseSyrup}` — `.add_clause()`, `solver_obj()` | 1 (`/v1/sat/solve`) |
-| **Linear algebra** | `sage.all.matrix(RDF, ...)`, `vector(RDF, ...)` — `.determinant()`, `.inverse()`, `.eigenvalues()`, `.solve_right()`, `.QR()`, `.LU()`, `.cholesky()`, `.SVD()`, `.exp()`, `.right_kernel()`, `.left_kernel()`, `.charpoly()` | 13 (`determinant`, `inverse`, `eigenvalues`, `solve`, `qr`, `lu`, `cholesky`, `svd`, `matrix-exp`, `right-kernel`, `left-kernel`, `charpoly`) |
+| **Linear algebra** | `sage.all.matrix(RDF, ...)`, `Matrix(...)`, `vector(RDF, ...)`, `vector(...)` — `.determinant()`, `.inverse()`, `.eigenvalues()`, `.eigenvectors_left()`, `.eigenvectors_right()`, `.solve_right()`, `.QR()`, `.LU()`, `.cholesky()`, `.SVD()`, `.exp()`, `.right_kernel()`, `.left_kernel()`, `.charpoly()`, `.kernel()`, `.echelon_form()`, `.rank()` | 19 (`determinant`, `inverse`, `eigenvalues`, `eigenvectors_left`, `eigenvectors_right`, `solve`, `qr`, `lu`, `cholesky`, `svd`, `matrix-exp`, `right-kernel`, `left-kernel`, `charpoly`, `kernel`, `echelon_form`, `rank`, `matrix_vector_product`, `vector_matrix_product`) |
 | **Mixed-integer linear programming** | `sage.numerical.mip.MixedIntegerLinearProgram` — `.new_variable()`, `.set_objective()`, `.add_constraint()`, `.solve()`, `.get_values()`, `.set_integer()` | 1 (`/v1/optimize/milp`) |
 | **Symbolic calculus** | `sage.all.SR()`, `var()` — `.simplify_full()`, `.diff()`, `.integrate()` (indefinite + definite) | 1 (`/v1/maxima/evaluate` with 3 operations) |
 

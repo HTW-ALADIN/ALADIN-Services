@@ -4,7 +4,6 @@ from src.core.linalg import (
     charpoly,
     cholesky,
     determinant,
-    eigenvalues,
     inverse,
     left_kernel,
     lu,
@@ -58,12 +57,6 @@ def test_inverse_identity_roundtrip():
 def test_inverse_singular_matrix_returns_error():
     with pytest.raises(ValueError, match=r"(?i)singular|invertible"):
         inverse([[1, 2], [2, 4]])
-
-
-@needs_sage
-def test_eigenvalues_diagonal_matrix():
-    result = eigenvalues([[2, 0], [0, 3]])
-    assert sorted(result) == [2, 3]
 
 
 @needs_sage

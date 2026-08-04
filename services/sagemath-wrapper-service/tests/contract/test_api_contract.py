@@ -134,6 +134,13 @@ def test_openapi_json_is_served_and_valid():
     assert "/v1/linalg/right-kernel" in paths
     assert "/v1/linalg/left-kernel" in paths
     assert "/v1/linalg/charpoly" in paths
+    assert "/v1/linalg/kernel" in paths
+    assert "/v1/linalg/echelon_form" in paths
+    assert "/v1/linalg/rank" in paths
+    assert "/v1/linalg/matrix_vector_product" in paths
+    assert "/v1/linalg/vector_matrix_product" in paths
+    assert "/v1/linalg/eigenvectors_left" in paths
+    assert "/v1/linalg/eigenvectors_right" in paths
     assert "/v1/optimize/milp" in paths
     assert "/v1/optimize/find-root" in paths
     assert "/v1/optimize/minimize" in paths

@@ -33,8 +33,8 @@
   function_ref: "src.core.linalg:inverse"
 
 - id: linalg.eigenvalues
-  summary: Eigenvalues of a square matrix
-  kind: function
+  summary: Eigenvalues of a square matrix (exact, supports complex values)
+  kind: template
   input_schema:
     type: object
     properties:
@@ -46,8 +46,10 @@
             type: number
     required: [matrix]
   output_type: vector
-  timeout_s: 5.0
-  function_ref: "src.core.linalg:eigenvalues"
+  timeout_s: 10.0
+  sage_template: |
+    A = Matrix({{ matrix|sage_literal }})
+    __result__ = list(A.eigenvalues())
 
 - id: linalg.solve
   summary: Solve a linear system A·x = b
@@ -312,3 +314,55 @@
     v = vector({{ vector|sage_literal }})
     A = Matrix({{ matrix|sage_literal }})
     __result__ = list(v * A)
+
+- id: linalg.eigenvectors_left
+  summary: Left eigenvectors with eigenvalues and multiplicities
+  kind: template
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: object
+  timeout_s: 10.0
+  sage_template: |
+    A = Matrix({{ matrix|sage_literal }})
+    raw = A.eigenvectors_left()
+    __result__ = []
+    for eigval, eigvecs, mult in raw:
+        __result__.append({
+            "eigenvalue": eigval,
+            "eigenvectors": [list(v) for v in eigvecs],
+            "multiplicity": mult
+        })
+
+- id: linalg.eigenvectors_right
+  summary: Right eigenvectors with eigenvalues and multiplicities
+  kind: template
+  input_schema:
+    type: object
+    properties:
+      matrix:
+        type: array
+        items:
+          type: array
+          items:
+            type: number
+    required: [matrix]
+  output_type: object
+  timeout_s: 10.0
+  sage_template: |
+    A = Matrix({{ matrix|sage_literal }})
+    raw = A.eigenvectors_right()
+    __result__ = []
+    for eigval, eigvecs, mult in raw:
+        __result__.append({
+            "eigenvalue": eigval,
+            "eigenvectors": [list(v) for v in eigvecs],
+            "multiplicity": mult
+        })

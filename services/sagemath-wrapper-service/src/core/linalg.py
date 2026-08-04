@@ -42,12 +42,6 @@ def inverse(matrix):
     return _to_rows(inv)
 
 
-def eigenvalues(matrix):
-    _validate_square(matrix, "eigenvalues")
-    m = _sage_matrix(matrix)
-    return [float(v) for v in m.eigenvalues()]
-
-
 def solve_linear_system(a, b):
     _validate_square(a, "solve_linear_system")
     if len(a) != len(b):

@@ -108,8 +108,52 @@ class TestLinalgTutorialCoverage:
             result = result["result"]
         assert result == 1, f"expected rank 1, got {result}"
 
+    @needs_sage
+    def test_eigenvalues_complex_supported(self):
+        """Eigenvalues of [[0,4],[-1,0]] = [-2*I, 2*I] — complex output."""
+        M = [[0, 4], [-1, 0]]
+        resp = client.post("/v1/linalg/eigenvalues", json={"matrix": M})
+        assert resp.status_code == 200, resp.text
+        result = resp.json()
+        if isinstance(result, dict) and "result" in result:
+            result = result["result"]
+        assert len(result) == 2
+        # Each eigenvalue is [real, imag]
+        has_neg_2i = any(
+            abs(v[0]) < 1e-9 and abs(v[1] - (-2)) < 1e-9
+            if isinstance(v, list) else False
+            for v in result
+        )
+        has_2i = any(
+            abs(v[0]) < 1e-9 and abs(v[1] - 2) < 1e-9
+            if isinstance(v, list) else False
+            for v in result
+        )
+        assert has_neg_2i, f"expected -2i in {result}"
+        assert has_2i, f"expected 2i in {result}"
+
+    @needs_sage
+    def test_eigenvectors_left_matches_tutorial_example(self):
+        """eigenvectors_left of [[1,3],[3,1]] = [(4,[(1,1)],1), (-2,[(1,-1)],1)]."""
+        B = [[1, 3], [3, 1]]
+        resp = client.post("/v1/linalg/eigenvectors_left", json={"matrix": B})
+        assert resp.status_code == 200, resp.text
+        result = resp.json()
+        if isinstance(result, dict) and "result" in result:
+            result = result["result"]
+        assert isinstance(result, list) and len(result) == 2, f"got {result}"
+        # result is [{eigenvalue, eigenvectors, multiplicity}, ...]
+        eigvals = set()
+        for entry in result:
+            assert "eigenvalue" in entry
+            assert "eigenvectors" in entry
+            assert "multiplicity" in entry
+            eigvals.add(entry["eigenvalue"])
+        assert 4 in eigvals, f"expected eigenvalue 4 in {result}"
+        assert -2 in eigvals, f"expected eigenvalue -2 in {result}"
+
     def test_new_entries_have_typed_openapi_schema(self):
-        """All 5 new paths have concrete types in OpenAPI, not generic blobs."""
+        """All new paths have concrete types in OpenAPI, not generic blobs."""
         resp = client.get("/openapi.json")
         assert resp.status_code == 200
         paths = resp.json()["paths"]
@@ -120,6 +164,8 @@ class TestLinalgTutorialCoverage:
             "/v1/linalg/rank",
             "/v1/linalg/matrix_vector_product",
             "/v1/linalg/vector_matrix_product",
+            "/v1/linalg/eigenvectors_left",
+            "/v1/linalg/eigenvectors_right",
         ]
 
         for path in new_paths:

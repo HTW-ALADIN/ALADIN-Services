@@ -40,6 +40,16 @@ def _sage_to_json(obj):
         return [_sage_to_json(v) for v in obj]
     if isinstance(obj, dict):
         return {k: _sage_to_json(v) for k, v in obj.items()}
+    # Complex numbers → [real, imag] pair
+    try:
+        if isinstance(obj, complex):
+            return [obj.real, obj.imag]
+        # SageMath complex types (e.g. sage.rings.complex_number.ComplexNumber)
+        cr = float(obj.real())
+        ci = float(obj.imag())
+        return [cr, ci]
+    except (TypeError, AttributeError):
+        pass
     try:
         return int(obj)
     except (TypeError, ValueError):
