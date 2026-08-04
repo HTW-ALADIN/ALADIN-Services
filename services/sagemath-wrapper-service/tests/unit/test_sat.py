@@ -67,20 +67,3 @@ def test_invalid_variable_index_zero_raises():
 def test_unknown_solver_name_raises():
     with pytest.raises(ValueError, match=r"(?i)solver|picosat|supported"):
         solve_cnf([[1]], solver="not-a-real-solver")
-
-
-@pytest.mark.integration
-def test_result_runs_inside_sandbox(monkeypatch):
-    called = False
-
-    def mock_run_sandboxed(fn, args, timeout_s=5.0):
-        nonlocal called
-        called = True
-        return {"ok": True, "result": {"satisfiable": True, "assignment": {"1": True}, "solver": "picosat"}, "error": None}
-
-    import src.sandbox.executor as exec_mod
-    monkeypatch.setattr(exec_mod, "run_sandboxed", mock_run_sandboxed)
-
-    result = solve_cnf([[1]])
-    assert called, "solve_cnf hat run_sandboxed nicht aufgerufen"
-    assert result["satisfiable"] is True

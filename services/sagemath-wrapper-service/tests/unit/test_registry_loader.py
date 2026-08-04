@@ -20,7 +20,7 @@ SIMPLE_FUNCTION_YAML = textwrap.dedent("""\
         required: [clauses]
       output_type: sat_result
       timeout_s: 5.0
-      function_ref: "core.sat:solve_cnf"
+      function_ref: "src.core.sat:solve_cnf"
 """)
 
 SIMPLE_TEMPLATE_YAML = textwrap.dedent("""\
@@ -65,7 +65,7 @@ class TestLoadRegistry:
         fn = specs[0] if specs[0].kind == "function" else specs[1]
         assert fn.id == "sat.solve"
         assert fn.kind == "function"
-        assert fn.function_ref == "core.sat:solve_cnf"
+        assert fn.function_ref == "src.core.sat:solve_cnf"
         assert fn.sage_template is None
         assert fn.timeout_s == 5.0
         assert fn.output_type == "sat_result"
@@ -133,7 +133,7 @@ class TestLoadRegistry:
               input_schema: {type: object}
               output_type: scalar
               timeout_s: 1.0
-              function_ref: "core.does_not_exist:foo"
+              function_ref: "src.core.does_not_exist:foo"
         """)
         (registry_dir / "bad.yaml").write_text(bad)
 
@@ -151,7 +151,7 @@ class TestLoadRegistry:
               input_schema: {type: "not-a-real-type"}
               output_type: scalar
               timeout_s: 1.0
-              function_ref: "core.sat:solve_cnf"
+              function_ref: "src.core.sat:solve_cnf"
         """)
         (registry_dir / "bad.yaml").write_text(bad)
 
@@ -169,7 +169,7 @@ class TestLoadRegistry:
               input_schema: {type: object}
               output_type: "not-a-known-type"
               timeout_s: 1.0
-              function_ref: "core.sat:solve_cnf"
+              function_ref: "src.core.sat:solve_cnf"
         """)
         (registry_dir / "bad.yaml").write_text(bad)
 
@@ -188,7 +188,7 @@ class TestLoadRegistry:
               input_schema: {type: object, properties: {matrix: {type: array}}, required: [matrix]}
               output_type: scalar
               timeout_s: 5.0
-              function_ref: "core.linalg:determinant"
+              function_ref: "src.core.linalg:determinant"
         """))
         (registry_dir / "optimize.yaml").write_text(textwrap.dedent("""\
             - id: optimize.milp
@@ -197,7 +197,7 @@ class TestLoadRegistry:
               input_schema: {type: object}
               output_type: object
               timeout_s: 10.0
-              function_ref: "core.optimize:solve_milp"
+              function_ref: "src.core.optimize:solve_milp"
         """))
 
         specs = load_registry(str(registry_dir))

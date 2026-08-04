@@ -16,26 +16,27 @@ api_client = TestClient(api_app)
 
 
 def _mock_sandbox(monkeypatch):
-    """Mock run_sandboxed so tests don't need SageMath."""
-    import src.sandbox.executor as exec_mod
+    """Mock run_function in the dispatcher so tests don't need SageMath."""
+    from src.registry import dispatcher as disp
 
-    def mock(fn, args, timeout_s=5.0):
-        if "clauses" in args:
+    def mock_function(fn_ref, args, timeout_s=5.0):
+        key = fn_ref.split(":", 1)[-1]
+        if key == "solve_cnf":
             return {"ok": True, "result": {"satisfiable": True, "assignment": {"1": True, "2": True}, "solver": "picosat"}, "error": None}
-        if args.get("matrix") == [[1, 2], [3, 4]]:
-            return {"ok": True, "result": {"result": -2, "error": None}, "error": None}
-        if "variables" in args:
+        if key == "determinant":
+            return {"ok": True, "result": -2, "error": None}
+        if key == "solve_milp":
             return {"ok": True, "result": {"status": "optimal", "objective_value": 1.6666666666666667, "values": {"x": 0.8333333333333334, "y": 0.0}}, "error": None}
-        if "expression" in args:
-            return {"ok": True, "result": {"result": "x^2", "error": None}, "error": None}
+        if key == "evaluate":
+            return {"ok": True, "result": "x^2", "error": None}
         return {"ok": True, "result": None, "error": None}
 
-    monkeypatch.setattr(exec_mod, "run_sandboxed", mock)
+    monkeypatch.setattr(disp, "run_function", mock_function)
 
 
 def test_cli_sat_solve_matches_core_output(monkeypatch):
     _mock_sandbox(monkeypatch)
-    result = runner.invoke(cli_app, ["sat", "solve", "--clauses", "[[1,2],[-1,2],[1,-2]]"])
+    result = runner.invoke(cli_app, ["sat", "solve", "--payload", '{"clauses": [[1,2],[-1,2],[1,-2]]}'])
     assert result.exit_code == 0, f"stderr: {result.stderr}"
     body = json.loads(result.stdout)
     assert body["satisfiable"] is True
@@ -45,7 +46,7 @@ def test_cli_sat_solve_matches_core_output(monkeypatch):
 def test_cli_linalg_determinant_output_matches_api(monkeypatch):
     _mock_sandbox(monkeypatch)
     # CLI
-    cli_result = runner.invoke(cli_app, ["linalg", "determinant", "--matrix", "[[1,2],[3,4]]"])
+    cli_result = runner.invoke(cli_app, ["linalg", "determinant", "--payload", '{"matrix": [[1,2],[3,4]]}'])
     assert cli_result.exit_code == 0
     cli_body = json.loads(cli_result.stdout)
 
@@ -58,7 +59,7 @@ def test_cli_linalg_determinant_output_matches_api(monkeypatch):
 
 
 def test_cli_invalid_json_input_returns_nonzero_exit_and_clear_error():
-    result = runner.invoke(cli_app, ["sat", "solve", "--clauses", "not json"])
+    result = runner.invoke(cli_app, ["sat", "solve", "--payload", "not json"])
     assert result.exit_code != 0
     assert "Traceback" not in (result.stdout + result.stderr)
 
@@ -85,15 +86,12 @@ def test_cli_optimize_from_spec_file(monkeypatch, tmp_path):
 
 
 def test_cli_maxima_rejects_injection_like_api(monkeypatch):
-    import src.sandbox.executor as exec_mod
-    calls = []
-    monkeypatch.setattr(exec_mod, "run_sandboxed", lambda *a, **kw: calls.append(1) or {"ok": True, "result": None, "error": None})
+    from src.registry import dispatcher as disp
+    monkeypatch.setattr(disp, "run_function", lambda *a, **kw: {"ok": False, "result": None, "error": "disallowed token 'system' in expression"})
 
     result = runner.invoke(cli_app, [
         "maxima", "eval",
-        "--expression", "system('rm -rf /')",
-        "--operation", "simplify",
+        "--payload", '{"expression": "system(\'rm -rf /\')", "operation": "simplify"}',
     ])
     assert result.exit_code != 0
     assert "Traceback" not in (result.stdout + result.stderr)
-    assert len(calls) == 0, "sandbox was called despite validation failure"

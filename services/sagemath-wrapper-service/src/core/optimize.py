@@ -1,6 +1,8 @@
-"""Optimization routines via SageMath, sandboxed via run_sandboxed."""
+"""Optimization routines via SageMath — pure functions, no sandbox.
 
-import src.sandbox.executor as _executor
+Each function performs SageMath work directly. The dispatcher is responsible
+for running these in a subprocess with the configured timeout and limits.
+"""
 
 
 def solve_milp(variables, objective, maximize, constraints, var_types=None, solver="GLPK"):
@@ -24,39 +26,6 @@ def solve_milp(variables, objective, maximize, constraints, var_types=None, solv
             if var not in var_set:
                 raise ValueError(f"unknown variable '{var}' in constraint")
 
-    result = _executor.run_sandboxed(
-        _milp_inner, {
-            "variables": variables, "objective": objective,
-            "maximize": maximize, "constraints": constraints,
-            "var_types": var_types, "solver": solver,
-        },
-    )
-    if not result["ok"]:
-        return {"status": "error", "objective_value": None, "values": None, "error": result["error"]}
-    return result["result"]
-
-
-def find_root(expression, variable, a, b):
-    """Find root of expression in interval [a, b]."""
-    result = _executor.run_sandboxed(
-        _find_root_inner, {"expression": expression, "variable": variable, "a": a, "b": b}
-    )
-    if not result["ok"]:
-        return {"result": None, "error": result["error"]}
-    return result["result"]
-
-
-def minimize(expression, variables, x0):
-    """Unconstrained minimization of expression using Nelder-Mead."""
-    result = _executor.run_sandboxed(
-        _minimize_inner, {"expression": expression, "variables": variables, "x0": x0}
-    )
-    if not result["ok"]:
-        return {"result": None, "error": result["error"]}
-    return result["result"]
-
-
-def _milp_inner(variables, objective, maximize, constraints, var_types, solver):
     from sage.numerical.mip import MixedIntegerLinearProgram
 
     p = MixedIntegerLinearProgram(maximization=maximize, solver=solver)
@@ -82,13 +51,13 @@ def _milp_inner(variables, objective, maximize, constraints, var_types, solver):
 
     try:
         obj_val = p.solve()
-    except Exception as e:  # noqa: BLE001 — caught at sandbox boundary
+    except Exception as e:
         msg = str(e).lower()
         if "infeasible" in msg or "no feasible" in msg:
             return {"status": "infeasible", "objective_value": None, "values": None}
         if "unbounded" in msg:
             return {"status": "unbounded", "objective_value": None, "values": None}
-        return {"status": "error", "objective_value": None, "values": None, "error": str(e)}
+        raise
 
     vals = p.get_values(v)
     return {
@@ -98,16 +67,25 @@ def _milp_inner(variables, objective, maximize, constraints, var_types, solver):
     }
 
 
-def _find_root_inner(expression, variable, a, b):
+def find_root(expression, variable, a, b):
+    """Find root of expression in interval [a, b]."""
     from sage.all import SR, find_root, var
     v = var(variable)
     f = SR(expression)
-    return {"result": float(find_root(f, a, b, v)), "error": None}
+    return float(find_root(f, a, b, v))
 
 
-def _minimize_inner(expression, variables, x0):
+def minimize(expression, variables, x0):
+    """Unconstrained minimization of expression using Nelder-Mead.
+
+    *variables* determines the variable order and must match *x0* in length.
+    """
+    if len(variables) != len(x0):
+        raise ValueError(
+            f"variables count ({len(variables)}) must match x0 length ({len(x0)})"
+        )
     from sage.all import SR
     f = SR(expression)
     from sage.numerical.optimize import minimize as sage_minimize
     sol = sage_minimize(f, x0, gradient=None, algorithm='default')
-    return {"result": [float(s) for s in sol], "error": None}
+    return [float(s) for s in sol]

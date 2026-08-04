@@ -20,6 +20,14 @@
         minItems: 2
         maxItems: 2
     required: [expression]
+    allOf:
+      - if:
+          properties:
+            operation:
+              enum: [limit, series]
+          required: [operation]
+        then:
+          required: [bounds]
   output_type: object
   timeout_s: 3.0
-  function_ref: "core.maxima:evaluate"
+  function_ref: "src.core.maxima:evaluate"

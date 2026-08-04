@@ -1,6 +1,8 @@
-"""Linear algebra operations via SageMath, sandboxed via run_sandboxed."""
+"""Linear algebra operations via SageMath — pure functions, no sandbox.
 
-import src.sandbox.executor as _executor
+Each function performs SageMath work directly. The dispatcher is responsible
+for running these in a subprocess with the configured timeout and limits.
+"""
 
 
 def _validate_square(matrix, name):
@@ -13,174 +15,95 @@ def _validate_square(matrix, name):
             raise ValueError(f"{name}: non-square matrix, got {len(matrix)}x{len(row)}")
 
 
+def _sage_matrix(matrix):
+    """Build a SageMath RDF matrix from a list-of-lists."""
+    from sage.all import RDF
+    from sage.all import matrix as sage_matrix
+    return sage_matrix(RDF, matrix)
+
+
+def _to_rows(m):
+    """Convert a SageMath matrix to a list-of-lists of floats."""
+    return [[float(m[i][j]) for j in range(m.ncols())] for i in range(m.nrows())]
+
+
 def determinant(matrix):
     _validate_square(matrix, "determinant")
-    return _unwrap(_executor.run_sandboxed(_det_inner, {"matrix": matrix}))
+    return float(_sage_matrix(matrix).determinant())
 
 
 def inverse(matrix):
     _validate_square(matrix, "inverse")
-    return _unwrap(_executor.run_sandboxed(_inv_inner, {"matrix": matrix}))
+    m = _sage_matrix(matrix)
+    try:
+        inv = m.inverse()
+    except (ZeroDivisionError, ValueError):
+        raise ValueError("singular matrix: not invertible")
+    return _to_rows(inv)
 
 
 def eigenvalues(matrix):
     _validate_square(matrix, "eigenvalues")
-    return _unwrap(_executor.run_sandboxed(_eig_inner, {"matrix": matrix}))
+    m = _sage_matrix(matrix)
+    return [float(v) for v in m.eigenvalues()]
 
 
 def solve_linear_system(a, b):
     _validate_square(a, "solve_linear_system")
     if len(a) != len(b):
         raise ValueError("solve_linear_system: a and b dimension mismatch")
-    return _unwrap(_executor.run_sandboxed(_solve_inner, {"a": a, "b": b}))
-
-
-def qr(matrix):
-    _validate_square(matrix, "qr")
-    return _unwrap(_executor.run_sandboxed(_qr_inner, {"matrix": matrix}))
-
-
-def lu(matrix):
-    _validate_square(matrix, "lu")
-    return _unwrap(_executor.run_sandboxed(_lu_inner, {"matrix": matrix}))
-
-
-def cholesky(matrix):
-    _validate_square(matrix, "cholesky")
-    return _unwrap(_executor.run_sandboxed(_cholesky_inner, {"matrix": matrix}))
-
-
-def svd(matrix):
-    return _unwrap(_executor.run_sandboxed(_svd_inner, {"matrix": matrix}))
-
-
-def matrix_exp(matrix):
-    _validate_square(matrix, "matrix_exp")
-    return _unwrap(_executor.run_sandboxed(_exp_inner, {"matrix": matrix}))
-
-
-def right_kernel(matrix):
-    _validate_square(matrix, "right_kernel")
-    return _unwrap(_executor.run_sandboxed(_rk_inner, {"matrix": matrix}))
-
-
-def left_kernel(matrix):
-    _validate_square(matrix, "left_kernel")
-    return _unwrap(_executor.run_sandboxed(_lk_inner, {"matrix": matrix}))
-
-
-def charpoly(matrix):
-    _validate_square(matrix, "charpoly")
-    return _unwrap(_executor.run_sandboxed(_charpoly_inner, {"matrix": matrix}))
-
-
-def _unwrap(result):
-    if not result["ok"]:
-        return {"result": None, "error": result["error"]}
-    return result["result"]
-
-
-def _det_inner(matrix):
-    from sage.all import RDF
-    from sage.all import matrix as sage_matrix
-    m = sage_matrix(RDF, matrix)
-    return {"result": float(m.determinant()), "error": None}
-
-
-def _inv_inner(matrix):
-    from sage.all import RDF
-    from sage.all import matrix as sage_matrix
-    m = sage_matrix(RDF, matrix)
-    try:
-        inv = m.inverse()
-    except (ZeroDivisionError, ValueError):
-        return {"result": None, "error": "singular matrix: not invertible"}
-    return {"result": [[float(inv[i][j]) for j in range(inv.ncols())] for i in range(inv.nrows())], "error": None}
-
-
-def _eig_inner(matrix):
-    from sage.all import RDF
-    from sage.all import matrix as sage_matrix
-    m = sage_matrix(RDF, matrix)
-    ev = m.eigenvalues()
-    return {"result": [float(v) for v in ev], "error": None}
-
-
-def _solve_inner(a, b):
     from sage.all import RDF, vector
-    from sage.all import matrix as sage_matrix
-    m = sage_matrix(RDF, a)
+    m = _sage_matrix(a)
     v = vector(RDF, b)
     try:
         sol = m.solve_right(v)
     except (ValueError, ZeroDivisionError):
-        return {"result": None, "error": "no solution: inconsistent system"}
-    return {"result": [float(sol[i]) for i in range(len(sol))], "error": None}
+        raise ValueError("no solution: inconsistent system")
+    return [float(sol[i]) for i in range(len(sol))]
 
 
-def _qr_inner(matrix):
-    from sage.all import RDF
-    from sage.all import matrix as sage_matrix
-    m = sage_matrix(RDF, matrix)
-    q, r = m.QR()
-    return {"result": {"Q": [[float(q[i][j]) for j in range(q.ncols())] for i in range(q.nrows())],
-                       "R": [[float(r[i][j]) for j in range(r.ncols())] for i in range(r.nrows())]}, "error": None}
+def qr(matrix):
+    _validate_square(matrix, "qr")
+    q, r = _sage_matrix(matrix).QR()
+    return {"Q": _to_rows(q), "R": _to_rows(r)}
 
 
-def _lu_inner(matrix):
-    from sage.all import RDF
-    from sage.all import matrix as sage_matrix
-    m = sage_matrix(RDF, matrix)
-    p, l, u = m.LU()
-    return {"result": {"P": [[float(p[i][j]) for j in range(p.ncols())] for i in range(p.nrows())],
-                       "L": [[float(l[i][j]) for j in range(l.ncols())] for i in range(l.nrows())],
-                       "U": [[float(u[i][j]) for j in range(u.ncols())] for i in range(u.nrows())]}, "error": None}
+def lu(matrix):
+    _validate_square(matrix, "lu")
+    p, l, u = _sage_matrix(matrix).LU()
+    return {"P": _to_rows(p), "L": _to_rows(l), "U": _to_rows(u)}
 
 
-def _cholesky_inner(matrix):
-    from sage.all import RDF
-    from sage.all import matrix as sage_matrix
-    m = sage_matrix(RDF, matrix)
-    c = m.cholesky()
-    return {"result": [[float(c[i][j]) for j in range(c.ncols())] for i in range(c.nrows())], "error": None}
+def cholesky(matrix):
+    _validate_square(matrix, "cholesky")
+    return _to_rows(_sage_matrix(matrix).cholesky())
 
 
-def _svd_inner(matrix):
-    from sage.all import RDF
-    from sage.all import matrix as sage_matrix
-    m = sage_matrix(RDF, matrix)
-    u, s, v = m.SVD()
-    return {"result": {"U": [[float(u[i][j]) for j in range(u.ncols())] for i in range(u.nrows())],
-                       "Sigma": [float(s[i]) for i in range(len(s))],
-                       "V": [[float(v[i][j]) for j in range(v.ncols())] for i in range(v.nrows())]}, "error": None}
+def svd(matrix):
+    """Singular value decomposition. Accepts non-square matrices."""
+    u, s, v = _sage_matrix(matrix).SVD()
+    return {
+        "U": _to_rows(u),
+        "Sigma": [float(s[i]) for i in range(len(s))],
+        "V": _to_rows(v),
+    }
 
 
-def _exp_inner(matrix):
-    from sage.all import RDF
-    from sage.all import matrix as sage_matrix
-    m = sage_matrix(RDF, matrix)
-    e = m.exp()
-    return {"result": [[float(e[i][j]) for j in range(e.ncols())] for i in range(e.nrows())], "error": None}
+def matrix_exp(matrix):
+    _validate_square(matrix, "matrix_exp")
+    return _to_rows(_sage_matrix(matrix).exp())
 
 
-def _rk_inner(matrix):
-    from sage.all import RDF
-    from sage.all import matrix as sage_matrix
-    m = sage_matrix(RDF, matrix)
-    k = m.right_kernel()
-    return {"result": [[float(k[i][j]) for j in range(k.ncols())] for i in range(k.nrows())], "error": None}
+def right_kernel(matrix):
+    _validate_square(matrix, "right_kernel")
+    return _to_rows(_sage_matrix(matrix).right_kernel())
 
 
-def _lk_inner(matrix):
-    from sage.all import RDF
-    from sage.all import matrix as sage_matrix
-    m = sage_matrix(RDF, matrix)
-    k = m.left_kernel()
-    return {"result": [[float(k[i][j]) for j in range(k.ncols())] for i in range(k.nrows())], "error": None}
+def left_kernel(matrix):
+    _validate_square(matrix, "left_kernel")
+    return _to_rows(_sage_matrix(matrix).left_kernel())
 
 
-def _charpoly_inner(matrix):
-    from sage.all import RDF
-    from sage.all import matrix as sage_matrix
-    m = sage_matrix(RDF, matrix)
-    return {"result": str(m.charpoly("x")), "error": None}
+def charpoly(matrix):
+    _validate_square(matrix, "charpoly")
+    return str(_sage_matrix(matrix).charpoly("x"))

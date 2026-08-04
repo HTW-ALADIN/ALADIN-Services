@@ -17,4 +17,4 @@
     required: [clauses]
   output_type: sat_result
   timeout_s: 5.0
-  function_ref: "core.sat:solve_cnf"
+  function_ref: "src.core.sat:solve_cnf"

@@ -1,10 +1,12 @@
-"""SAT solving via SageMath's SAT solvers, sandboxed via run_sandboxed."""
+"""SAT solving via SageMath's SAT solvers — pure functions, no sandbox.
 
-import src.sandbox.executor as _executor
+Each function performs SageMath work directly. The dispatcher is responsible
+for running these in a subprocess with the configured timeout and limits.
+"""
 
 
 def solve_cnf(clauses, solver="picosat"):
-    """Solve a CNF formula inside the sandbox using a SageMath SAT solver."""
+    """Solve a CNF formula using a SageMath SAT solver."""
     solver = solver.lower()
     if solver not in ("picosat", "cryptominisat", "glucose"):
         raise ValueError(
@@ -16,16 +18,6 @@ def solve_cnf(clauses, solver="picosat"):
             if lit == 0:
                 raise ValueError("variable index 0 is forbidden in DIMACS format")
 
-    result = _executor.run_sandboxed(
-        _solve_cnf_inner, {"clauses": clauses, "solver": solver}
-    )
-    if not result["ok"]:
-        raise RuntimeError(f"sandbox execution failed: {result['error']}")
-    return result["result"]
-
-
-def _solve_cnf_inner(clauses, solver):
-    """Run inside sandbox child process — SageMath imports here."""
     from sage.sat.solvers.dimacs import CryptoMiniSat, GlucoseSyrup, PicoSAT
 
     s = {"picosat": PicoSAT, "cryptominisat": CryptoMiniSat, "glucose": GlucoseSyrup}[solver]()

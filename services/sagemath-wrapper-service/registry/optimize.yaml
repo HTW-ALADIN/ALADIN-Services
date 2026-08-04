@@ -31,7 +31,7 @@
     required: [variables, objective, constraints]
   output_type: object
   timeout_s: 10.0
-  function_ref: "core.optimize:solve_milp"
+  function_ref: "src.core.optimize:solve_milp"
 
 - id: optimize.find-root
   summary: Find a root of an expression in an interval
@@ -50,7 +50,7 @@
     required: [expression, variable, a, b]
   output_type: scalar
   timeout_s: 5.0
-  function_ref: "core.optimize:find_root"
+  function_ref: "src.core.optimize:find_root"
 
 - id: optimize.minimize
   summary: Unconstrained minimization of an expression
@@ -71,4 +71,4 @@
     required: [expression, variables, x0]
   output_type: vector
   timeout_s: 10.0
-  function_ref: "core.optimize:minimize"
+  function_ref: "src.core.optimize:minimize"

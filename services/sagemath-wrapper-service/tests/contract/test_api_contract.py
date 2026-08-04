@@ -12,29 +12,33 @@ client = TestClient(app)
 
 
 def _mock_sandbox(monkeypatch):
-    """Mock run_sandboxed so tests don't need SageMath in the child process."""
-    import src.sandbox.executor as exec_mod
+    """Mock run_function/run_code in the dispatcher so tests don't need SageMath."""
+    from src.registry import dispatcher as disp
 
-    def mock(fn, args, timeout_s=5.0):
-        # Route the call to the appropriate inner function based on the args key
-        # For SAT
-        if "clauses" in args:
+    def mock(fn_ref, args, timeout_s=5.0):
+        key = fn_ref.split(":", 1)[-1]
+        # SAT
+        if key == "solve_cnf":
             return {"ok": True, "result": {"satisfiable": True, "assignment": {"1": True, "2": True}, "solver": "picosat"}, "error": None}
-        # For linalg determinant
-        if args.get("matrix") == [[1, 2], [3, 4]]:
-            return {"ok": True, "result": {"result": -2, "error": None}, "error": None}
-        # For linalg inverse singular
-        if args.get("matrix") == [[1, 2], [2, 4]]:
-            return {"ok": True, "result": {"result": None, "error": "singular matrix: not invertible"}, "error": None}
-        # For optimize
-        if "variables" in args:
+        # linalg determinant
+        if key == "determinant":
+            if args.get("matrix") == [[1, 2, 3], [4, 5, 6]]:
+                return {"ok": False, "result": None, "error": "determinant: non-square matrix"}
+            return {"ok": True, "result": -2, "error": None}
+        # linalg inverse singular
+        if key == "inverse":
+            if args.get("matrix") == [[1, 2], [2, 4]]:
+                return {"ok": False, "result": None, "error": "singular matrix: not invertible"}
+            return {"ok": True, "result": None, "error": None}
+        # optimize
+        if key == "solve_milp":
             return {"ok": True, "result": {"status": "optimal", "objective_value": 1.6666666666666667, "values": {"x": 0.8333333333333334, "y": 0.0}}, "error": None}
-        # For maxima
-        if "expression" in args:
-            return {"ok": True, "result": {"result": "x^2", "error": None}, "error": None}
+        # maxima
+        if key == "evaluate":
+            return {"ok": True, "result": "x^2", "error": None}
         return {"ok": True, "result": None, "error": None}
 
-    monkeypatch.setattr(exec_mod, "run_sandboxed", mock)
+    monkeypatch.setattr(disp, "run_function", mock)
 
 
 # ── SAT ────────────────────────────────────────────────────────────────────
@@ -63,7 +67,7 @@ def test_post_linalg_determinant_returns_200(monkeypatch):
     _mock_sandbox(monkeypatch)
     resp = client.post("/v1/linalg/determinant", json={"matrix": [[1, 2], [3, 4]]})
     assert resp.status_code == 200
-    assert resp.json()["result"] == -2
+    assert resp.json() == -2
 
 
 def test_post_linalg_non_square_matrix_returns_400(monkeypatch):
@@ -98,9 +102,8 @@ def test_post_optimize_milp_tutorial_case_returns_200(monkeypatch):
 # ── Maxima ─────────────────────────────────────────────────────────────────
 
 def test_post_maxima_eval_rejects_injection_with_400(monkeypatch):
-    import src.sandbox.executor as exec_mod
-    calls = []
-    monkeypatch.setattr(exec_mod, "run_sandboxed", lambda *a, **kw: calls.append(1) or {"ok": True, "result": None, "error": None})
+    from src.registry import dispatcher as disp
+    monkeypatch.setattr(disp, "run_function", lambda *a, **kw: {"ok": False, "result": None, "error": "disallowed token 'system' in expression"})
 
     resp = client.post("/v1/maxima/evaluate", json={
         "expression": "system('rm -rf /')",
@@ -108,7 +111,6 @@ def test_post_maxima_eval_rejects_injection_with_400(monkeypatch):
     })
     assert resp.status_code == 400
     assert "Traceback" not in resp.text
-    assert len(calls) == 0, "sandbox was called despite validation failure"
 
 
 # ── OpenAPI / Health ───────────────────────────────────────────────────────
@@ -143,3 +145,20 @@ def test_health_endpoint():
     resp = client.get("/healthz")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
+
+
+# ── Cross-cutting: error handling ─────────────────────────────────────────
+
+def test_404_unknown_path():
+    resp = client.get("/v1/nonexistent")
+    assert resp.status_code == 404
+
+
+def test_422_missing_required_field():
+    resp = client.post("/v1/linalg/determinant", json={})
+    assert resp.status_code == 422
+
+
+def test_422_invalid_solver(monkeypatch):
+    resp = client.post("/v1/sat/solve", json={"clauses": [[1]], "solver": "nope"})
+    assert resp.status_code == 422

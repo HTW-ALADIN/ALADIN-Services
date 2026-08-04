@@ -19,21 +19,22 @@ REGISTRY_PATH = os.path.join(
 
 
 def _mock_sandbox(monkeypatch):
-    """Mock run_sandboxed so tests don't need SageMath."""
-    import src.sandbox.executor as exec_mod
+    """Mock run_function in the dispatcher so tests don't need SageMath."""
+    from src.registry import dispatcher as disp
 
-    def mock(fn, args, timeout_s=5.0):
-        if "clauses" in args:
+    def mock(fn_ref, args, timeout_s=5.0):
+        key = fn_ref.split(":", 1)[-1]
+        if key == "solve_cnf":
             return {"ok": True, "result": {"satisfiable": True, "assignment": {"1": True, "2": True}, "solver": "picosat"}, "error": None}
-        if args.get("matrix") == [[1, 2], [3, 4]]:
-            return {"ok": True, "result": {"result": -2, "error": None}, "error": None}
-        if "variables" in args:
+        if key == "determinant":
+            return {"ok": True, "result": -2, "error": None}
+        if key == "solve_milp":
             return {"ok": True, "result": {"status": "optimal", "objective_value": 1.6666666666666667, "values": {"x": 0.8333333333333334, "y": 0.0}}, "error": None}
-        if "expression" in args:
-            return {"ok": True, "result": {"result": "x^2", "error": None}, "error": None}
+        if key == "evaluate":
+            return {"ok": True, "result": "x^2", "error": None}
         return {"ok": True, "result": None, "error": None}
 
-    monkeypatch.setattr(exec_mod, "run_sandboxed", mock)
+    monkeypatch.setattr(disp, "run_function", mock)
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -47,7 +48,7 @@ class TestDynamicCLI:
         # CLI
         cli_result = runner.invoke(
             cli_app,
-            ["linalg", "determinant", "--matrix", "[[1,2],[3,4]]"],
+            ["linalg", "determinant", "--payload", '{"matrix": [[1,2],[3,4]]}'],
         )
         assert cli_result.exit_code == 0, cli_result.stdout
         cli_body = json.loads(cli_result.stdout)
@@ -67,7 +68,7 @@ class TestDynamicCLI:
         import typer
         from typer.testing import CliRunner
 
-        from src.cli.dynamic_commands import register_commands
+        from src.cli.main import _register_commands as register_commands
         from src.registry.loader import OperationSpec
 
         # Create a fresh Typer app with serve command
@@ -90,13 +91,13 @@ class TestDynamicCLI:
             },
             output_type="object",
             timeout_s=5.0,
-            function_ref="core.sat:solve_cnf",
+            function_ref="src.core.sat:solve_cnf",
         )
         ops.append(new_op)
         register_commands(test_app, ops)
 
         local_runner = CliRunner()
-        result = local_runner.invoke(test_app, ["test", "hello", "--name", "test"])
+        result = local_runner.invoke(test_app, ["test", "hello", "--payload", '{"name": "test"}'])
         # Should reach the dispatcher (which calls the sandbox, which we haven't mocked)
         # Just checking the command exists and is callable
         assert result.exit_code != 0  # sandbox not mocked, but command exists

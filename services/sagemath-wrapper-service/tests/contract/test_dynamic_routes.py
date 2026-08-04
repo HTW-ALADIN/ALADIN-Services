@@ -28,7 +28,7 @@ def _op(**overrides) -> OperationSpec:
         "input_schema": {"type": "object", "properties": {"x": {"type": "number"}}, "required": ["x"]},
         "output_type": "scalar",
         "timeout_s": 5.0,
-        "function_ref": "core.linalg:determinant",
+        "function_ref": "src.core.linalg:determinant",
     }
     base.update(overrides)
     return OperationSpec(**base)

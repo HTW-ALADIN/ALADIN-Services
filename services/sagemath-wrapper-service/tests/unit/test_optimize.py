@@ -100,29 +100,11 @@ def test_missing_variable_in_objective_raises():
 @needs_sage
 def test_find_root_linear():
     result = find_root("x - 2", "x", 0, 5)
-    assert result["error"] is None
-    assert abs(result["result"] - 2.0) < 1e-9
+    assert abs(result - 2.0) < 1e-9
 
 
 @needs_sage
 def test_minimize_quadratic():
     result = minimize("x^2 + y^2", ["x", "y"], [1.0, 1.0])
-    assert result["error"] is None
-    assert abs(result["result"][0]) < 1e-6
-    assert abs(result["result"][1]) < 1e-6
-
-
-@pytest.mark.integration
-def test_runs_inside_sandbox(monkeypatch):
-    import src.sandbox.executor as exec_mod
-    calls = []
-
-    def mock_run_sandboxed(fn, args, timeout_s=5.0):
-        calls.append(args)
-        return {"ok": True, "result": {"status": "optimal", "objective_value": 1.0, "values": {"x": 1.0}}, "error": None}
-
-    monkeypatch.setattr(exec_mod, "run_sandboxed", mock_run_sandboxed)
-
-    result = solve_milp(["x"], {"x": 1}, True, [])
-    assert len(calls) == 1
-    assert result["status"] == "optimal"
+    assert abs(result[0]) < 1e-6
+    assert abs(result[1]) < 1e-6

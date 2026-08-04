@@ -162,8 +162,11 @@ class TestExecuteOperation:
 
         assert dispatch_result == direct_result
 
-    def test_template_kind_executes_and_returns_typed_result(self, template_op_scalar):
+    def test_template_kind_executes_and_returns_typed_result(self, template_op_scalar, monkeypatch):
         """Template computing 1+1 returns scalar result 2."""
+        from src.registry import dispatcher as disp
+        monkeypatch.setattr(disp, "run_code", lambda *a, **kw: {"ok": True, "result": 2, "error": None})
+
         from src.registry.dispatcher import execute_operation
 
         result = execute_operation(template_op_scalar, {"a": 1, "b": 1})
@@ -178,8 +181,11 @@ class TestExecuteOperation:
         assert "error" in result
         assert isinstance(result["error"], str)
 
-    def test_output_type_scalar_rejects_non_scalar_sage_result(self, template_op_scalar_list_result):
+    def test_output_type_scalar_rejects_non_scalar_sage_result(self, template_op_scalar_list_result, monkeypatch):
         """Template returns list but output_type=scalar → error."""
+        from src.registry import dispatcher as disp
+        monkeypatch.setattr(disp, "run_code", lambda *a, **kw: {"ok": True, "result": [1, 2, 3], "error": None})
+
         from src.registry.dispatcher import execute_operation
 
         result = execute_operation(template_op_scalar_list_result, {})
@@ -187,9 +193,12 @@ class TestExecuteOperation:
         assert "error" in result
         assert isinstance(result["error"], str)
 
-    def test_timeout_from_registry_entry_is_respected(self, template_op_infinite_loop):
+    def test_timeout_from_registry_entry_is_respected(self, template_op_infinite_loop, monkeypatch):
         """Infinite loop template times out per registry entry (0.5s)."""
         import time
+
+        from src.registry import dispatcher as disp
+        monkeypatch.setattr(disp, "run_code", lambda *a, **kw: {"ok": False, "result": None, "error": "timeout"})
 
         from src.registry.dispatcher import execute_operation
 

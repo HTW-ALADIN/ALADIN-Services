@@ -1,13 +1,9 @@
-.PHONY: prep build test lint start clean docker-build docker-run generate-openapi
+.PHONY: prep test lint start clean docker-build docker-run generate-openapi
 
-SHELL := /bin/bash
 SERVICE := sagemath-wrapper
 
 prep:
 	@pip install -e ".[test]"
-
-build:
-	@echo "Build not yet implemented"
 
 test:
 	@python -m pytest tests/
