@@ -1,0 +1,22 @@
+- id: sat.solve
+  summary: Solve a CNF SAT formula
+  kind: function
+  input_schema:
+    type: object
+    properties:
+      clauses:
+        type: array
+        maxItems: 1000
+        items:
+          type: array
+          maxItems: 1000
+          items:
+            type: integer
+      solver:
+        type: string
+        enum: [picosat, cryptominisat, glucose]
+        default: picosat
+    required: [clauses]
+  output_type: sat_result
+  timeout_s: 5.0
+  function_ref: "src.core.sat:solve_cnf"
