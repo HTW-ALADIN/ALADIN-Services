@@ -8,6 +8,7 @@
 [![noise-generation-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-noise-generation-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-noise-generation-service.yml)
 [![llm-gateway-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-llm-gateway-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-llm-gateway-service.yml)
 [![academic-search-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-academic-search-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-academic-search-service.yml)
+[![edit-distance-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-edit-distance-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-edit-distance-service.yml)
 
 ## Services
 
@@ -20,6 +21,7 @@
 | [fermentaladin-service](services/fermentaladin-service/README.md) | Python | [![CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-fermentaladin-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-fermentaladin-service.yml) | — | Bioreactor fermentation simulation — ODE-based multi-phase kinetic model exposed as a FastAPI HTTP service |
 | [noise-generation-service](services/noise-generation-service/README.md) | Rust | [![CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-noise-generation-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-noise-generation-service.yml) | — | Unified REST API for noise generation — 14 algorithms (Perlin, Simplex, FBM, Domain Warp, etc.) with multiple backends |
 | [llm-gateway-service](services/llm-gateway-service/README.md) | TypeScript | [![CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-llm-gateway-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-llm-gateway-service.yml) | [![codecov](https://codecov.io/gh/HTW-ALADIN/ALADIN-Services/graph/badge.svg?flag=llm-gateway-service)](https://codecov.io/gh/HTW-ALADIN/ALADIN-Services?flags[0]=llm-gateway-service) | HTTP/CLI wrapper around a self-hosted LLM Gateway instance, using the Vercel AI SDK |
+| [edit-distance-service](services/edit-distance-service/README.md) | Python | [![CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-edit-distance-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-edit-distance-service.yml) | — | Unified REST API for text edit distance (15 algorithms) and graph edit distance (4 GED algorithms) over multiple open-source libraries |
 
 ## For Developers:
 

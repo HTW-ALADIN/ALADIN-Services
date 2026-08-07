@@ -39,9 +39,13 @@ Unified REST API for text edit distance and graph edit distance (GED) algorithms
 | Algorithm | Default Backend | Description |
 |-----------|----------------|-------------|
 | `ged_astar` | networkx | Exact GED (A\*), anytime approximation, edit path |
-| `ged_heuristic` | gedlib | BIPARTITE, IPFP, REFINE, lower bounds |
+| `ged_heuristic` | gmatch4py | BIPARTITE heuristic (installed by default); `"backend": "gedlib"` adds IPFP, REFINE, lower bounds if gedlibpy is manually installed |
 | `ged_hausdorff` | gmatch4py | Hausdorff Edit Distance (cheap upper bound) |
 | `ged_greedy` | gmatch4py | Greedy Edit Distance (fast approximation) |
+
+> **Graph backends:** `networkx` and `gmatch4py` are installed by default (see [Graph Backends](#graph-backends) below). GEDLIB (`gedlib` backend, method families IPFP/REFINE/ANCHOR_AWARE_GED/BRANCH/NODE/RING/SUBGRAPH/WALKS/exact_mip) has no PyPI package and additionally requires building the full GEDLIB C++ library — it is not installed by CI/Docker; the service falls back gracefully with an `"error"` field per result when it's absent.
+>
+> **Method validation:** if `params.method` isn't supported by the *resolved* backend (e.g. requesting `"method": "IPFP"` for `ged_heuristic` without an explicit `"backend": "gedlib"`, since the gmatch4py default only implements BIPARTITE), the request is rejected with `400` instead of silently running a different method.
 
 ## Examples
 
@@ -506,10 +510,12 @@ Omitting `node_labels` auto-generates `["0", "1", …]`. Only the upper triangle
 
 ## Quick Start
 
+Requires **Python 3.11** (not 3.12+ — see [Graph Backends](#graph-backends)).
+
 ```bash
 cd services/edit-distance-service
-python3.12 -m venv .venv && source .venv/bin/activate
-make prep              # pip install -e ".[dev,graph]"
+python3.11 -m venv .venv && source .venv/bin/activate
+make prep              # pip install -e ".[dev]" + gmatch4py (graph backends)
 make test              # pytest -v
 make start             # uvicorn src.main:app --reload (port 8000)
 ```
@@ -521,12 +527,66 @@ make dev   # docker-compose -f docker-compose.dev.yml up --build
 make prod  # docker-compose -f docker-compose.prod.yml up --build
 ```
 
+## Graph Backends
+
+`ged_astar` (via NetworkX) and `ged_heuristic`/`ged_hausdorff`/`ged_greedy` (via
+[gmatch4py](https://github.com/jacquesfize/GMatch4py)) work out of the box —
+`make prep`/`make build`/the Dockerfile install everything needed by default.
+No optional extras need to be requested.
+
+**Why this needs a bit of care:** gmatch4py has no PyPI release, so it's
+installed straight from GitHub, pinned to a fixed commit (no tags/releases
+exist upstream). The commit and the matching `Cython` version are declared
+**once**, in [`gmatch4py.env`](gmatch4py.env) — the Makefile, Dockerfile, and
+CI workflow all read from that file, so bumping either pin only requires
+editing it in one place:
+
+```bash
+source gmatch4py.env
+pip install "Cython==${CYTHON_VERSION}"
+pip install --no-build-isolation "gmatch4py @ ${GMATCH4PY_REF}"
+```
+
+Constraints that fall out of that and are already handled by the Makefile/Dockerfile/CI:
+
+- Its `setup.py` imports `numpy` directly at build time, so it needs
+  `--no-build-isolation` with `numpy`/`Cython` already installed.
+- Its compiled extensions are built against the NumPy 1.x ABI (`numpy<2` is
+  pinned in `pyproject.toml`) and unconditionally import `numpy.distutils` on
+  package import. NumPy removed `numpy.distutils` for **Python >= 3.12** with
+  no workaround, so this service is pinned to **Python 3.11**. On 3.11, the
+  environment variable `SETUPTOOLS_USE_DISTUTILS=stdlib` must also be set
+  (setuptools' vendored distutils shim is missing pieces `numpy.distutils`
+  needs) — the Makefile exports it for all targets, and the Dockerfile sets
+  it via `ENV`.
+
+**Supply-chain note:** because there's no PyPI/registry release, the Docker
+build and CI compile gmatch4py's source directly from GitHub on every build.
+The commit pin gives you content reproducibility (the same source every
+time), but *not* an independent integrity check, and it depends on GitHub's
+availability and the upstream repo continuing to exist at that URL. If your
+deployment environment requires stricter supply-chain guarantees (air-gapped
+builds, hash-pinned/reviewed artifacts, no build-time network access to
+arbitrary third-party source), build the wheel once from the pinned commit
+and publish/vendor it as a reviewed artifact instead.
+
+GEDLIB (`gedlibpy`, the `gedlib` backend) is **not** installed by default: it
+has no PyPI package either, and additionally requires building the full
+GEDLIB C++ library (CMake, Boost, SWIG, ...) — out of scope for a "trivial"
+default install. It remains supported in code (`src/graph/__init__.py`); if
+you manually `pip install` a working `gedlibpy` into the service's
+environment, the `gedlib` backend becomes available automatically at
+runtime, with no code changes required.
+
 ## Project Structure
 
 ```
 services/edit-distance-service/
 ├── pyproject.toml          # Dependencies (rapidfuzz, textdistance, jellyfish, edlib,
-│                           #   diff-match-patch, networkx, gedlibpy, gmatch4py)
+│                           #   diff-match-patch, networkx). gmatch4py is installed
+│                           #   separately (not on PyPI) — see "Graph Backends" above.
+├── gmatch4py.env           # Single source of truth for the pinned gmatch4py commit
+│                           #   + Cython version, shared by Makefile/Dockerfile/CI
 ├── Dockerfile              # Multi-stage build
 ├── Makefile                # prep, build, test, lint, start, docker-build, …
 ├── src/
@@ -605,7 +665,7 @@ Set `EDIT_DISTANCE_BASE_URL` to avoid repeating `--base`.
 
 | Command | Action |
 |---------|--------|
-| `make prep` | Install dev dependencies |
+| `make prep` | Install dev dependencies + gmatch4py (graph backends) |
 | `make test` | Run tests (pytest -v) |
 | `make lint` | Lint + format check (ruff) |
 | `make start` | Start dev server (hot-reload) |

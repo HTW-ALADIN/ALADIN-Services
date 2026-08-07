@@ -1,10 +1,27 @@
 .PHONY: prep build test lint start clean docker-build generate-openapi dev prod
 
+# Single source of truth for the pinned gmatch4py commit / Cython version
+# (see gmatch4py.env) — also read by the Dockerfile and CI workflow.
+include gmatch4py.env
+GMATCH4PY_PKG := gmatch4py @ $(GMATCH4PY_REF)
+
+# gmatch4py's setup.py imports numpy directly at build time (no
+# pyproject.toml build-system declared), so it must be installed with
+# --no-build-isolation once numpy/Cython are already present. Its compiled
+# extensions unconditionally import `numpy.distutils` on package import,
+# which requires the real stdlib `distutils` (setuptools' local shim is
+# missing pieces numpy.distutils needs) — hence SETUPTOOLS_USE_DISTUTILS.
+export SETUPTOOLS_USE_DISTUTILS := stdlib
+
 prep:
 	pip install -e ".[dev]"
+	pip install "Cython==$(CYTHON_VERSION)"
+	pip install --no-build-isolation "$(GMATCH4PY_PKG)"
 
 build:
 	pip install -e ".[dev]"
+	pip install "Cython==$(CYTHON_VERSION)"
+	pip install --no-build-isolation "$(GMATCH4PY_PKG)"
 
 test:
 	pytest -v

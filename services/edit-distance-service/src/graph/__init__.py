@@ -382,7 +382,12 @@ def _gmatch4py_compute(
         return GedPairResult(
             id=pair.id,
             upper_bound=distance,
-            lower_bound=distance,
+            # These are heuristic/approximate distances (BIPARTITE, Hausdorff,
+            # greedy), not verified lower bounds; reporting `distance` itself
+            # as lower_bound would falsely imply a tight, proven interval.
+            # Match the networkx anytime-mode convention (lower_bound=0.0)
+            # for any non-exact result.
+            lower_bound=0.0,
             exact=False,
             runtime_ms=elapsed,
         )

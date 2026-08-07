@@ -18,11 +18,11 @@ from src.models import GraphPair, GraphRef
 
 requires_gedlibpy = pytest.mark.skipif(
     importlib.util.find_spec("gedlibpy") is None,
-    reason="gedlibpy is not installed (optional [graph] extra)",
+    reason="gedlibpy is not installed (no PyPI package; manual install only, not covered by CI/Docker)",
 )
 requires_gmatch4py = pytest.mark.skipif(
     importlib.util.find_spec("gmatch4py") is None,
-    reason="gmatch4py is not installed (optional [graph] extra)",
+    reason="gmatch4py is not installed (run `make prep`, which installs it by default)",
 )
 
 
