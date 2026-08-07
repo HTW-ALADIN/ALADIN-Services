@@ -5,10 +5,14 @@ on:
     branches: ["master"]
     paths:
       - "services/edit-distance-service/**"
+      - "third_party/gedlibpy"
+      - ".github/workflows/service-edit-distance-service.yml"
   pull_request:
     branches: ["master"]
     paths:
       - "services/edit-distance-service/**"
+      - "third_party/gedlibpy"
+      - ".github/workflows/service-edit-distance-service.yml"
 
 defaults:
   run:
@@ -150,6 +154,11 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # third_party/gedlibpy is a git submodule; recurse so the gedlib
+          # backend is built when a .gitmodules mapping is present. If not
+          # present, the Dockerfile skips the gedlib build gracefully.
+          submodules: recursive
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -168,7 +177,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          dockerfile: services/edit-distance-service/Dockerfile
+          file: services/edit-distance-service/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

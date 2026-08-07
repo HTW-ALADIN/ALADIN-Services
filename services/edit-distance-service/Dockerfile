@@ -21,12 +21,21 @@ RUN pip install --no-cache-dir --upgrade pip && \
     rm -rf dist
 
 # Install optional GED library (gedlibpy) from monorepo third_party/
-# (not on PyPI — ships with the ALADIN monorepo)
+# (not on PyPI — ships with the ALADIN monorepo). This is a best-effort step:
+# third_party/gedlibpy is a git submodule that may not be checked out (e.g. no
+# .gitmodules entry, or checkout without --recurse-submodules). In that case
+# the directory is empty and we skip the build instead of failing the image;
+# the service already falls back gracefully at runtime when gedlibpy is
+# unavailable (see src/graph/__init__.py _gedlib_compute).
 COPY third_party/gedlibpy/ /tmp/third_party/gedlibpy/
 RUN pip install --no-cache-dir Cython && \
-    cd /tmp/third_party/gedlibpy && \
-    python setup.py build_ext --inplace && \
-    pip install --no-cache-dir . && \
+    if [ -f /tmp/third_party/gedlibpy/setup.py ]; then \
+        cd /tmp/third_party/gedlibpy && \
+        python setup.py build_ext --inplace && \
+        pip install --no-cache-dir . ; \
+    else \
+        echo "WARNING: third_party/gedlibpy is empty (submodule not checked out) - skipping gedlib backend"; \
+    fi && \
     rm -rf /tmp/third_party
 
 # Install optional GED library (gmatch4py) from PyPI

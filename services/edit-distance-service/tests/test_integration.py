@@ -65,6 +65,22 @@ class TestTextCompare:
         resp = client.post("/v1/text/distance", json={"algorithm": "nonexistent", "inputs": [{"id": "p1", "a": "a", "b": "b"}]})
         assert resp.status_code == 400
 
+    def test_oversized_input_string_returns_422(self):
+        from src.models import MAX_TEXT_LENGTH
+
+        resp = client.post("/v1/text/distance", json={
+            "algorithm": "levenshtein",
+            "inputs": [{"id": "p1", "a": "x" * (MAX_TEXT_LENGTH + 1), "b": "y"}],
+        })
+        assert resp.status_code == 422
+
+    def test_oversized_batch_returns_422(self):
+        from src.models import MAX_BATCH_SIZE
+
+        inputs = [{"id": f"p{i}", "a": "a", "b": "b"} for i in range(MAX_BATCH_SIZE + 1)]
+        resp = client.post("/v1/text/distance", json={"algorithm": "levenshtein", "inputs": inputs})
+        assert resp.status_code == 422
+
 
 class TestGedDiscovery:
     def test_list_ged_algorithms(self):
@@ -111,3 +127,42 @@ class TestGedCompute:
         })
         assert resp.status_code == 200
         assert len(resp.json()["results"]) == 1
+
+    def test_missing_backend_reports_error_not_silent_null(self):
+        """gedlib/gmatch4py are optional extras; when absent the response
+        must surface why, not just a bare null upper_bound."""
+        resp = client.post("/v1/graphs/distance", json={
+            "algorithm": "ged_hausdorff",
+            "graphs": [{"id": "p1", "g1": {"nodes": [{"id": "A"}], "edges": []}, "g2": {"nodes": [{"id": "A"}], "edges": []}}],
+        })
+        assert resp.status_code == 200
+        result = resp.json()["results"][0]
+        if result["upper_bound"] is None:
+            assert result["error"]
+
+    def test_oversized_adjacency_matrix_row_returns_422(self):
+        """Field(max_length=...) on `matrix: list[list[float]]` only bounds
+        the number of rows, not each row's length (regression test for the
+        adjacency-matrix DoS gap)."""
+        from src.models import MAX_GRAPH_NODES
+
+        oversized_row = [0.0] * (MAX_GRAPH_NODES + 1)
+        resp = client.post("/v1/graphs/distance", json={
+            "algorithm": "ged_astar",
+            "graphs": [{
+                "id": "p1",
+                "g1": {"format": "adjacency_matrix", "matrix": [oversized_row]},
+                "g2": {"format": "adjacency_matrix", "matrix": [[0.0]]},
+            }],
+        })
+        assert resp.status_code == 422
+
+    def test_oversized_graph_batch_returns_422(self):
+        from src.models import MAX_BATCH_SIZE
+
+        graphs = [
+            {"id": f"p{i}", "g1": {"nodes": [{"id": "A"}]}, "g2": {"nodes": [{"id": "A"}]}}
+            for i in range(MAX_BATCH_SIZE + 1)
+        ]
+        resp = client.post("/v1/graphs/distance", json={"algorithm": "ged_astar", "graphs": graphs})
+        assert resp.status_code == 422

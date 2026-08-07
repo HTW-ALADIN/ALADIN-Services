@@ -2,20 +2,31 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field, model_serializer
+from pydantic import BaseModel, Field, model_serializer, model_validator
+
+# ─── Limits ────────────────────────────────────────────────────────────────────
+# Several algorithms are O(n*m) or worse (textdistance pure-Python DP, NCD
+# compressors, Needleman-Wunsch/Gotoh/Smith-Waterman alignment) or exponential
+# (exact graph edit distance). These caps bound worst-case CPU/memory per
+# request; they are generous for real workloads while preventing a single
+# request (or malicious input) from exhausting resources for all callers.
+MAX_TEXT_LENGTH = 100_000
+MAX_BATCH_SIZE = 500
+MAX_GRAPH_NODES = 200
+MAX_GRAPH_EDGES = 2_000
 
 # ─── Input Models (must precede request models that reference them) ──────────
 
 
 class InputPair(BaseModel):
     id: str
-    a: str
-    b: str
+    a: str = Field(..., max_length=MAX_TEXT_LENGTH)
+    b: str = Field(..., max_length=MAX_TEXT_LENGTH)
 
 
 class InputPhonetic(BaseModel):
     id: str
-    text: str
+    text: str = Field(..., max_length=MAX_TEXT_LENGTH)
 
 
 class GraphRef(BaseModel):
@@ -27,8 +38,8 @@ class GraphRef(BaseModel):
     """
 
     # Default format: explicit nodes + edges
-    nodes: list[dict] | None = None
-    edges: list[dict] | None = None
+    nodes: list[dict] | None = Field(None, max_length=MAX_GRAPH_NODES)
+    edges: list[dict] | None = Field(None, max_length=MAX_GRAPH_EDGES)
 
     # Alternative format selector
     format: str | None = Field(
@@ -37,12 +48,26 @@ class GraphRef(BaseModel):
     )
 
     # node_link format fields
-    links: list[dict] | None = None
+    links: list[dict] | None = Field(None, max_length=MAX_GRAPH_EDGES)
     directed: bool = False
 
     # adjacency_matrix format fields
-    matrix: list[list[float]] | None = None
-    node_labels: list[str] | None = None
+    matrix: list[list[float]] | None = Field(None, max_length=MAX_GRAPH_NODES)
+    node_labels: list[str] | None = Field(None, max_length=MAX_GRAPH_NODES)
+
+    @model_validator(mode="after")
+    def _validate_matrix_row_length(self) -> "GraphRef":
+        # Field(max_length=...) only bounds the outer list (row count); it
+        # does not recurse into nested lists, so each row's length must be
+        # checked explicitly or the adjacency_matrix format has no effective
+        # size cap at all.
+        if self.matrix is not None:
+            for row in self.matrix:
+                if len(row) > MAX_GRAPH_NODES:
+                    raise ValueError(
+                        f"adjacency matrix row exceeds max length of {MAX_GRAPH_NODES}"
+                    )
+        return self
 
 
 class GraphPair(BaseModel):
@@ -60,14 +85,14 @@ class TextCompareRequest(BaseModel):
     algorithm: str
     backend: str | None = None  # None = use default
     params: dict[str, Any] = Field(default_factory=dict)
-    inputs: list[InputPair | InputPhonetic]
+    inputs: list[InputPair | InputPhonetic] = Field(..., max_length=MAX_BATCH_SIZE)
 
 
 class GedComputeRequest(BaseModel):
     algorithm: str
     backend: str | None = None
     params: dict[str, Any] = Field(default_factory=dict)
-    graphs: list[GraphPair]
+    graphs: list[GraphPair] = Field(..., max_length=MAX_BATCH_SIZE)
 
 
 class ScalarDistanceResult(BaseModel):
@@ -122,8 +147,11 @@ class GedPairResult(BaseModel):
     upper_bound: float
     lower_bound: float
     exact: bool = False
-    node_map: list[list[int]] | None = None
+    # Node IDs are whatever the caller supplied (e.g. string labels in the
+    # default/adjacency_matrix formats), not necessarily integers.
+    node_map: list[list[Any]] | None = None
     runtime_ms: float = 0.0
+    error: str | None = None
 
     @model_serializer
     def _clean(self) -> dict:
@@ -136,6 +164,7 @@ class GedPairResult(BaseModel):
             "exact": self.exact,
             "node_map": self.node_map,
             "runtime_ms": self.runtime_ms,
+            "error": self.error,
         }
 
 

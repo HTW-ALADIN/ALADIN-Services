@@ -75,7 +75,7 @@ async def list_text_algorithms() -> list[dict]:
 
 
 @app.post("/v1/text/distance")
-async def text_distance(request: TextCompareRequest) -> TextCompareResponse:
+def text_distance(request: TextCompareRequest) -> TextCompareResponse:
     """Compute a distance/similarity/transform for one pair or a batch of pairs.
 
     See the /v1/text/algorithms endpoint for the full catalog of supported
@@ -117,7 +117,7 @@ async def list_ged_algorithms() -> list[dict]:
 
 
 @app.post("/v1/graphs/distance")
-async def ged_compute(request: GedComputeRequest) -> GedResultResponse:
+def ged_compute(request: GedComputeRequest) -> GedResultResponse:
     """Compute the edit distance between one pair (or a batch of pairs) of graphs."""
     algorithm = request.algorithm
     backend = request.backend or _DEFAULT_GED_BACKEND.get(algorithm, "networkx")
