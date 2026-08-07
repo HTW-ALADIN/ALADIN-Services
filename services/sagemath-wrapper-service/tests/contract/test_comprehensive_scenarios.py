@@ -319,12 +319,12 @@ class TestMaximaWorkflow:
 
     def test_limit(self, mock_sandbox):
         r = client.post("/v1/maxima/evaluate", json={
-            "expression": "sin(x)/x", "operation": "limit", "variable": "x"})
+            "expression": "sin(x)/x", "operation": "limit", "variable": "x", "bounds": [0, 5]})
         assert r.status_code == 200 and "1" in str(r.json())
 
     def test_series(self, mock_sandbox):
         r = client.post("/v1/maxima/evaluate", json={
-            "expression": "sin(x)", "operation": "series", "variable": "x"})
+            "expression": "sin(x)", "operation": "series", "variable": "x", "bounds": [0, 5]})
         assert r.status_code == 200
         s = r.json()
         assert "x" in s and "O(x" in s
