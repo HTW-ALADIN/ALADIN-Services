@@ -25,7 +25,7 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@v5
       - name: Install dependencies
-        run: uv sync --all-extras --group dev
+        run: uv sync --all-extras
       - name: Lint
         run: make lint
 
@@ -40,7 +40,7 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@v5
       - name: Install dependencies
-        run: uv sync --all-extras --group dev
+        run: uv sync --all-extras
       - name: Run tests
         run: make test
       - name: Upload coverage to Codecov
@@ -63,7 +63,7 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@v5
       - name: Install dependencies
-        run: uv sync --all-extras --group dev
+        run: uv sync --all-extras
       - name: Generate OpenAPI spec
         run: make generate-openapi
       - name: Upload OpenAPI spec
