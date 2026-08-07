@@ -5,7 +5,7 @@ for running these in a subprocess with the configured timeout and limits.
 """
 
 
-def solve_milp(variables, objective, maximize, constraints, var_types=None, solver="GLPK"):
+def solve_milp(variables, objective, maximize, constraints, var_types=None, solver="GLPK", nonnegative=None):
     if solver not in ("GLPK", "PPL", "CBC", "InteractiveLP", "CPLEX", "CVXOPT"):
         raise ValueError(f"unsupported solver '{solver}'. supported: GLPK, PPL, CBC, InteractiveLP, CPLEX, CVXOPT")
 
@@ -26,10 +26,20 @@ def solve_milp(variables, objective, maximize, constraints, var_types=None, solv
             if var not in var_set:
                 raise ValueError(f"unknown variable '{var}' in constraint")
 
+    # Nonnegativity: default off so free real variables with negative optima
+    # are solved correctly.  `nonnegative` may be a bool (apply to all vars)
+    # or a set/list/iterable of variable names to force nonnegative.
+    if nonnegative is None:
+        nonnegative = set()
+    elif isinstance(nonnegative, bool):
+        nonnegative = set(variables) if nonnegative else set()
+    else:
+        nonnegative = set(nonnegative)
+
     from sage.numerical.mip import MixedIntegerLinearProgram
 
     p = MixedIntegerLinearProgram(maximization=maximize, solver=solver)
-    v = p.new_variable(real=True, nonnegative=True)
+    v = p.new_variable(real=True)
 
     # Set objective
     expr = sum(objective[var] * v[var] for var in objective)
@@ -49,13 +59,31 @@ def solve_milp(variables, objective, maximize, constraints, var_types=None, solv
         if typ == "integer":
             p.set_integer(v[var])
 
+    # Nonnegativity constraints (only for explicitly-requested variables)
+    for var in nonnegative:
+        p.add_constraint(v[var] >= 0)
+
     try:
         obj_val = p.solve()
     except Exception as e:
+        # Robust status detection: inspect the SageCythonException's
+        # underlying MIPSolverException type where possible.
+        if hasattr(e, "args") and e.args:
+            inner = e.args[0]
+            # MIPSolverException carries a .type attribute like 'infeasible'
+            # or 'unbounded'.
+            exc_type = getattr(inner, "type", None)
+            if exc_type is not None:
+                exc_type = str(exc_type).lower()
+                if "infeas" in exc_type or "no feasible" in exc_type:
+                    return {"status": "infeasible", "objective_value": None, "values": None}
+                if "unbound" in exc_type:
+                    return {"status": "unbounded", "objective_value": None, "values": None}
+        # Last-resort fallback: string matching
         msg = str(e).lower()
         if "infeasible" in msg or "no feasible" in msg:
             return {"status": "infeasible", "objective_value": None, "values": None}
-        if "unbounded" in msg:
+        if "unbounded" in msg or "unbound" in msg:
             return {"status": "unbounded", "objective_value": None, "values": None}
         raise
 
@@ -69,10 +97,11 @@ def solve_milp(variables, objective, maximize, constraints, var_types=None, solv
 
 def find_root(expression, variable, a, b):
     """Find root of expression in interval [a, b]."""
-    from sage.all import SR, find_root, var
+    from sage.all import SR, var
+    from sage.all import find_root as sage_find_root
     v = var(variable)
     f = SR(expression)
-    return float(find_root(f, a, b, v))
+    return float(sage_find_root(f, a, b, v))
 
 
 def minimize(expression, variables, x0):

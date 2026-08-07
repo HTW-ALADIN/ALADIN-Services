@@ -4,15 +4,15 @@ on:
   push:
     branches: ["master"]
     paths:
-      - "services/sagemath-wrapper/**"
+      - "services/sagemath-wrapper-service/**"
   pull_request:
     branches: ["master"]
     paths:
-      - "services/sagemath-wrapper/**"
+      - "services/sagemath-wrapper-service/**"
 
 defaults:
   run:
-    working-directory: services/sagemath-wrapper
+    working-directory: services/sagemath-wrapper-service
 
 jobs:
   lint:
@@ -25,7 +25,7 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@v5
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --all-extras
       - name: Lint
         run: make lint
 
@@ -40,13 +40,13 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@v5
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --all-extras
       - name: Run tests
         run: make test
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: services/sagemath-wrapper/coverage.xml
+          files: services/sagemath-wrapper-service/coverage.xml
           flags: sagemath-wrapper
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
@@ -63,14 +63,14 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@v5
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --all-extras
       - name: Generate OpenAPI spec
         run: make generate-openapi
       - name: Upload OpenAPI spec
         uses: actions/upload-artifact@v4
         with:
           name: openapi-spec-sagemath-wrapper
-          path: services/sagemath-wrapper/openapi/openapi.yaml
+          path: services/sagemath-wrapper-service/openapi/openapi.yaml
 
   build:
     name: Build & Push Docker Image
@@ -99,7 +99,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: services/sagemath-wrapper
+          context: services/sagemath-wrapper-service
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -107,10 +107,12 @@ jobs:
   docker-smoke-test:
     name: Docker Smoke Test
     runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     steps:
       - uses: actions/checkout@v4
       - name: Build Docker image
-        run: docker build -t sagemath-wrapper:test services/sagemath-wrapper
+        run: docker build -t sagemath-wrapper:test services/sagemath-wrapper-service
       - name: Start container
         run: docker run -d --name sagemath-smoke -p 8000:8000 sagemath-wrapper:test
       - name: Wait for health endpoint

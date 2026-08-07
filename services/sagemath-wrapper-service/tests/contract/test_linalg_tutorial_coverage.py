@@ -207,7 +207,9 @@ class TestLinalgTutorialCoverage:
         # This is a valid request — the expression may be a literal like 42
         # We mock run_code to avoid actual SageMath execution
         from unittest.mock import patch
+
         from src.registry import dispatcher as disp
+
         with patch.object(disp, "run_code", return_value={"ok": True, "result": 42, "error": None}):
             resp = client.post("/v1/linalg/evaluate", json={"expression": "42"})
         assert resp.status_code == 200, resp.text

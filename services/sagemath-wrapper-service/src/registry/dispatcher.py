@@ -7,6 +7,8 @@ dict. All errors (validation, execution, output-type) are signalled via
 ``ok=False`` — never via exceptions.
 """
 
+import logging
+
 import jinja2
 import jinja2.sandbox
 import jsonschema
@@ -15,9 +17,18 @@ import jsonschema.exceptions
 from src.registry.loader import OperationSpec
 from src.sandbox.executor import run_code, run_function
 
+logger = logging.getLogger(__name__)
+
 
 def render_template(sage_template: str, values: dict) -> str:
     """Render a Jinja2 template string with *values* using the sandboxed env.
+
+    ═══════════════════════════════════════════════════════════════════════
+    IMPORTANT: All user-supplied ``{{ var }}`` values MUST be interpolated
+    through the ``|sage_literal`` filter (which applies ``repr()``) to
+    prevent code injection.  Never use ``|safe`` or bare ``{{ var }}`` with
+    user data.
+    ═══════════════════════════════════════════════════════════════════════
 
     * Template syntax uses ``{{ ...|sage_literal }}`` for safe value insertion.
     * ``SandboxedEnvironment`` blocks dangerous attribute access (``__class__``,
@@ -49,10 +60,17 @@ def execute_operation(op: OperationSpec, payload: dict) -> dict:
     Returns a dict with ``ok``, ``result``, and ``error`` keys.
     """
     # Validate payload against input_schema
-    cleaned = {k: v for k, v in payload.items() if v is not None}
+    # Strip None values only for keys NOT in `required`, so legitimately-null
+    # required fields are preserved and validated.
+    required = set(op.input_schema.get("required", []) or [])
+    cleaned = {
+        k: v for k, v in payload.items()
+        if v is not None or k in required
+    }
     try:
         jsonschema.validate(cleaned, op.input_schema)
     except jsonschema.exceptions.ValidationError as exc:
+        logger.warning("validation failed for %s: %s", op.id, exc.message)
         return {"ok": False, "result": None, "error": exc.message}
 
     timeout = op.timeout_s
@@ -63,12 +81,14 @@ def execute_operation(op: OperationSpec, payload: dict) -> dict:
         try:
             code = render_template(op.sage_template, cleaned)
         except (ValueError, RuntimeError) as exc:
-            return {"ok": False, "result": None, "error": str(exc)}
+            logger.warning("template render failed for %s: %s", op.id, exc)
+            return {"ok": False, "result": None, "error": "invalid input"}
         result = run_code(code, timeout_s=timeout)
     else:
         return {"ok": False, "result": None, "error": f"unknown kind '{op.kind}'"}
 
     if not result["ok"]:
+        logger.warning("execution failed for %s: %s", op.id, result.get("error"))
         return result
 
     # Output-type check — applies to both function and template results.
@@ -79,8 +99,10 @@ def execute_operation(op: OperationSpec, payload: dict) -> dict:
         return {"ok": False, "result": None, "error": f"expected scalar, got {type(v).__name__}"}
     if op.output_type == "vector" and not isinstance(v, list):
         return {"ok": False, "result": None, "error": f"expected vector (list), got {type(v).__name__}"}
-    if op.output_type == "matrix" and not (isinstance(v, list) and all(isinstance(r, list) for r in v)):
-        return {"ok": False, "result": None, "error": f"expected matrix (list of lists), got {type(v).__name__}"}
+    if op.output_type == "matrix" and not (
+        isinstance(v, list) and len(v) > 0 and all(isinstance(r, list) for r in v)
+    ):
+        return {"ok": False, "result": None, "error": f"expected matrix (non-empty list of lists), got {type(v).__name__}"}
     if op.output_type == "sat_result" and not (isinstance(v, dict) and "satisfiable" in v):
         return {"ok": False, "result": None, "error": f"expected sat_result (dict with 'satisfiable'), got {type(v).__name__}"}
 

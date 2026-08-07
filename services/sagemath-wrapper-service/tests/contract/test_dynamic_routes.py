@@ -5,7 +5,7 @@ import pathlib
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.api.dynamic_routes import register_routes
+from src.api.dynamic_routes import _create_request_model, register_routes
 from src.registry.loader import OperationSpec, load_registry
 
 REGISTRY_PATH = str(
@@ -111,3 +111,82 @@ class TestDynamicRoutes:
         else:
             # Routers dir fully deleted — also fine
             assert not routers_dir.exists()
+
+
+class TestDynamicModelDefaults:
+    """Issue 13: Verify JSON-Schema defaults round-trip correctly."""
+
+    def test_required_field_has_no_default(self):
+        """A required field gets ... (required) not None."""
+        from src.api.dynamic_routes import _create_request_model
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "x": {"type": "number"},
+            },
+            "required": ["x"],
+        }
+        model = _create_request_model("test.req", schema)
+        assert model.model_fields["x"].is_required() is True
+
+    def test_optional_field_without_default_is_optional(self):
+        """An optional field without default becomes py_type | None = None."""
+        from src.api.dynamic_routes import _create_request_model
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "x": {"type": "number"},
+            },
+        }
+        model = _create_request_model("test.opt", schema)
+        field = model.model_fields["x"]
+        # Should be Optional[float] with default None
+        assert field.default is None
+        # Should accept None
+        m = model(x=None)
+        assert m.x is None
+
+    def test_falsy_defaults_are_preserved(self):
+        """Falsy defaults like 0, false, '' are used, not replaced by None."""
+        from src.api.dynamic_routes import _create_request_model
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "count": {"type": "integer", "default": 0},
+                "enabled": {"type": "boolean", "default": False},
+                "label": {"type": "string", "default": ""},
+            },
+        }
+        model = _create_request_model("test.falsy", schema)
+        m = model()
+        assert m.count == 0
+        assert m.enabled is False
+        assert m.label == ""
+
+    def test_optimize_milp_defaults_honored(self):
+        """The optimize.milp schema has maximize: true and solver: GLPK defaults."""
+        from src.registry.loader import load_registry
+
+        registry_path = str(
+            pathlib.Path(__file__).resolve().parents[2] / "registry"
+        )
+        specs = load_registry(registry_path)
+        milp = next(s for s in specs if s.id == "optimize.milp")
+        model = _create_request_model(milp.id, milp.input_schema)
+
+        # Required fields
+        assert model.model_fields["variables"].is_required() is True
+        assert model.model_fields["objective"].is_required() is True
+        assert model.model_fields["constraints"].is_required() is True
+
+        # Optional fields with defaults
+        assert model.model_fields["maximize"].default is True
+        assert model.model_fields["solver"].default == "GLPK"
+
+        # Verify model construction works
+        m = model(variables=["x"], objective={"x": 1}, constraints=[])
+        assert m.maximize is True
+        assert m.solver == "GLPK"

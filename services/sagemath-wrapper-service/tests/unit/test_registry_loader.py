@@ -122,8 +122,8 @@ class TestLoadRegistry:
         with pytest.raises(ValueError, match="sage_template"):
             load_registry(str(registry_dir))
 
-    def test_function_ref_must_point_to_existing_importable_function(self, registry_dir):
-        """function_ref to non-existent module/function raises ValueError."""
+    def test_function_ref_must_point_to_existing_importable_function(self, registry_dir, monkeypatch):
+        """Lazy mode warns (not raises); strict mode raises ValueError."""
         from src.registry.loader import load_registry
 
         bad = textwrap.dedent("""\
@@ -137,6 +137,15 @@ class TestLoadRegistry:
         """)
         (registry_dir / "bad.yaml").write_text(bad)
 
+        # Lazy mode (default): import failure is a warning, not an error
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            load_registry(str(registry_dir))
+        assert any("does_not_exist" in str(x.message) for x in w)
+
+        # Strict mode: raises ValueError
+        monkeypatch.setenv("SAGE_STRICT_REGISTRY", "1")
         with pytest.raises(ValueError, match="does_not_exist"):
             load_registry(str(registry_dir))
 

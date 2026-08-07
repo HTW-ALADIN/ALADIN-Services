@@ -7,8 +7,19 @@ inside the child process before any user code runs.
 """
 
 import json
+import logging
+import os
 import subprocess
 import sys
+import threading
+
+logger = logging.getLogger(__name__)
+
+# ── Concurrency limit ─────────────────────────────────────────────────────────
+# Bounded by a semaphore so we don't overwhelm the host.  Size comes from
+# env SAGE_MAX_CONCURRENCY (default 4).
+_MAX_CONCURRENCY = int(os.environ.get("SAGE_MAX_CONCURRENCY", "4"))
+_concurrency_sem = threading.Semaphore(_MAX_CONCURRENCY)
 
 # ── Resource limits for the sandboxed child process ──────────────────────────
 # These are set *inside* the subprocess before any user code executes.
@@ -23,9 +34,19 @@ def _sandbox_preamble() -> str:
     """Python code prepended to every subprocess helper to set resource limits."""
     return (
         "import resource\n"
-        f"resource.setrlimit(resource.RLIMIT_AS, ({_MAX_MEMORY}, {_MAX_MEMORY}))\n"
-        f"resource.setrlimit(resource.RLIMIT_CPU, ({_MAX_CPU}, {_MAX_CPU}))\n"
-        f"resource.setrlimit(resource.RLIMIT_NPROC, ({_MAX_PROCESSES}, {_MAX_PROCESSES}))\n"
+        # Each setrlimit is wrapped in try/except so a restrictive host
+        # does not crash the child before it can report a clean error.
+        # Note: RLIMIT_NPROC is per-user, not per-process, so it may fail
+        # if the user already has many processes running.
+        "for _rsc, _lim in [\n"
+        f"    (resource.RLIMIT_AS, ({_MAX_MEMORY}, {_MAX_MEMORY})),\n"
+        f"    (resource.RLIMIT_CPU, ({_MAX_CPU}, {_MAX_CPU})),\n"
+        f"    (resource.RLIMIT_NPROC, ({_MAX_PROCESSES}, {_MAX_PROCESSES})),\n"
+        "]:\n"
+        "    try:\n"
+        "        resource.setrlimit(_rsc, _lim)\n"
+        "    except (ValueError, OSError):\n"
+        "        pass\n"
     )
 
 
@@ -50,12 +71,22 @@ def _sage_to_json(obj):
         return [cr, ci]
     except (TypeError, AttributeError):
         pass
+    # Try float() before int() so rationals like 1/2 don't truncate to 0.
+    # Keep exact ints as ints — if the float value is integral and the
+    # original object is not a Rational/Fraction, return int.
     try:
-        return int(obj)
+        obj_is_rational = any(
+            type(obj).__name__ == t
+            for t in ("Rational", "Fraction")
+        )
+        val = float(obj)
+        if not obj_is_rational and val == int(val) and not isinstance(val, bool):
+            return int(val)
+        return val
     except (TypeError, ValueError):
         pass
     try:
-        return float(obj)
+        return int(obj)
     except (TypeError, ValueError):
         pass
     return str(obj)
@@ -66,32 +97,48 @@ def _run_subprocess(helper_code: str, input_data: dict | None = None,
                     timeout_s: float = 5.0) -> dict:
     """Run *helper_code* in a subprocess with resource limits and timeout.
 
+    Concurrency is bounded by ``_concurrency_sem``.  If the semaphore cannot
+    be acquired within a short timeout, returns ``{"ok": False, ..., "error": "busy"}``.
+
     Returns ``{"ok": bool, "result": ..., "error": ...}``.
     """
-    full_code = _sandbox_preamble() + _SAGE_TO_JSON_SOURCE + helper_code
+    # Try to acquire the concurrency slot
+    if not _concurrency_sem.acquire(blocking=True, timeout=2.0):
+        return {"ok": False, "result": None, "error": "busy"}
     try:
-        proc = subprocess.run(
-            [sys.executable, "-c", full_code],
-            input=json.dumps(input_data) if input_data is not None else None,
-            capture_output=True,
-            text=True,
-            timeout=timeout_s,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "result": None, "error": "timeout"}
-    if proc.returncode != 0:
-        return {
-            "ok": False, "result": None,
-            "error": (proc.stderr or "").strip() or f"exit code {proc.returncode}",
-        }
-    try:
-        return json.loads(proc.stdout)
-    except Exception:  # noqa: BLE001
-        return {
-            "ok": False, "result": None,
-            "error": (proc.stderr or "").strip() or "invalid output",
-        }
+        full_code = _sandbox_preamble() + _SAGE_TO_JSON_SOURCE + helper_code
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-c", full_code],
+                input=json.dumps(input_data) if input_data is not None else None,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning("subprocess timed out after %.1fs", timeout_s)
+            return {"ok": False, "result": None, "error": "timeout"}
+        if proc.returncode != 0:
+            _stderr = (proc.stderr or "").strip()
+            if _stderr:
+                logger.warning("subprocess stderr (rc=%d): %s", proc.returncode, _stderr)
+            return {
+                "ok": False, "result": None,
+                "error": "execution failed",
+            }
+        try:
+            return json.loads(proc.stdout)
+        except Exception:  # noqa: BLE001
+            _stderr = (proc.stderr or "").strip()
+            if _stderr:
+                logger.warning("subprocess parse error, stderr: %s", _stderr)
+            return {
+                "ok": False, "result": None,
+                "error": "invalid output",
+            }
+    finally:
+        _concurrency_sem.release()
 
 
 def run_function(fn_ref: str, args: dict, timeout_s: float = 5.0) -> dict:
@@ -109,8 +156,9 @@ def run_function(fn_ref: str, args: dict, timeout_s: float = 5.0) -> dict:
         "    print(json.dumps({'ok': True, 'result': _sage_to_json(_result), "
         "'error': None}))\n"
         "except BaseException as _exc:\n"
+        "    _tname = type(_exc).__name__\n"
         "    print(json.dumps({'ok': False, 'result': None, "
-        "'error': str(_exc)}))\n"
+        "'error': _tname}))\n"
     )
     return _run_subprocess(helper, input_data=args, timeout_s=timeout_s)
 

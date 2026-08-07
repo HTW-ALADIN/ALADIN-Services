@@ -34,4 +34,17 @@ markers = [
     "integration: marks tests that exercise the full SageMath stack",
     "docker: marks tests that require a Docker daemon",
 ]
-addopts = "--cov=src --cov-report=xml:coverage.xml --cov-report=term-missing"
+addopts = "--cov=src --cov-report=xml:coverage.xml --cov-report=term-missing -m 'not integration and not docker'"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0",
+    "httpx>=0.28.0",
+    "ruff>=0.6",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100

@@ -430,6 +430,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/eigenvectors_left:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Eigenvectors Left
+      operationId: linalg_eigenvectors_left_v1_linalg_eigenvectors_left_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/eigenvectors_left_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Eigenvectors Left V1 Linalg Eigenvectors Left
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/eigenvectors_right:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Eigenvectors Right
+      operationId: linalg_eigenvectors_right_v1_linalg_eigenvectors_right_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/eigenvectors_right_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Eigenvectors Right V1 Linalg Eigenvectors Right
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/evaluate:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Evaluate
+      operationId: linalg_evaluate_v1_linalg_evaluate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/src__api__dynamic_routes__linalg__evaluate_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Evaluate V1 Linalg Evaluate Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /v1/maxima/evaluate:
     post:
       tags:
@@ -440,7 +517,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/evaluate_request'
+              $ref: '#/components/schemas/src__api__dynamic_routes__maxima__evaluate_request'
         required: true
       responses:
         '200':
@@ -667,38 +744,32 @@ components:
       required:
       - matrix
       title: linalg.eigenvalues_request
-    evaluate_request:
+    eigenvectors_left_request:
       properties:
-        expression:
-          type: string
-          title: Expression
-        operation:
-          type: string
-          enum:
-          - simplify
-          - differentiate
-          - integrate
-          - solve
-          - limit
-          - series
-          - laplace
-          title: Operation
-          default: simplify
-        variable:
-          type: string
-          title: Variable
-          default: x
-        bounds:
-          anyOf:
-          - items:
+        matrix:
+          items:
+            items:
               type: number
             type: array
-          - type: 'null'
-          title: Bounds
+          type: array
+          title: Matrix
       type: object
       required:
-      - expression
-      title: maxima.evaluate_request
+      - matrix
+      title: linalg.eigenvectors_left_request
+    eigenvectors_right_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.eigenvectors_right_request
     find-root_request:
       properties:
         expression:
@@ -913,6 +984,35 @@ components:
       required:
       - matrix
       title: linalg.right-kernel_request
+    src__api__dynamic_routes__linalg__evaluate_request:
+      properties:
+        matrices:
+          anyOf:
+          - additionalProperties:
+              items:
+                items:
+                  type: number
+                type: array
+              type: array
+            type: object
+          - type: 'null'
+          title: Matrices
+        vectors:
+          anyOf:
+          - additionalProperties:
+              items:
+                type: number
+              type: array
+            type: object
+          - type: 'null'
+          title: Vectors
+        expression:
+          type: string
+          title: Expression
+      type: object
+      required:
+      - expression
+      title: linalg.evaluate_request
     src__api__dynamic_routes__linalg__solve_request:
       properties:
         a:
@@ -932,6 +1032,38 @@ components:
       - a
       - b
       title: linalg.solve_request
+    src__api__dynamic_routes__maxima__evaluate_request:
+      properties:
+        expression:
+          type: string
+          title: Expression
+        operation:
+          type: string
+          enum:
+          - simplify
+          - differentiate
+          - integrate
+          - solve
+          - limit
+          - series
+          - laplace
+          title: Operation
+          default: simplify
+        variable:
+          type: string
+          title: Variable
+          default: x
+        bounds:
+          anyOf:
+          - items:
+              type: number
+            type: array
+          - type: 'null'
+          title: Bounds
+      type: object
+      required:
+      - expression
+      title: maxima.evaluate_request
     src__api__dynamic_routes__sat__solve_request:
       properties:
         clauses:

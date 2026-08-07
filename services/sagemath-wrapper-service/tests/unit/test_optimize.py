@@ -24,7 +24,7 @@ def test_tutorial_reference_case():
         {"coeffs": {"x": 1.5, "y": 0.5}, "max": 4, "min": 0.5},
     ]
     var_types = {"x": "real", "y": "real"}
-    result = solve_milp(variables, objective, True, constraints, var_types)
+    result = solve_milp(variables, objective, True, constraints, var_types, nonnegative=True)
     assert result["status"] == "optimal"
     assert abs(result["objective_value"] - 1.6666666666666667) < 1e-6
     assert abs(result["values"]["x"] - 0.8333333333333334) < 1e-6
@@ -40,7 +40,7 @@ def test_minimization_with_min_and_max_bounds():
         {"coeffs": {"x": 10, "y": 4}, "min": 40},
     ]
     var_types = {"x": "real", "y": "real"}
-    result = solve_milp(variables, objective, False, constraints, var_types)
+    result = solve_milp(variables, objective, False, constraints, var_types, nonnegative=True)
     assert result["status"] == "optimal"
     vals = result["values"]
     # Verify constraints
@@ -60,7 +60,7 @@ def test_infeasible_problem_returns_infeasible_status():
         {"coeffs": {"x": 1}, "min": 5},
     ]
     var_types = {"x": "real"}
-    result = solve_milp(variables, objective, True, constraints, var_types)
+    result = solve_milp(variables, objective, True, constraints, var_types, nonnegative=True)
     assert result["status"] == "infeasible"
     assert result["values"] is None
 
@@ -71,7 +71,7 @@ def test_unbounded_problem_returns_unbounded_status():
     objective = {"x": 1}
     constraints = []
     var_types = {"x": "real"}
-    result = solve_milp(variables, objective, True, constraints, var_types)
+    result = solve_milp(variables, objective, True, constraints, var_types, nonnegative=True)
     assert result["status"] == "unbounded"
     assert result["values"] is None
 
@@ -82,9 +82,37 @@ def test_integer_variable_type_enforced():
     objective = {"x": 1}
     constraints = [{"coeffs": {"x": 2}, "max": 3}]
     var_types = {"x": "integer"}
-    result = solve_milp(variables, objective, True, constraints, var_types)
+    result = solve_milp(variables, objective, True, constraints, var_types, nonnegative=True)
     assert result["status"] == "optimal"
     assert result["values"]["x"] == 1  # 1, not 1.5
+
+
+@needs_sage
+def test_negative_optimal_value():
+    """Free real variables with negative optimal value are solved correctly."""
+    variables = ["x"]
+    objective = {"x": -1}  # minimize -x → maximize x, but with negative obj
+    constraints = [
+        {"coeffs": {"x": 1}, "max": 10},
+        {"coeffs": {"x": 1}, "min": -10},
+    ]
+    # Without nonnegativity, x can be -10, giving objective -10
+    result = solve_milp(variables, objective, False, constraints, {})
+    assert result["status"] == "optimal"
+    assert result["values"]["x"] == 10  # minimize -x → x=10
+    assert abs(result["objective_value"] - (-10)) < 1e-9
+
+
+@needs_sage
+def test_unbounded_returns_proper_status():
+    """Unbounded problem returns 'unbounded' status, not 500."""
+    variables = ["x"]
+    objective = {"x": 1}
+    constraints = []
+    # No bounds, maximize x → unbounded
+    result = solve_milp(variables, objective, True, constraints, {})
+    assert result["status"] == "unbounded"
+    assert result["values"] is None
 
 
 def test_unknown_solver_raises():

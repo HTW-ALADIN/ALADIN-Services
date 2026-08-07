@@ -6,6 +6,7 @@
     properties:
       expression:
         type: string
+        maxLength: 10000
       operation:
         type: string
         enum: [simplify, differentiate, integrate, solve, limit, series, laplace]
@@ -15,10 +16,10 @@
         default: x
       bounds:
         type: array
+        maxItems: 2
         items:
           type: number
         minItems: 2
-        maxItems: 2
     required: [expression]
     allOf:
       - if:

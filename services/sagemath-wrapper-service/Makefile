@@ -2,11 +2,21 @@
 
 SERVICE := sagemath-wrapper
 
+# ── Development installation ──────────────────────────────────────────────
 prep:
 	@pip install -e ".[test]"
 
+# ── Testing ───────────────────────────────────────────────────────────────
+# Non-Sage tests (contract, unit tests that don't need SageMath):
+# run with plain python -m pytest.
+# Integration tests requiring SageMath: use sage -python -m pytest
+# with -m integration.
 test:
-	@python -m pytest tests/
+	@python -m pytest -m "not integration and not docker" tests/
+
+# Full test suite (requires SageMath):
+test-all:
+	@sage -python -m pytest tests/
 
 lint:
 	@ruff check src/ tests/

@@ -1,4 +1,4 @@
-FROM sagemath/sagemath:latest
+FROM sagemath/sagemath:10.4
 
 # The base image already runs as 'sage' user (uid=1001).
 # Switch to root for build steps that need it.

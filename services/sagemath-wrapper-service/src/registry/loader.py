@@ -2,6 +2,7 @@
 
 import importlib
 import os
+import warnings
 from typing import Literal
 
 import jsonschema
@@ -27,9 +28,15 @@ class OperationSpec(pydantic.BaseModel):
 def load_registry(path: str) -> list[OperationSpec]:
     """Load all ``*.yaml`` files from *path* (file or directory).
 
-    Validates each entry: JSON Schema, function_ref existence, duplicate IDs.
+    Validates each entry: JSON Schema, function_ref format, duplicate IDs.
+    By default, ``function_ref`` module imports are **lazy** (format-only
+    validation) so the OpenAPI export works without SageMath at import time.
+    Set ``SAGE_STRICT_REGISTRY=1`` to enable full import validation at
+    load time.
     Returns a list of :class:`OperationSpec` objects.
     """
+    strict = os.environ.get("SAGE_STRICT_REGISTRY", "") == "1"
+
     if os.path.isfile(path):
         paths = [path]
     elif os.path.isdir(path):
@@ -77,16 +84,30 @@ def load_registry(path: str) -> list[OperationSpec]:
                     raise ValueError(
                         f"invalid function_ref format '{function_ref}' — expected 'module:function'"
                     ) from None
-                try:
-                    mod = importlib.import_module(module_path)
-                except ImportError as exc:
-                    raise ValueError(
-                        f"function_ref module '{module_path}' cannot be imported: {exc}"
-                    ) from exc
-                if not hasattr(mod, func_name):
-                    raise ValueError(
-                        f"function_ref '{func_name}' not found in module '{module_path}'"
-                    )
+                if strict:
+                    try:
+                        mod = importlib.import_module(module_path)
+                    except ImportError as exc:
+                        raise ValueError(
+                            f"function_ref module '{module_path}' cannot be imported: {exc}"
+                        ) from exc
+                    if not hasattr(mod, func_name):
+                        raise ValueError(
+                            f"function_ref '{func_name}' not found in module '{module_path}'"
+                        )
+                else:
+                    # Lazy mode: log a warning on import failure, don't crash
+                    try:
+                        mod = importlib.import_module(module_path)
+                        if not hasattr(mod, func_name):
+                            warnings.warn(
+                                f"function_ref '{func_name}' not found in module '{module_path}'"
+                            )
+                    except ImportError:
+                        warnings.warn(
+                            f"function_ref module '{module_path}' cannot be imported "
+                            f"(set SAGE_STRICT_REGISTRY=1 to make this an error)"
+                        )
 
             spec = OperationSpec(**entry)
             if spec.id in seen_ids:
