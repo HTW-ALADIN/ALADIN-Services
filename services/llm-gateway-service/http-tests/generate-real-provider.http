@@ -44,9 +44,7 @@ Content-Type: application/json
 {
   "provider": "real-provider",
   "model": "{{model}}",
-  "messages": [
-    { "role": "user", "content": "What is 2 + 2? Reply with only the number." }
-  ],
+  "messages": [{"parts":[{"type":"text","text":"test"}],"id":"RiW7UghLYXNpUhjH","role":"user"}],
   "customProvider": {
     "baseUrl": "{{providerBaseUrl}}",
     "apiKey": "{{providerApiKey}}"
