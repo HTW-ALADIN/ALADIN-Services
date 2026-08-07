@@ -12,14 +12,14 @@ prep:
 # Integration tests requiring SageMath: use sage -python -m pytest
 # with -m integration.
 test:
-	@python -m pytest -m "not integration and not docker" tests/
+	@uv run python -m pytest -m "not integration and not docker" tests/
 
 # Full test suite (requires SageMath):
 test-all:
 	@sage -python -m pytest tests/
 
 lint:
-	@ruff check src/ tests/
+	@uv run ruff check src/ tests/
 
 start:
 	@sage -python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -35,4 +35,4 @@ docker-run:
 	@docker run --rm -p 8000:8000 $(SERVICE)
 
 generate-openapi:
-	@python scripts/export_openapi.py --out openapi/openapi.yaml
+	@uv run python scripts/export_openapi.py --out openapi/openapi.yaml
