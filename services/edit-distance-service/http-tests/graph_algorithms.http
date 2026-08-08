@@ -1,0 +1,161 @@
+### Graph Edit Distance - Discovery
+GET http://localhost:8000/v1/graphs/algorithms
+
+### GED A* (NetworkX, exact mode)
+POST http://localhost:8000/v1/graphs/distance
+Content-Type: application/json
+
+{
+  "algorithm": "ged_astar",
+  "params": {
+    "mode": "exact",
+    "timeout_ms": 5000
+  },
+  "graphs": [
+    {
+      "id": "pair-1",
+      "g1": {
+        "nodes": [
+          { "id": "A", "label": "A" },
+          { "id": "B", "label": "B" },
+          { "id": "C", "label": "C" }
+        ],
+        "edges": [
+          { "source": "A", "target": "B" },
+          { "source": "B", "target": "C" }
+        ]
+      },
+      "g2": {
+        "nodes": [
+          { "id": "A", "label": "A" },
+          { "id": "B", "label": "B" },
+          { "id": "C", "label": "C" }
+        ],
+        "edges": [
+          { "source": "A", "target": "B" },
+          { "source": "B", "target": "C" },
+          { "source": "A", "target": "C" }
+        ]
+      }
+    }
+  ],
+  "output": { "include_node_map": false }
+}
+
+### GED A* (NetworkX, anytime mode)
+POST http://localhost:8000/v1/graphs/distance
+Content-Type: application/json
+
+{
+  "algorithm": "ged_astar",
+  "params": {
+    "mode": "anytime",
+    "timeout_ms": 3000
+  },
+  "graphs": [
+    {
+      "id": "pair-1",
+      "g1": {
+        "nodes": [
+          { "id": "1", "label": "A" },
+          { "id": "2", "label": "B" }
+        ],
+        "edges": [
+          { "source": "1", "target": "2" }
+        ]
+      },
+      "g2": {
+        "nodes": [
+          { "id": "1", "label": "A" },
+          { "id": "2", "label": "B" },
+          { "id": "3", "label": "C" }
+        ],
+        "edges": [
+          { "source": "1", "target": "2" },
+          { "source": "2", "target": "3" }
+        ]
+      }
+    }
+  ]
+}
+
+### GED Hausdorff (GMatch4py)
+POST http://localhost:8000/v1/graphs/distance
+Content-Type: application/json
+
+{
+  "algorithm": "ged_hausdorff",
+  "params": {
+    "node_del": 1.0,
+    "node_ins": 1.0,
+    "edge_del": 1.0,
+    "edge_ins": 1.0
+  },
+  "graphs": [
+    {
+      "id": "pair-1",
+      "g1": {
+        "nodes": [
+          { "id": "A", "label": "A" },
+          { "id": "B", "label": "B" }
+        ],
+        "edges": [
+          { "source": "A", "target": "B" }
+        ]
+      },
+      "g2": {
+        "nodes": [
+          { "id": "A", "label": "A" },
+          { "id": "B", "label": "B" },
+          { "id": "C", "label": "C" }
+        ],
+        "edges": [
+          { "source": "A", "target": "B" },
+          { "source": "B", "target": "C" }
+        ]
+      }
+    }
+  ]
+}
+
+### GED Greedy (GMatch4py)
+POST http://localhost:8000/v1/graphs/distance
+Content-Type: application/json
+
+{
+  "algorithm": "ged_greedy",
+  "params": {
+    "node_del": 1.0,
+    "node_ins": 1.0,
+    "edge_del": 1.0,
+    "edge_ins": 1.0
+  },
+  "graphs": [
+    {
+      "id": "pair-1",
+      "g1": {
+        "nodes": [
+          { "id": "A", "label": "A" },
+          { "id": "B", "label": "B" }
+        ],
+        "edges": [
+          { "source": "A", "target": "B" }
+        ]
+      },
+      "g2": {
+        "nodes": [
+          { "id": "A", "label": "A" },
+          { "id": "B", "label": "B" },
+          { "id": "C", "label": "C" }
+        ],
+        "edges": [
+          { "source": "A", "target": "B" },
+          { "source": "B", "target": "C" }
+        ]
+      }
+    }
+  ]
+}
+
+### NOTE: Results are returned inline by `POST /v1/graphs/distance` and no separate
+### resource GET/DELETE endpoints are available.
