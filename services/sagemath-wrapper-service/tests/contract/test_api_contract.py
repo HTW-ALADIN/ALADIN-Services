@@ -113,6 +113,20 @@ def test_post_maxima_eval_rejects_injection_with_400(monkeypatch):
     assert "Traceback" not in resp.text
 
 
+def test_busy_sandbox_returns_503_with_retry_after(monkeypatch):
+    """When the sandbox concurrency semaphore is exhausted, clients get a
+    retryable 503 (not a generic 400), so they don't treat it as a bad
+    request they should never retry."""
+    from src.registry import dispatcher as disp
+    from src.sandbox.executor import BUSY_ERROR
+
+    monkeypatch.setattr(disp, "run_function", lambda *a, **kw: {"ok": False, "result": None, "error": BUSY_ERROR})
+
+    resp = client.post("/v1/linalg/determinant", json={"matrix": [[1, 2], [3, 4]]})
+    assert resp.status_code == 503
+    assert resp.headers.get("retry-after") is not None
+
+
 # ── OpenAPI / Health ───────────────────────────────────────────────────────
 
 def test_openapi_json_is_served_and_valid():

@@ -8,13 +8,21 @@ RUN mkdir -p /app && chown sage:sage /app
 
 WORKDIR /app
 
-# Copy source code, config, and registry YAMLs
-COPY pyproject.toml .
+# Copy source code, config, lock file and registry YAMLs
+COPY pyproject.toml uv.lock .
 COPY src/ src/
 COPY registry/ registry/
 
-# Install Python runtime dependencies (no test deps in production image)
-RUN sage -python -m pip install --no-cache-dir -e "." \
+# Resolve exact, pinned runtime dependency versions from uv.lock (no test
+# deps in production image) so the published image is reproducible, then
+# install them with sage's own pip. `uv` itself is only a build-time tool
+# and is not installed into the image's runtime environment.
+RUN pip install --no-cache-dir uv \
+    && uv export --frozen --no-dev --no-hashes --no-emit-project -o /tmp/requirements.lock.txt \
+    && sage -python -m pip install --no-cache-dir -r /tmp/requirements.lock.txt \
+    && sage -python -m pip install --no-cache-dir --no-deps -e "." \
+    && pip uninstall --yes uv \
+    && rm -f /tmp/requirements.lock.txt \
     && rm -rf /root/.cache /home/sage/.cache /tmp/*
 
 # Rebuild cysignals from source to avoid mmap issues (WSL2 / Docker known problem)

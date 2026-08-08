@@ -4,6 +4,7 @@ from src.core.linalg import (
     charpoly,
     cholesky,
     determinant,
+    evaluate_expression,
     inverse,
     left_kernel,
     lu,
@@ -159,3 +160,41 @@ def test_non_square_matrix_for_exp_raises():
 def test_non_square_matrix_for_charpoly_raises():
     with pytest.raises(ValueError, match=r"(?i)square"):
         charpoly([[1, 2, 3], [4, 5, 6]])
+
+
+# ── evaluate_expression: validation runs before `sage.all` is imported, so
+# these injection/identifier checks don't require SageMath. ────────────────
+
+@pytest.mark.parametrize("expression", [
+    "__import__('os').system('id')",
+    "A.__class__.__bases__[0]",
+    "eval('1')",
+    "exec('1')",
+    "getattr(A, '__class__')",
+    "A.system()",
+])
+def test_evaluate_expression_rejects_dangerous_expressions(expression):
+    with pytest.raises(ValueError):
+        evaluate_expression(expression, matrices={"A": [[1, 2], [3, 4]]})
+
+
+@pytest.mark.parametrize("bad_name", [
+    "A; import os",
+    "__builtins__",
+    "os",
+    "eval",
+    "__A",
+])
+def test_evaluate_expression_rejects_dangerous_matrix_names(bad_name):
+    with pytest.raises(ValueError):
+        evaluate_expression("1", matrices={bad_name: [[1, 2], [3, 4]]})
+
+
+def test_evaluate_expression_rejects_dangerous_vector_names():
+    with pytest.raises(ValueError):
+        evaluate_expression("1", vectors={"os": [1, 2]})
+
+
+def test_evaluate_expression_rejects_overlong_expression():
+    with pytest.raises(ValueError, match=r"(?i)too long"):
+        evaluate_expression("A+" * 600 + "A", matrices={"A": [[1, 2], [3, 4]]})

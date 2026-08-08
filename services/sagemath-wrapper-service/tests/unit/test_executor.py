@@ -2,7 +2,15 @@
 
 import time
 
-from src.sandbox.executor import run_code, run_function
+from src.sandbox.executor import _SAGE_TO_JSON_SOURCE, run_code, run_function
+
+
+def _load_sage_to_json():
+    """Exec the embedded ``_sage_to_json`` source (single source of truth
+    also used inside the sandboxed subprocess) and return the function."""
+    ns: dict = {}
+    exec(_SAGE_TO_JSON_SOURCE, ns)  # noqa: S102 - test-only, trusted local source
+    return ns["_sage_to_json"]
 
 
 def test_run_function_returns_ok_for_successful_call():
@@ -98,3 +106,53 @@ def test_sandbox_code_exception_is_sanitized():
     # The error should not contain the secret message (it's from the subprocess stdout, not stderr)
     # This test is informational — the subprocess catches the exception and sends type name
     assert result["error"] is not None
+
+
+def test_sage_to_json_real_valued_object_stays_a_number():
+    """A real-only object exposing .real()/.imag() (like a SageMath real
+    number) must not be corrupted into a [real, imag] pair — only genuinely
+    complex values (non-zero imaginary part) should become pairs.
+
+    Exercises the embedded ``_sage_to_json`` helper (single source of truth
+    for both run_code and run_function) directly, without needing SageMath:
+    a plain object with .real()/.imag() methods mimics
+    RealNumber/RealDoubleElement, which also expose those methods.
+    """
+    sage_to_json = _load_sage_to_json()
+
+    class _FakeReal:
+        def __init__(self, v):
+            self._v = v
+
+        def real(self):
+            return self._v
+
+        def imag(self):
+            return 0.0
+
+    assert sage_to_json(_FakeReal(3.5)) == 3.5
+
+
+def test_sage_to_json_complex_valued_object_stays_a_pair():
+    """A genuinely complex object (non-zero imaginary part) still converts
+    to a [real, imag] pair."""
+    sage_to_json = _load_sage_to_json()
+
+    class _FakeComplex:
+        def __init__(self, r, i):
+            self._r, self._i = r, i
+
+        def real(self):
+            return self._r
+
+        def imag(self):
+            return self._i
+
+    assert sage_to_json(_FakeComplex(1.0, 2.0)) == [1.0, 2.0]
+
+
+def test_sage_to_json_python_complex_with_zero_imag_stays_a_number():
+    """A plain python complex with zero imaginary part converts to a float,
+    not a string or a [real, 0.0] pair."""
+    sage_to_json = _load_sage_to_json()
+    assert sage_to_json(complex(4.0, 0.0)) == 4

@@ -8,6 +8,7 @@ from pydantic import BaseModel, create_model
 
 from src.registry.dispatcher import execute_operation
 from src.registry.loader import OperationSpec
+from src.sandbox.executor import BUSY_ERROR
 
 
 def _json_schema_to_python_type(schema: dict, op_id: str = "?") -> type:
@@ -72,6 +73,7 @@ def register_routes(app: FastAPI, operations: list[OperationSpec]) -> None:
     Each operation gets a route at ``/v1/{op.id.replace('.', '/')}``.
     Override handling:
     - ``{"ok": True, "result": <value>}`` → 200 with the raw result
+    - ``{"ok": False, "error": "busy"}`` → 503 with ``Retry-After`` header
     - ``{"ok": False, "error": <msg>}`` → 400 with ``{"detail": msg}``
     """
     router = APIRouter(prefix="/v1", tags=["operations"])
@@ -92,6 +94,12 @@ def _register_one(router: APIRouter, path: str, op: OperationSpec, req_model: ty
         payload = body.model_dump()
         result = execute_operation(op, payload)
         if not result["ok"]:
+            if result["error"] == BUSY_ERROR:
+                raise HTTPException(
+                    status_code=503,
+                    detail="server busy, please retry",
+                    headers={"Retry-After": "2"},
+                )
             raise HTTPException(status_code=400, detail=result["error"])
         return result["result"]
 

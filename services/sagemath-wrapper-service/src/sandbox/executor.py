@@ -15,6 +15,12 @@ import threading
 
 logger = logging.getLogger(__name__)
 
+# Sentinel error string used when the concurrency semaphore could not be
+# acquired. Callers (e.g. src.api.dynamic_routes) use this to distinguish a
+# transient, retryable "server busy" condition (→ HTTP 503) from a genuine
+# input/execution error (→ HTTP 400).
+BUSY_ERROR = "busy"
+
 # ── Concurrency limit ─────────────────────────────────────────────────────────
 # Bounded by a semaphore so we don't overwhelm the host.  Size comes from
 # env SAGE_MAX_CONCURRENCY (default 4).
@@ -61,16 +67,24 @@ def _sage_to_json(obj):
         return [_sage_to_json(v) for v in obj]
     if isinstance(obj, dict):
         return {k: _sage_to_json(v) for k, v in obj.items()}
-    # Complex numbers → [real, imag] pair
+    # Complex numbers → [real, imag] pair. Sage real types (RealNumber,
+    # RealDoubleElement, ...) also expose .real()/.imag(), so only take
+    # this branch when the imaginary part is actually non-zero — otherwise
+    # fall through to the plain float/int conversion below (using the real
+    # part), so genuinely real Sage values are not corrupted into pairs.
+    cr = ci = None
     try:
         if isinstance(obj, complex):
-            return [obj.real, obj.imag]
-        # SageMath complex types (e.g. sage.rings.complex_number.ComplexNumber)
-        cr = float(obj.real())
-        ci = float(obj.imag())
-        return [cr, ci]
+            cr, ci = obj.real, obj.imag
+        else:
+            # SageMath complex types (e.g. sage.rings.complex_number.ComplexNumber)
+            cr, ci = float(obj.real()), float(obj.imag())
     except (TypeError, AttributeError):
         pass
+    if ci is not None and ci != 0:
+        return [cr, ci]
+    if cr is not None:
+        obj = cr
     # Try float() before int() so rationals like 1/2 don't truncate to 0.
     # Keep exact ints as ints — if the float value is integral and the
     # original object is not a Rational/Fraction, return int.
@@ -104,7 +118,7 @@ def _run_subprocess(helper_code: str, input_data: dict | None = None,
     """
     # Try to acquire the concurrency slot
     if not _concurrency_sem.acquire(blocking=True, timeout=2.0):
-        return {"ok": False, "result": None, "error": "busy"}
+        return {"ok": False, "result": None, "error": BUSY_ERROR}
     try:
         full_code = _sandbox_preamble() + _SAGE_TO_JSON_SOURCE + helper_code
         try:

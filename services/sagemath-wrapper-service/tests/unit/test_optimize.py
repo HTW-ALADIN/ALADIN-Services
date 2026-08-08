@@ -136,3 +136,26 @@ def test_minimize_quadratic():
     result = minimize("x^2 + y^2", ["x", "y"], [1.0, 1.0])
     assert abs(result[0]) < 1e-6
     assert abs(result[1]) < 1e-6
+
+
+# ── Expression validation runs before `sage.all` is imported, so these
+# injection checks don't require SageMath. ─────────────────────────────────
+
+def test_find_root_rejects_injection_attempt():
+    with pytest.raises(ValueError):
+        find_root("__import__('os').system('id')", "x", 0, 5)
+
+
+def test_find_root_rejects_bad_variable_name():
+    with pytest.raises(ValueError):
+        find_root("x - 2", "x; import os", 0, 5)
+
+
+def test_minimize_rejects_injection_attempt():
+    with pytest.raises(ValueError):
+        minimize("__import__('os').system('id')", ["x"], [1.0])
+
+
+def test_minimize_rejects_bad_variable_name():
+    with pytest.raises(ValueError):
+        minimize("x^2", ["os"], [1.0])

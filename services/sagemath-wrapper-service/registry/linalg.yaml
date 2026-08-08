@@ -254,7 +254,7 @@
   timeout_s: 5.0
   sage_template: |
     A = Matrix({{ matrix|sage_literal }})
-    __result__ = A.kernel().basis_matrix().rows()
+    __result__ = [list(row) for row in A.kernel().basis_matrix().rows()]
 
 - id: linalg.echelon_form
   summary: Row echelon form of a matrix
@@ -275,7 +275,7 @@
   timeout_s: 5.0
   sage_template: |
     A = Matrix({{ matrix|sage_literal }})
-    __result__ = A.echelon_form().rows()
+    __result__ = [list(row) for row in A.echelon_form().rows()]
 
 - id: linalg.rank
   summary: Rank of a matrix
@@ -410,13 +410,15 @@
 
 - id: linalg.evaluate
   summary: Evaluate a SageMath matrix expression with named matrices and vectors
-  kind: template
+  kind: function
   input_schema:
     type: object
     properties:
       matrices:
         type: object
         description: "Named matrices as {name: [[row], ...]}"
+        propertyNames:
+          pattern: "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
         additionalProperties:
           type: array
           maxItems: 1000
@@ -428,6 +430,8 @@
       vectors:
         type: object
         description: "Named vectors as {name: [...]}"
+        propertyNames:
+          pattern: "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
         additionalProperties:
           type: array
           maxItems: 1000
@@ -435,27 +439,9 @@
             type: number
       expression:
         type: string
-        maxLength: 10000
-        description: "SageMath expression using the named matrices/vectors"
+        maxLength: 1000
+        description: "SageMath matrix expression using the named matrices/vectors and an allowlisted set of methods"
     required: [expression]
   output_type: object
   timeout_s: 30.0
-  sage_template: |
-    {% if matrices is defined %}
-    {% for name, data in matrices.items() %}
-    {{ name }} = Matrix({{ data|sage_literal }})
-    {% endfor %}
-    {% endif %}
-    {% if vectors is defined %}
-    {% for name, data in vectors.items() %}
-    {{ name }} = vector({{ data|sage_literal }})
-    {% endfor %}
-    {% endif %}
-    _result = eval({{ expression|sage_literal }})
-    try:
-        __result__ = [list(row) for row in _result.rows()]
-    except AttributeError:
-        try:
-            __result__ = list(_result)
-        except TypeError:
-            __result__ = _result
+  function_ref: "src.core.linalg:evaluate_expression"

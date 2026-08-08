@@ -6,6 +6,8 @@ for running these in a subprocess with the configured timeout and limits.
 
 import re
 
+from src.core.expr_safety import validate_no_dangerous_substrings
+
 _ALLOWED_OPERATIONS = ("simplify", "differentiate", "integrate", "solve", "limit", "series", "laplace")
 
 # Token whitelist: numbers, known functions, variable names, operators, whitespace
@@ -28,11 +30,7 @@ def _validate_expression(expression: str) -> None:
         raise ValueError(f"expression too long ({len(expression)} > 500)")
     if not expression or not expression.strip():
         raise ValueError("expression must not be empty")
-    lower = expression.lower()
-    for bad in ("system", "openr", "openw", "load", "os.", "eval", "exec",
-                "__import__", "subprocess", "import", "compile", "execfile"):
-        if bad in lower:
-            raise ValueError(f"disallowed token '{bad}' in expression")
+    validate_no_dangerous_substrings(expression)
     if not _TOKEN_RE.match(expression):
         raise ValueError("expression contains invalid characters or tokens")
 

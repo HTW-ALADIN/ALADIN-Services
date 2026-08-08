@@ -43,7 +43,7 @@
     properties:
       expression:
         type: string
-        maxLength: 10000
+        maxLength: 500
       variable:
         type: string
       a:
@@ -63,7 +63,7 @@
     properties:
       expression:
         type: string
-        maxLength: 10000
+        maxLength: 500
       variables:
         type: array
         maxItems: 1000

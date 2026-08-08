@@ -4,6 +4,38 @@ Each function performs SageMath work directly. The dispatcher is responsible
 for running these in a subprocess with the configured timeout and limits.
 """
 
+import re
+
+from src.core.expr_safety import validate_identifier, validate_no_dangerous_substrings
+
+# Token whitelist mirroring src.core.maxima's expression grammar: numbers,
+# known functions, variable names, operators, whitespace.
+_MAX_EXPRESSION_LENGTH = 500
+_TOKEN_RE = re.compile(
+    r"^(?:"
+    r"\d+\.?\d*(?:e[+-]?\d+)?|"
+    r"(?:sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|"
+    r"exp|log|ln|sqrt|abs|floor|ceil|sign|erf|"
+    r"real|imag|conjugate|arctan|arcsin|arccos|arctan2)|"
+    r"[a-zA-Z_][a-zA-Z0-9_]*|"
+    r"[+\-*/^()\[\],]|"
+    r"\s+"
+    r")+$",
+)
+
+
+def _validate_expression(expression: str) -> None:
+    """Validate that expression contains only whitelisted tokens."""
+    if len(expression) > _MAX_EXPRESSION_LENGTH:
+        raise ValueError(
+            f"expression too long ({len(expression)} > {_MAX_EXPRESSION_LENGTH})"
+        )
+    if not expression or not expression.strip():
+        raise ValueError("expression must not be empty")
+    validate_no_dangerous_substrings(expression)
+    if not _TOKEN_RE.match(expression):
+        raise ValueError("expression contains invalid characters or tokens")
+
 
 def solve_milp(variables, objective, maximize, constraints, var_types=None, solver="GLPK", nonnegative=None):
     if solver not in ("GLPK", "PPL", "CBC", "InteractiveLP", "CPLEX", "CVXOPT"):
@@ -97,6 +129,9 @@ def solve_milp(variables, objective, maximize, constraints, var_types=None, solv
 
 def find_root(expression, variable, a, b):
     """Find root of expression in interval [a, b]."""
+    _validate_expression(expression)
+    validate_identifier(variable, "variable")
+
     from sage.all import SR, var
     from sage.all import find_root as sage_find_root
     v = var(variable)
@@ -109,6 +144,9 @@ def minimize(expression, variables, x0):
 
     *variables* determines the variable order and must match *x0* in length.
     """
+    _validate_expression(expression)
+    for name in variables:
+        validate_identifier(name, "variable")
     if len(variables) != len(x0):
         raise ValueError(
             f"variables count ({len(variables)}) must match x0 length ({len(x0)})"

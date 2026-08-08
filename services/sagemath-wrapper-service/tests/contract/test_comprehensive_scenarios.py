@@ -424,11 +424,15 @@ class TestTemplateEndpoints:
         assert r.json() == [3.0, 7.0]
 
     def test_evaluate_expression(self, monkeypatch):
-        """linalg.evaluate with named matrices and an expression."""
+        """linalg.evaluate with named matrices and an expression.
+
+        linalg.evaluate is a `kind: function` operation (routed through
+        run_function), not a template — see src.core.linalg.evaluate_expression.
+        """
         from src.registry import dispatcher as disp
         mock_result = [[-2.0, 1.0], [1.5, -0.5]]
-        monkeypatch.setattr(disp, "run_code",
-                            lambda c, timeout_s=5.0, prepend_sage_import=True: {"ok": True, "result": mock_result, "error": None})
+        monkeypatch.setattr(disp, "run_function",
+                            lambda fn_ref, args, timeout_s=5.0: {"ok": True, "result": mock_result, "error": None})
         r = client.post("/v1/linalg/evaluate", json={
             "matrices": {"A": [[1, 2], [3, 4]]},
             "expression": "A.inverse()"

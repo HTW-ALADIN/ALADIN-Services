@@ -4,6 +4,31 @@ Each function performs SageMath work directly. The dispatcher is responsible
 for running these in a subprocess with the configured timeout and limits.
 """
 
+import re
+
+from src.core.expr_safety import validate_identifier, validate_no_dangerous_substrings
+
+# Matrix-algebra expressions may reference declared matrix/vector names,
+# numbers, a small allowlist of methods/attributes, and arithmetic operators.
+# Anything else (including dunder attribute access) is rejected.
+_MAX_EXPRESSION_LENGTH = 1000
+_ALLOWED_METHODS = frozenset({
+    "inverse", "transpose", "det", "rank", "charpoly", "echelon_form",
+    "kernel", "right_kernel", "left_kernel", "eigenvalues",
+    "eigenvectors_left", "eigenvectors_right", "exp", "LU", "QR",
+    "cholesky", "SVD", "T", "trace", "norm", "adjugate", "rows", "columns",
+    "list",
+})
+_EXPR_TOKEN_RE = re.compile(
+    r"^(?:"
+    r"\d+\.?\d*(?:e[+-]?\d+)?|"
+    r"[A-Za-z_][A-Za-z0-9_]*|"
+    r"[+\-*/^().,]|"
+    r"\s+"
+    r")+$",
+)
+_DOTTED_METHOD_RE = re.compile(r"\.([A-Za-z_][A-Za-z0-9_]*)")
+
 
 def _validate_square(matrix, name):
     """Ensure matrix is a non-empty square list-of-lists."""
@@ -90,14 +115,76 @@ def matrix_exp(matrix):
 
 def right_kernel(matrix):
     _validate_square(matrix, "right_kernel")
-    return _to_rows(_sage_matrix(matrix).right_kernel())
+    return _to_rows(_sage_matrix(matrix).right_kernel().basis_matrix())
 
 
 def left_kernel(matrix):
     _validate_square(matrix, "left_kernel")
-    return _to_rows(_sage_matrix(matrix).left_kernel())
+    return _to_rows(_sage_matrix(matrix).left_kernel().basis_matrix())
 
 
 def charpoly(matrix):
     _validate_square(matrix, "charpoly")
     return str(_sage_matrix(matrix).charpoly("x"))
+
+
+def _validate_matrix_expression(expression: str) -> None:
+    """Validate a matrix-algebra expression before it is evaluated.
+
+    Only declared identifiers, numbers, arithmetic operators, and an
+    explicit allowlist of matrix/vector methods are permitted. Dunder
+    attribute access and any dangerous substring (import, exec, eval, ...)
+    are rejected outright.
+    """
+    if len(expression) > _MAX_EXPRESSION_LENGTH:
+        raise ValueError(
+            f"expression too long ({len(expression)} > {_MAX_EXPRESSION_LENGTH})"
+        )
+    if not expression or not expression.strip():
+        raise ValueError("expression must not be empty")
+    validate_no_dangerous_substrings(expression)
+    if not _EXPR_TOKEN_RE.match(expression):
+        raise ValueError("expression contains invalid characters or tokens")
+    for method in _DOTTED_METHOD_RE.findall(expression):
+        if method not in _ALLOWED_METHODS:
+            raise ValueError(f"method '{method}' is not allowed in expression")
+
+
+def evaluate_expression(expression, matrices=None, vectors=None):
+    """Evaluate a matrix-algebra *expression* against named matrices/vectors.
+
+    *matrices* and *vectors* are ``{name: data}`` mappings used to build
+    SageMath ``Matrix``/``vector`` objects bound to *expression*'s
+    namespace. The expression is validated (allowlisted methods only, no
+    dunder attribute access, no dangerous substrings) and evaluated with an
+    empty ``__builtins__`` so no Python builtin (``__import__``, ``open``,
+    ``exec``, ...) is reachable even if validation is bypassed.
+    """
+    matrices = matrices or {}
+    vectors = vectors or {}
+
+    for name in (*matrices.keys(), *vectors.keys()):
+        validate_identifier(name, "matrix/vector name")
+    _validate_matrix_expression(expression)
+
+    from sage.all import RDF, vector
+    from sage.all import matrix as sage_matrix
+
+    namespace = {}
+    for name, data in matrices.items():
+        namespace[name] = sage_matrix(RDF, data)
+    for name, data in vectors.items():
+        namespace[name] = vector(RDF, data)
+
+    try:
+        result = eval(expression, {"__builtins__": {}}, namespace)
+    except Exception as exc:
+        raise ValueError(f"failed to evaluate expression: {exc}") from exc
+
+    try:
+        return [list(row) for row in result.rows()]
+    except AttributeError:
+        try:
+            return list(result)
+        except TypeError:
+            return result
