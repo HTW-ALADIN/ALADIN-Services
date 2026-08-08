@@ -113,9 +113,9 @@ def find_root(expression, variable, a, b):
 
     from sage.all import SR, var
     from sage.all import find_root as sage_find_root
-    v = var(variable)
+    var(variable)
     f = SR(expression)
-    return float(sage_find_root(f, a, b, v))
+    return float(sage_find_root(f, a, b))
 
 
 def minimize(expression, variables, x0):

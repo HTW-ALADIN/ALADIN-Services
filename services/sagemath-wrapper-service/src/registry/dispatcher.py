@@ -120,9 +120,11 @@ def execute_operation(op: OperationSpec, payload: dict) -> dict:
     if op.output_type == "vector" and not isinstance(v, list):
         return {"ok": False, "result": None, "error": f"expected vector (list), got {type(v).__name__}"}
     if op.output_type == "matrix" and not (
-        isinstance(v, list) and len(v) > 0 and all(isinstance(r, list) for r in v)
+        isinstance(v, list) and all(isinstance(r, list) for r in v)
     ):
-        return {"ok": False, "result": None, "error": f"expected matrix (non-empty list of lists), got {type(v).__name__}"}
+        # An empty list is a valid matrix result (e.g. a trivial kernel
+        # basis for an invertible matrix), so it must not be rejected here.
+        return {"ok": False, "result": None, "error": f"expected matrix (list of lists), got {type(v).__name__}"}
     if op.output_type == "sat_result" and not (isinstance(v, dict) and "satisfiable" in v):
         return {"ok": False, "result": None, "error": f"expected sat_result (dict with 'satisfiable'), got {type(v).__name__}"}
 

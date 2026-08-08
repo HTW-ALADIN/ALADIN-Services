@@ -19,15 +19,21 @@ _ALLOWED_METHODS = frozenset({
     "cholesky", "SVD", "T", "trace", "norm", "adjugate", "rows", "columns",
     "list",
 })
+# NOTE: matched token-by-token at an advancing offset (see
+# ``_validate_matrix_expression``), never wrapped in an outer ``(?:...)+``
+# group — combining these overlapping alternatives under a single repeated
+# group is vulnerable to catastrophic backtracking (ReDoS) on crafted
+# non-matching input. Do not reintroduce that shape.
 _EXPR_TOKEN_RE = re.compile(
-    r"^(?:"
-    r"\d+\.?\d*(?:e[+-]?\d+)?|"
-    r"[A-Za-z_][A-Za-z0-9_]*|"
-    r"[+\-*/^().,]|"
-    r"\s+"
-    r")+$",
+    r"\d+\.?\d*(?:e[+-]?\d+)?"
+    r"|[A-Za-z_][A-Za-z0-9_]*"
+    r"|[+\-*/^().,]"
+    r"|\s+",
 )
-_DOTTED_METHOD_RE = re.compile(r"\.([A-Za-z_][A-Za-z0-9_]*)")
+# Matches a dotted attribute/method access, tolerating optional whitespace
+# between the ``.`` and the identifier (Python itself accepts `A. gap()` as
+# `A.gap()`) so the allowlist below cannot be bypassed by inserting spaces.
+_DOTTED_METHOD_RE = re.compile(r"\.\s*([A-Za-z_][A-Za-z0-9_]*)")
 
 
 def _validate_square(matrix, name):
@@ -143,8 +149,13 @@ def _validate_matrix_expression(expression: str) -> None:
     if not expression or not expression.strip():
         raise ValueError("expression must not be empty")
     validate_no_dangerous_substrings(expression)
-    if not _EXPR_TOKEN_RE.match(expression):
-        raise ValueError("expression contains invalid characters or tokens")
+    pos = 0
+    length = len(expression)
+    while pos < length:
+        match = _EXPR_TOKEN_RE.match(expression, pos)
+        if not match:
+            raise ValueError("expression contains invalid characters or tokens")
+        pos = match.end()
     for method in _DOTTED_METHOD_RE.findall(expression):
         if method not in _ALLOWED_METHODS:
             raise ValueError(f"method '{method}' is not allowed in expression")
@@ -176,8 +187,15 @@ def evaluate_expression(expression, matrices=None, vectors=None):
     for name, data in vectors.items():
         namespace[name] = vector(RDF, data)
 
+    # `_validate_matrix_expression` guarantees `^` is only ever tokenized as
+    # a standalone operator character (never part of a number/identifier),
+    # so it is safe to translate Sage/Maxima-style `^` (power) into Python's
+    # `**` here — plain `eval()` would otherwise treat `^` as bitwise XOR,
+    # which Sage matrix/vector objects don't support.
+    python_expression = expression.replace("^", "**")
+
     try:
-        result = eval(expression, {"__builtins__": {}}, namespace)
+        result = eval(python_expression, {"__builtins__": {}}, namespace)
     except Exception as exc:
         raise ValueError(f"failed to evaluate expression: {exc}") from exc
 

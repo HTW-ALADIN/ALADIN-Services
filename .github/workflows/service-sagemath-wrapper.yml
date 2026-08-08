@@ -43,6 +43,14 @@ jobs:
         run: uv sync --all-extras --frozen
       - name: Run tests
         run: make test
+      - name: Run Docker/SageMath smoke test
+        # `make test` excludes both `integration` and `docker`-marked tests,
+        # so nothing above actually imports SageMath or exercises the built
+        # image. This builds a throwaway image and runs a real Sage
+        # computation through it (see tests/contract/test_docker_smoke.py),
+        # catching Sage-import/resource-limit/Dockerfile regressions before
+        # the `build` job pushes an image to the registry.
+        run: uv run pytest -m docker tests/contract/test_docker_smoke.py -v
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:

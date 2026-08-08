@@ -285,7 +285,7 @@ The Docker smoke test requires a Docker daemon and is skipped when unavailable.
 
 | Resource | Minimum | Recommended |
 |----------|---------|-------------|
-| Memory | **2 GB RAM** | 4 GB+ |
+| Memory | **3 GB RAM** | 4 GB+ |
 | CPU | 2 cores | 4 cores |
 | GPU | — | not required |
 | Image size | ~5 GB | 5–10 GB |

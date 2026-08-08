@@ -55,16 +55,20 @@ def validate_identifier(name: str, kind: str = "name") -> None:
 # string to SageMath: numbers, known functions, variable names, operators,
 # whitespace. Kept in one place so ``src.core.maxima`` and ``src.core.optimize``
 # cannot silently drift apart on which tokens are allowed.
+#
+# NOTE: this is matched token-by-token (via ``re.Pattern.match`` at an
+# advancing offset), never wrapped in an outer ``(?:...)+`` group. Combining
+# these overlapping alternatives (e.g. digit runs vs. identifiers) under a
+# single repeated group is vulnerable to catastrophic backtracking (ReDoS)
+# on crafted non-matching input — do not reintroduce that shape.
 _TOKEN_RE = re.compile(
-    r"^(?:"
-    r"\d+\.?\d*(?:e[+-]?\d+)?|"
-    r"(?:sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|"
+    r"\d+\.?\d*(?:e[+-]?\d+)?"
+    r"|(?:sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|"
     r"exp|log|ln|sqrt|abs|floor|ceil|sign|erf|"
-    r"real|imag|conjugate|arctan|arcsin|arccos|arctan2)|"
-    r"[a-zA-Z_][a-zA-Z0-9_]*|"
-    r"[+\-*/^()\[\],]|"
-    r"\s+"
-    r")+$",
+    r"real|imag|conjugate|arctan|arcsin|arccos|arctan2)"
+    r"|[a-zA-Z_][a-zA-Z0-9_]*"
+    r"|[+\-*/^()\[\],]"
+    r"|\s+",
 )
 
 
@@ -80,5 +84,10 @@ def validate_expression_tokens(expression: str, max_length: int) -> None:
     if not expression or not expression.strip():
         raise ValueError("expression must not be empty")
     validate_no_dangerous_substrings(expression)
-    if not _TOKEN_RE.match(expression):
-        raise ValueError("expression contains invalid characters or tokens")
+    pos = 0
+    length = len(expression)
+    while pos < length:
+        match = _TOKEN_RE.match(expression, pos)
+        if not match:
+            raise ValueError("expression contains invalid characters or tokens")
+        pos = match.end()

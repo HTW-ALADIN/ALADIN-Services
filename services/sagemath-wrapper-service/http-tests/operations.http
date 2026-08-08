@@ -77,7 +77,8 @@ Content-Type: application/json
     {"coeffs": {"x": 3, "y": 4}, "max": 2.5}
   ],
   "var_types": {"x": "real", "y": "real"},
-  "solver": "GLPK"
+  "solver": "GLPK",
+  "nonnegative": true
 }
 
 ###

@@ -41,10 +41,16 @@ _SEM_ACQUIRE_TIMEOUT = float(os.environ.get("SAGE_SEM_ACQUIRE_TIMEOUT", "30.0"))
 # RLIMIT_AS. Because up to _MAX_CONCURRENCY subprocesses can run at once, the
 # worst-case *combined* memory usage is `_MAX_MEMORY * _MAX_CONCURRENCY`, plus
 # the main service process's own overhead. Both values are configurable via
-# env so operators can tune them to the container's actual memory limit; the
-# defaults below keep worst-case combined usage (1 GiB) comfortably within
-# the documented "2 GB RAM minimum" deployment target.
-_MAX_MEMORY = int(os.environ.get("SAGE_MAX_MEMORY_MB", "512")) * 1024 * 1024
+# env so operators can tune them to the container's actual memory limit.
+#
+# NOTE: RLIMIT_AS bounds *virtual address space*, not resident memory — this
+# includes every shared library mapped into the process, and importing
+# `sage.all` alone (plus numpy/BLAS) commonly reserves several hundred MiB of
+# address space before any user computation runs. A too-low default here
+# makes every sandboxed call fail. 1024 MiB keeps worst-case combined usage
+# (2 GiB at the default concurrency of 2) within the documented "3 GB RAM
+# minimum" deployment target (see README.md).
+_MAX_MEMORY = int(os.environ.get("SAGE_MAX_MEMORY_MB", "1024")) * 1024 * 1024
 _MAX_CPU = 60                      # 60 seconds CPU time
 _MAX_PROCESSES = 64                # prevent fork bombs
 

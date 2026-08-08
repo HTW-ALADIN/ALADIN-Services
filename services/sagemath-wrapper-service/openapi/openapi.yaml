@@ -918,6 +918,11 @@ components:
           - CVXOPT
           title: Solver
           default: GLPK
+        nonnegative:
+          anyOf:
+          - {}
+          - type: 'null'
+          title: Nonnegative
       type: object
       required:
       - variables

@@ -30,6 +30,17 @@
         type: string
         enum: [GLPK, PPL, CBC, InteractiveLP, CPLEX, CVXOPT]
         default: GLPK
+      nonnegative:
+        description: >-
+          Force nonnegativity constraints (v >= 0). Pass `true` to apply to
+          every variable, or a list of variable names to apply to only those
+          variables. Defaults to no nonnegativity constraints.
+        oneOf:
+          - type: boolean
+          - type: array
+            maxItems: 1000
+            items:
+              type: string
     required: [variables, objective, constraints]
   output_type: object
   timeout_s: 10.0
