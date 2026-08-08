@@ -45,8 +45,9 @@ def test_validate_rejects_file_io_keywords():
 
 
 def test_validate_rejects_too_long_expression():
-    with pytest.raises(ValueError, match=r"(?i)too long|length|500"):
-        _validate_expression("x" * 501)
+    # Limit must match registry/maxima.yaml's `expression.maxLength` (10000).
+    with pytest.raises(ValueError, match=r"(?i)too long|length|10000"):
+        _validate_expression("x" * 10001)
 
 
 def test_validate_rejects_semicolon_or_colon():
@@ -138,5 +139,6 @@ def test_unknown_operation_raises():
 
 
 def test_expression_length_limit_enforced():
-    with pytest.raises(ValueError, match=r"(?i)too long|length|500"):
-        evaluate("x" * 501, "simplify")
+    # Limit must match registry/maxima.yaml's `expression.maxLength` (10000).
+    with pytest.raises(ValueError, match=r"(?i)too long|length|10000"):
+        evaluate("x" * 10001, "simplify")

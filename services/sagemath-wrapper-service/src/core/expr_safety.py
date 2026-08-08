@@ -49,3 +49,36 @@ def validate_identifier(name: str, kind: str = "name") -> None:
         )
     if name.startswith("__") or name.lower() in _RESERVED_NAMES:
         raise ValueError(f"invalid {kind} '{name}': reserved word")
+
+
+# Token whitelist shared by every module that hands a raw symbolic expression
+# string to SageMath: numbers, known functions, variable names, operators,
+# whitespace. Kept in one place so ``src.core.maxima`` and ``src.core.optimize``
+# cannot silently drift apart on which tokens are allowed.
+_TOKEN_RE = re.compile(
+    r"^(?:"
+    r"\d+\.?\d*(?:e[+-]?\d+)?|"
+    r"(?:sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|"
+    r"exp|log|ln|sqrt|abs|floor|ceil|sign|erf|"
+    r"real|imag|conjugate|arctan|arcsin|arccos|arctan2)|"
+    r"[a-zA-Z_][a-zA-Z0-9_]*|"
+    r"[+\-*/^()\[\],]|"
+    r"\s+"
+    r")+$",
+)
+
+
+def validate_expression_tokens(expression: str, max_length: int) -> None:
+    """Raise ``ValueError`` unless *expression* is a safe, whitelisted-token
+    symbolic expression no longer than *max_length* characters.
+
+    Shared by ``src.core.maxima`` and ``src.core.optimize`` so the allowed
+    token set and dangerous-substring checks cannot drift between modules.
+    """
+    if len(expression) > max_length:
+        raise ValueError(f"expression too long ({len(expression)} > {max_length})")
+    if not expression or not expression.strip():
+        raise ValueError("expression must not be empty")
+    validate_no_dangerous_substrings(expression)
+    if not _TOKEN_RE.match(expression):
+        raise ValueError("expression contains invalid characters or tokens")

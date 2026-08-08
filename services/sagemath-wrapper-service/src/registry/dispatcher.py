@@ -54,6 +54,25 @@ def render_template(sage_template: str, values: dict) -> str:
         raise RuntimeError(f"template blocked by sandbox: {exc}") from exc
 
 
+def _apply_schema_defaults(cleaned: dict, input_schema: dict) -> dict:
+    """Fill in JSON-Schema ``default`` values for properties missing from
+    *cleaned*.
+
+    ``jsonschema.validate`` never mutates its input or applies ``default``
+    values on the caller's behalf. The HTTP API layer (``src.api.dynamic_routes``)
+    separately fills defaults via generated Pydantic models, but the CLI and
+    any other direct ``execute_operation`` caller go through this dispatcher
+    only — so defaults must be applied here as well, otherwise omitting a
+    documented-as-optional field raises a ``TypeError`` deep inside the
+    sandboxed function instead of using its declared default.
+    """
+    properties = input_schema.get("properties", {}) or {}
+    for name, schema in properties.items():
+        if name not in cleaned and "default" in schema:
+            cleaned[name] = schema["default"]
+    return cleaned
+
+
 def execute_operation(op: OperationSpec, payload: dict) -> dict:
     """Execute an operation according to its *op* spec with the given *payload*.
 
@@ -67,6 +86,7 @@ def execute_operation(op: OperationSpec, payload: dict) -> dict:
         k: v for k, v in payload.items()
         if v is not None or k in required
     }
+    cleaned = _apply_schema_defaults(cleaned, op.input_schema)
     try:
         jsonschema.validate(cleaned, op.input_schema)
     except jsonschema.exceptions.ValidationError as exc:

@@ -9,6 +9,7 @@ inside the child process before any user code runs.
 import json
 import logging
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -23,17 +24,43 @@ BUSY_ERROR = "busy"
 
 # ── Concurrency limit ─────────────────────────────────────────────────────────
 # Bounded by a semaphore so we don't overwhelm the host.  Size comes from
-# env SAGE_MAX_CONCURRENCY (default 4).
-_MAX_CONCURRENCY = int(os.environ.get("SAGE_MAX_CONCURRENCY", "4"))
+# env SAGE_MAX_CONCURRENCY (default 2 — see the memory-budget note below).
+_MAX_CONCURRENCY = int(os.environ.get("SAGE_MAX_CONCURRENCY", "2"))
 _concurrency_sem = threading.Semaphore(_MAX_CONCURRENCY)
+
+# Default acquire timeout for the concurrency semaphore, scaled to the
+# longest configured per-operation timeout so we don't report "busy" (503)
+# well before a queued request could plausibly have been served. Overridable
+# via SAGE_SEM_ACQUIRE_TIMEOUT for hosts with different queuing expectations.
+_SEM_ACQUIRE_TIMEOUT = float(os.environ.get("SAGE_SEM_ACQUIRE_TIMEOUT", "30.0"))
 
 # ── Resource limits for the sandboxed child process ──────────────────────────
 # These are set *inside* the subprocess before any user code executes.
-# Values are chosen to stay well within the Docker container limit (2 GiB).
-
-_MAX_MEMORY = 1536 * 1024 * 1024  # 1.5 GiB  (Docker limit is 2 GiB)
+#
+# _MAX_MEMORY caps the address space of a *single* sandboxed subprocess via
+# RLIMIT_AS. Because up to _MAX_CONCURRENCY subprocesses can run at once, the
+# worst-case *combined* memory usage is `_MAX_MEMORY * _MAX_CONCURRENCY`, plus
+# the main service process's own overhead. Both values are configurable via
+# env so operators can tune them to the container's actual memory limit; the
+# defaults below keep worst-case combined usage (1 GiB) comfortably within
+# the documented "2 GB RAM minimum" deployment target.
+_MAX_MEMORY = int(os.environ.get("SAGE_MAX_MEMORY_MB", "512")) * 1024 * 1024
 _MAX_CPU = 60                      # 60 seconds CPU time
 _MAX_PROCESSES = 64                # prevent fork bombs
+
+# Sanity-check the operator-configured memory budget at import time. This is
+# a deploy-safety guardrail only — it does not enforce anything — but it
+# turns a silent OOM-kill risk into a visible startup warning.
+_CONTAINER_MEMORY_BUDGET_MB = int(os.environ.get("SAGE_CONTAINER_MEMORY_MB", "2048"))
+_worst_case_mb = (_MAX_MEMORY * _MAX_CONCURRENCY) // (1024 * 1024)
+if _worst_case_mb > _CONTAINER_MEMORY_BUDGET_MB:
+    logger.warning(
+        "SAGE_MAX_MEMORY_MB (%d) * SAGE_MAX_CONCURRENCY (%d) = %d MiB worst-case, "
+        "which exceeds SAGE_CONTAINER_MEMORY_MB (%d). Lower one of these or raise "
+        "the container memory limit to avoid the container being OOM-killed under load.",
+        _MAX_MEMORY // (1024 * 1024), _MAX_CONCURRENCY, _worst_case_mb,
+        _CONTAINER_MEMORY_BUDGET_MB,
+    )
 
 
 def _sandbox_preamble() -> str:
@@ -107,34 +134,70 @@ def _sage_to_json(obj):
 """
 
 
+def _kill_process_group(proc: subprocess.Popen) -> None:
+    """Kill *proc* and every process in its process group.
+
+    *proc* must have been started with ``start_new_session=True`` so that it
+    (and anything it spawns, e.g. external SAT/MILP solver binaries) is the
+    leader of its own process group and can be terminated as a unit.
+    """
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass  # already exited
+    except OSError:
+        logger.warning("failed to kill process group for pid %s", proc.pid, exc_info=True)
+    try:
+        proc.wait(timeout=5.0)
+    except Exception:  # noqa: BLE001, S110 -- best-effort cleanup only
+        pass
+
+
 def _run_subprocess(helper_code: str, input_data: dict | None = None,
                     timeout_s: float = 5.0) -> dict:
     """Run *helper_code* in a subprocess with resource limits and timeout.
 
     Concurrency is bounded by ``_concurrency_sem``.  If the semaphore cannot
-    be acquired within a short timeout, returns ``{"ok": False, ..., "error": "busy"}``.
+    be acquired within ``_SEM_ACQUIRE_TIMEOUT``, returns
+    ``{"ok": False, ..., "error": "busy"}``.
+
+    The child is launched in its own process group (``start_new_session``)
+    so that, on timeout, we can kill the *entire* group — not just the
+    direct ``python -c`` child. Some operations (SAT/MILP solving) shell out
+    to external solver binaries as grandchildren of that child; killing only
+    the direct child via ``subprocess.run``'s default timeout handling would
+    leave those solver processes running indefinitely, defeating the timeout
+    as a resource-exhaustion control.
 
     Returns ``{"ok": bool, "result": ..., "error": ...}``.
     """
     # Try to acquire the concurrency slot
-    if not _concurrency_sem.acquire(blocking=True, timeout=2.0):
+    if not _concurrency_sem.acquire(blocking=True, timeout=_SEM_ACQUIRE_TIMEOUT):
         return {"ok": False, "result": None, "error": BUSY_ERROR}
     try:
         full_code = _sandbox_preamble() + _SAGE_TO_JSON_SOURCE + helper_code
+        proc = subprocess.Popen(
+            [sys.executable, "-c", full_code],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,  # own process group, for group-wide kill
+        )
         try:
-            proc = subprocess.run(
-                [sys.executable, "-c", full_code],
+            stdout, stderr = proc.communicate(
                 input=json.dumps(input_data) if input_data is not None else None,
-                capture_output=True,
-                text=True,
                 timeout=timeout_s,
-                check=False,
             )
         except subprocess.TimeoutExpired:
             logger.warning("subprocess timed out after %.1fs", timeout_s)
+            _kill_process_group(proc)
             return {"ok": False, "result": None, "error": "timeout"}
+        except BaseException:
+            _kill_process_group(proc)
+            raise
         if proc.returncode != 0:
-            _stderr = (proc.stderr or "").strip()
+            _stderr = (stderr or "").strip()
             if _stderr:
                 logger.warning("subprocess stderr (rc=%d): %s", proc.returncode, _stderr)
             return {
@@ -142,9 +205,9 @@ def _run_subprocess(helper_code: str, input_data: dict | None = None,
                 "error": "execution failed",
             }
         try:
-            return json.loads(proc.stdout)
+            return json.loads(stdout)
         except Exception:  # noqa: BLE001
-            _stderr = (proc.stderr or "").strip()
+            _stderr = (stderr or "").strip()
             if _stderr:
                 logger.warning("subprocess parse error, stderr: %s", _stderr)
             return {
