@@ -5,13 +5,11 @@ on:
     branches: ["master"]
     paths:
       - "services/edit-distance-service/**"
-      - "third_party/gedlibpy"
       - ".github/workflows/service-edit-distance-service.yml"
   pull_request:
     branches: ["master"]
     paths:
       - "services/edit-distance-service/**"
-      - "third_party/gedlibpy"
       - ".github/workflows/service-edit-distance-service.yml"
 
 defaults:
@@ -27,7 +25,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
       - name: Cache dependencies
         uses: actions/cache@v4
         with:
@@ -51,7 +49,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
       - name: Cache dependencies
         uses: actions/cache@v4
         with:
@@ -63,9 +61,25 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -e ".[dev]"
+      - name: Install graph backend (gmatch4py)
+        # GMATCH4PY_REF/CYTHON_VERSION are the single source of truth shared
+        # with the Makefile and Dockerfile (see gmatch4py.env) — only that
+        # file needs updating to bump either pin.
+        env:
+          SETUPTOOLS_USE_DISTUTILS: stdlib
+        run: |
+          set -a
+          source gmatch4py.env
+          set +a
+          pip install "Cython==${CYTHON_VERSION}"
+          pip install --no-build-isolation "gmatch4py @ ${GMATCH4PY_REF}"
       - name: Run tests
+        env:
+          SETUPTOOLS_USE_DISTUTILS: stdlib
         run: pytest -v --tb=short
       - name: Run smoke tests
+        env:
+          SETUPTOOLS_USE_DISTUTILS: stdlib
         run: |
           set -e
           # Start server in background
@@ -109,6 +123,13 @@ jobs:
             -d '{"algorithm":"ged_astar","params":{"mode":"exact","timeout_ms":5000},"graphs":[{"id":"p1","g1":{"nodes":[{"id":"A"},{"id":"B"}],"edges":[{"source":"A","target":"B"}]},"g2":{"nodes":[{"id":"A"},{"id":"B"},{"id":"C"}],"edges":[{"source":"A","target":"B"},{"source":"B","target":"C"}]}}]}' \
             | python -c "import sys,json; d=json.load(sys.stdin); assert d['algorithm']=='ged_astar'; assert len(d['results'])==1; print('GED compute: OK')"
 
+          # Smoke test: GED compute via the default gmatch4py backend
+          echo "=== GED compute (gmatch4py, ged_hausdorff) ==="
+          curl -sf -X POST http://localhost:8000/v1/graphs/distance \
+            -H 'Content-Type: application/json' \
+            -d '{"algorithm":"ged_hausdorff","params":{},"graphs":[{"id":"p1","g1":{"nodes":[{"id":"A"},{"id":"B"}],"edges":[{"source":"A","target":"B"}]},"g2":{"nodes":[{"id":"A"},{"id":"B"},{"id":"C"}],"edges":[{"source":"A","target":"B"},{"source":"B","target":"C"}]}}]}' \
+            | python -c "import sys,json; d=json.load(sys.stdin); assert d['algorithm']=='ged_hausdorff'; r=d['results'][0]; assert r.get('error') is None, f'gmatch4py backend not available: {r}'; print('GED compute (gmatch4py): OK')"
+
           echo "=== All smoke tests passed ==="
 
           # Stop the server
@@ -124,7 +145,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
       - name: Cache dependencies
         uses: actions/cache@v4
         with:
@@ -154,11 +175,6 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          # third_party/gedlibpy is a git submodule; recurse so the gedlib
-          # backend is built when a .gitmodules mapping is present. If not
-          # present, the Dockerfile skips the gedlib build gracefully.
-          submodules: recursive
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:

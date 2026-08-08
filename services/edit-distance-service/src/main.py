@@ -60,9 +60,25 @@ _DEFAULT_TEXT_BACKEND: dict[str, str] = {
 
 _DEFAULT_GED_BACKEND: dict[str, str] = {
     "ged_astar": "networkx",
-    "ged_heuristic": "gedlib",
+    # gedlib (gedlibpy) is not installed by default (no PyPI package, and
+    # building it requires the full GEDLIB C++ library); gmatch4py is
+    # installed by default (see Makefile/Dockerfile) and covers the
+    # BIPARTITE heuristic out of the box. Callers who have manually
+    # installed gedlibpy can still opt in via `"backend": "gedlib"`.
+    "ged_heuristic": "gmatch4py",
     "ged_hausdorff": "gmatch4py",
     "ged_greedy": "gmatch4py",
+}
+
+# (algorithm, backend) -> the set of `params.method` values that backend
+# actually implements, taken from GED_ALGORITHM_CATALOG. Used to reject
+# requests for a method the *resolved* backend does not support instead of
+# silently running a different method (e.g. requesting "method": "IPFP"
+# without an explicit "backend" resolves to the gmatch4py default, which
+# only implements BIPARTITE and would otherwise ignore "IPFP" outright).
+_GED_METHOD_OPTIONS: dict[tuple[str, str], list[str]] = {
+    (entry["algorithm"], entry["backend"]): entry["method_options"]
+    for entry in GED_ALGORITHM_CATALOG
 }
 
 # ─── PART A: Text Edit Distance ───────────────────────────────────────────────
@@ -126,6 +142,20 @@ def ged_compute(request: GedComputeRequest) -> GedResultResponse:
 
     if not graphs:
         raise HTTPException(status_code=400, detail="Missing required field: 'graphs'")
+
+    requested_method = params.get("method")
+    if requested_method is not None:
+        allowed_methods = _GED_METHOD_OPTIONS.get((algorithm, backend))
+        if allowed_methods and requested_method not in allowed_methods:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Unsupported method {requested_method!r} for {algorithm}/{backend}. "
+                    f"Available methods for this backend: {allowed_methods}. "
+                    'If you need a gedlib-only method (e.g. "IPFP", "REFINE"), explicitly '
+                    'set "backend": "gedlib" (requires gedlibpy to be manually installed).'
+                ),
+            )
 
     try:
         results = compute_ged(algorithm, backend, graphs, params)

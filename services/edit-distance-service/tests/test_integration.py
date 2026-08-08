@@ -129,10 +129,48 @@ class TestGedCompute:
         assert len(resp.json()["results"]) == 1
 
     def test_missing_backend_reports_error_not_silent_null(self):
-        """gedlib/gmatch4py are optional extras; when absent the response
-        must surface why, not just a bare null upper_bound."""
+        """gmatch4py is installed by default (`make prep`) but gedlib is
+        manual-install-only; when a backend is absent the response must
+        surface why, not just a bare null upper_bound."""
         resp = client.post("/v1/graphs/distance", json={
             "algorithm": "ged_hausdorff",
+            "graphs": [{"id": "p1", "g1": {"nodes": [{"id": "A"}], "edges": []}, "g2": {"nodes": [{"id": "A"}], "edges": []}}],
+        })
+        assert resp.status_code == 200
+        result = resp.json()["results"][0]
+        if result["upper_bound"] is None:
+            assert result["error"]
+
+    def test_ged_heuristic_gedlib_only_method_without_explicit_backend_returns_400(self):
+        """ged_heuristic defaults to the gmatch4py backend, which only
+        implements BIPARTITE. Requesting a gedlib-only method (e.g. IPFP)
+        without explicitly opting into "backend": "gedlib" must be rejected,
+        not silently run as BIPARTITE."""
+        resp = client.post("/v1/graphs/distance", json={
+            "algorithm": "ged_heuristic",
+            "params": {"method": "IPFP"},
+            "graphs": [{"id": "p1", "g1": {"nodes": [{"id": "A"}], "edges": []}, "g2": {"nodes": [{"id": "A"}], "edges": []}}],
+        })
+        assert resp.status_code == 400
+        assert "IPFP" in resp.json()["detail"]
+
+    def test_ged_heuristic_bipartite_method_default_backend_returns_200(self):
+        """The gmatch4py default backend does support BIPARTITE."""
+        resp = client.post("/v1/graphs/distance", json={
+            "algorithm": "ged_heuristic",
+            "params": {"method": "BIPARTITE"},
+            "graphs": [{"id": "p1", "g1": {"nodes": [{"id": "A"}], "edges": []}, "g2": {"nodes": [{"id": "A"}], "edges": []}}],
+        })
+        assert resp.status_code == 200
+
+    def test_ged_heuristic_gedlib_method_with_explicit_backend_still_reaches_gedlib(self):
+        """Explicitly requesting "backend": "gedlib" must still be allowed to
+        dispatch to compute_ged (which reports its own "not installed" error
+        when gedlibpy is absent, rather than being rejected upfront)."""
+        resp = client.post("/v1/graphs/distance", json={
+            "algorithm": "ged_heuristic",
+            "backend": "gedlib",
+            "params": {"method": "IPFP"},
             "graphs": [{"id": "p1", "g1": {"nodes": [{"id": "A"}], "edges": []}, "g2": {"nodes": [{"id": "A"}], "edges": []}}],
         })
         assert resp.status_code == 200
