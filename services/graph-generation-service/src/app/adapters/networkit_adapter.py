@@ -72,25 +72,6 @@ class EdgeSwitchingMarkovChainGenerator:
         return self._generator.generate()
 
 
-class StochasticBlockmodel:
-    def __init__(self, *, n: int, nBlocks: int, membership: list[int], affinity: list[list[float]]) -> None:
-        del nBlocks
-        self._n = n
-        self._membership = membership
-        self._affinity = affinity
-
-    def generate(self) -> Graph:
-        from random import random
-
-        graph = Graph(self._n)
-        for source in range(self._n):
-            for target in range(source + 1, self._n):
-                probability = self._affinity[self._membership[source]][self._membership[target]]
-                if random() < probability:
-                    graph.addEdge(source, target)
-        return graph
-
-
 class RmatGenerator:
     def __init__(self, *, scale: int, edgeFactor: int, a: float, b: float, c: float, d: float) -> None:
         self._generator = _NetworKitRmatGenerator(scale, edgeFactor, a, b, c, d)
@@ -162,13 +143,6 @@ def generate_configuration_model(
         sequence=sorted(sequence, reverse=True), ignoreIfRealizable=ignore_if_not_realizable
     )
     return _generated_graph(havel_hakimi.generate())
-
-
-def generate_stochastic_block_model(
-    *, n: int, n_blocks: int, membership: list[int], affinity: list[list[float]]
-) -> GeneratedGraph:
-    generator = StochasticBlockmodel(n=n, nBlocks=n_blocks, membership=membership, affinity=affinity)
-    return _generated_graph(generator.generate())
 
 
 def generate_rmat(*, scale: int, edge_factor: int, a: float, b: float, c: float, d: float) -> GeneratedGraph:

@@ -28,7 +28,6 @@ ADAPTERS: dict[RouteKey, Adapter] = {
     ("configuration_model", "networkit"): networkit_adapter.generate_configuration_model,
     ("stochastic_block_model", "networkx"): networkx_adapter.generate_stochastic_block_model,
     ("stochastic_block_model", "igraph"): igraph_adapter.generate_stochastic_block_model,
-    ("stochastic_block_model", "networkit"): networkit_adapter.generate_stochastic_block_model,
     ("random_regular", "networkx"): networkx_adapter.generate_random_regular,
     ("random_regular", "igraph"): igraph_adapter.generate_random_regular,
     ("random_geometric", "networkx"): networkx_adapter.generate_random_geometric,

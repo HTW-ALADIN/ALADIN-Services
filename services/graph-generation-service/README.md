@@ -5,7 +5,7 @@ FastAPI service for validated graph generation through NetworkX, python-igraph, 
 Requests use a two-level discriminated union: `algorithm` selects the graph family and `backend` selects the
 backend-specific parameter schema. The discovery endpoint publishes the complete Spec A schema catalog.
 
-The complete Spec A catalog is executable: 23 algorithm families and 42 backend combinations covering random,
+The catalog is executable: 23 algorithm families and 41 native backend combinations covering random,
 degree-sequence, community, geometric, deterministic, tree, bipartite, fitness, attachment, R-MAT, and hyperbolic
 generators. Backend-specific parameters are validated before execution, including each supported `variant`.
 
@@ -50,8 +50,8 @@ Example request:
 Supported exports are `edge_list`, `adjacency`, `graphml`, `gml`, and `graph6`. JSON formats are returned
 directly; GraphML, GML, and graph6 are streamed with format-specific content types.
 
-Generated graphs are currently retained in an in-memory resource store. Durable storage and asynchronous
-generation for large graphs are not implemented yet.
+Requests are limited to 10,000 generated nodes. Up to 100 graphs are retained in memory, with the oldest resource
+evicted when the limit is reached. Durable storage and asynchronous generation are not implemented yet.
 
 ## Architecture
 

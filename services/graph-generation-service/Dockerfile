@@ -4,13 +4,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
         cmake \
-        curl \
     && rm -rf /var/lib/apt/lists/*
 
-ADD https://astral.sh/uv/install.sh /uv-installer.sh
-RUN sh /uv-installer.sh && rm /uv-installer.sh
-
-ENV PATH="/root/.local/bin/:$PATH"
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./

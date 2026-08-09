@@ -20,6 +20,7 @@ LabelMode: TypeAlias = Literal["index", "uuid"]
 Probability: TypeAlias = Annotated[float, Field(ge=0.0, le=1.0)]
 PositiveFloat: TypeAlias = Annotated[float, Field(gt=0.0)]
 NonNegativeFloat: TypeAlias = Annotated[float, Field(ge=0.0)]
+MAX_GRAPH_NODES = 10_000
 
 
 class OutputOptions(StrictBaseModel):
@@ -374,26 +375,8 @@ class IgraphStochasticBlockModelParams(StrictBaseModel):
         return self
 
 
-class NetworKitStochasticBlockModelParams(StrictBaseModel):
-    backend: Literal["networkit"]
-    n: PositiveInt
-    nBlocks: PositiveInt
-    membership: list[int]
-    affinity: list[list[Probability]]
-
-    @model_validator(mode="after")
-    def validate_model(self) -> Self:
-        if len(self.membership) != self.n:
-            raise RequestParameterError("params.membership", "membership must contain n entries")
-        if any(block < 0 or block >= self.nBlocks for block in self.membership):
-            raise RequestParameterError("params.membership", "membership entries must identify an existing block")
-        if len(self.affinity) != self.nBlocks or any(len(row) != self.nBlocks for row in self.affinity):
-            raise RequestParameterError("params.affinity", "affinity must be an nBlocks by nBlocks matrix")
-        return self
-
-
 StochasticBlockModelParams: TypeAlias = Annotated[
-    NetworkXStochasticBlockModelParams | IgraphStochasticBlockModelParams | NetworKitStochasticBlockModelParams,
+    NetworkXStochasticBlockModelParams | IgraphStochasticBlockModelParams,
     Field(discriminator="backend"),
 ]
 
@@ -402,25 +385,17 @@ class StochasticBlockModelRequest(BackendDiscriminatedRequest):
     DEFAULT_BACKEND: ClassVar[str] = "networkx"
 
     algorithm: Literal["stochastic_block_model"]
-    backend: Literal["networkx", "igraph", "networkit"] = "networkx"
+    backend: Literal["networkx", "igraph"] = "networkx"
     params: StochasticBlockModelParams
     output: OutputOptions = Field(default_factory=OutputOptions)
 
     @model_validator(mode="after")
     def validate_matrix_symmetry(self) -> Self:
         matrix = (
-            self.params.affinity
-            if isinstance(self.params, NetworKitStochasticBlockModelParams)
-            else (
-                self.params.p
-                if isinstance(self.params, NetworkXStochasticBlockModelParams)
-                else self.params.pref_matrix
-            )
+            self.params.p if isinstance(self.params, NetworkXStochasticBlockModelParams) else self.params.pref_matrix
         )
         if not self.output.directed and any(matrix[i][j] != matrix[j][i] for i in range(len(matrix)) for j in range(i)):
             raise RequestParameterError("params", "probability matrix must be symmetric for an undirected graph")
-        if self.output.directed and isinstance(self.params, NetworKitStochasticBlockModelParams):
-            raise RequestParameterError("output.directed", "NetworKit stochastic block graphs are undirected")
         return self
 
 
@@ -1061,7 +1036,7 @@ class DuplicationDivergenceRequest(StrictBaseModel):
         return self
 
 
-GraphGenerationRequest: TypeAlias = Annotated[
+GraphGenerationRequestValue: TypeAlias = (
     ErdosRenyiGnpRequest
     | ErdosRenyiGnmRequest
     | WattsStrogatzRequest
@@ -1084,7 +1059,51 @@ GraphGenerationRequest: TypeAlias = Annotated[
     | KleinbergSmallWorldRequest
     | PowerlawClusterRequest
     | GeometricThresholdRequest
-    | DuplicationDivergenceRequest,
+    | DuplicationDivergenceRequest
+)
+
+
+def _bounded_power(base: int, exponent: int) -> int:
+    if base > 1 and exponent > MAX_GRAPH_NODES.bit_length():
+        return MAX_GRAPH_NODES + 1
+    return int(base**exponent)
+
+
+def validate_graph_size(request: GraphGenerationRequestValue) -> None:
+    params = request.params.model_dump(by_alias=True)
+    algorithm = request.algorithm
+    if algorithm == "kronecker_rmat":
+        node_count = _bounded_power(2, params["scale"])
+    elif algorithm in {"watts_strogatz", "kleinberg_small_world"} and "dim" in params:
+        base = params["size"] if "size" in params else params["n"]
+        node_count = _bounded_power(base, params["dim"])
+    elif algorithm == "classic_deterministic" and params.get("shape") in {"grid", "lattice"}:
+        node_count = params["rows"] * params["cols"]
+    elif algorithm == "classic_deterministic" and params.get("shape") == "hypercube":
+        node_count = _bounded_power(2, params["n"])
+    elif algorithm == "random_bipartite":
+        node_count = params["n1"] + params["n2"]
+    elif algorithm == "community_clustered" and params.get("n") is None:
+        node_count = params["l"] * params["k"]
+    elif isinstance(params.get("n"), int):
+        node_count = params["n"]
+    elif isinstance(params.get("nMax"), int):
+        node_count = params["nMax"]
+    elif isinstance(params.get("sizes"), list):
+        node_count = sum(params["sizes"])
+    else:
+        sequence = next(
+            (params[name] for name in ("sequence", "out", "degreeSequence", "fitness_out") if params.get(name)),
+            (),
+        )
+        node_count = len(sequence)
+
+    if node_count > MAX_GRAPH_NODES:
+        raise RequestParameterError("params", f"graph must not exceed {MAX_GRAPH_NODES} nodes")
+
+
+GraphGenerationRequest: TypeAlias = Annotated[
+    GraphGenerationRequestValue,
     Field(discriminator="algorithm"),
 ]
 

@@ -29,10 +29,13 @@ from app.schemas import (
     GraphResource,
     OutputFormat,
     ProblemDetails,
+    RequestParameterError,
+    validate_graph_size,
 )
 from app.storage import StoredGraph
 
 GRAPH_STORE: dict[str, StoredGraph] = {}
+MAX_STORED_GRAPHS = 100
 
 app = FastAPI(
     title="Unified Graph Generation Service",
@@ -109,11 +112,28 @@ def _graph_resource(
 def create_graph(
     request: Annotated[GraphGenerationRequest, Body(discriminator="algorithm")],
 ) -> GraphResource:
+    try:
+        validate_graph_size(request)
+    except RequestParameterError as exc:
+        raise RequestValidationError(
+            [
+                {
+                    "type": "value_error",
+                    "loc": ("body", "params"),
+                    "msg": f"Value error, {exc}",
+                    "input": request.params.model_dump(),
+                    "ctx": {"error": exc},
+                }
+            ]
+        ) from exc
+
     started_at = perf_counter()
     generated = execute_request(request)
     generation_time_ms = int((perf_counter() - started_at) * 1000)
 
     resource = _graph_resource(request, generated, generation_time_ms)
+    if len(GRAPH_STORE) >= MAX_STORED_GRAPHS:
+        GRAPH_STORE.pop(next(iter(GRAPH_STORE)))
     GRAPH_STORE[resource.id] = StoredGraph(
         resource=resource,
         generated=generated,

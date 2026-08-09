@@ -34,7 +34,6 @@ CATALOG_ROWS: tuple[CatalogRow, ...] = (
     ),
     ("stochastic_block_model", "networkx", "Stochastic block model", "NetworkXStochasticBlockModelParams", True),
     ("stochastic_block_model", "igraph", "Stochastic block model", "IgraphStochasticBlockModelParams", False),
-    ("stochastic_block_model", "networkit", "Stochastic block model", "NetworKitStochasticBlockModelParams", False),
     ("random_regular", "networkx", "Random k-regular graph", "NetworkXRandomRegularParams", True),
     ("random_regular", "igraph", "Random k-regular graph", "IgraphRandomRegularParams", False),
     ("random_geometric", "networkx", "Random geometric graph", "NetworkXRandomGeometricParams", True),

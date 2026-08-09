@@ -60,6 +60,31 @@ def test_rejects_missing_backend_parameter() -> None:
     assert any(error["name"].endswith("m") for error in response.json()["invalidParams"])
 
 
+def test_rejects_graphs_over_node_limit() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={"algorithm": "erdos_renyi_gnp", "backend": "networkx", "params": {"n": 10_001, "p": 0.1}},
+    )
+
+    assert response.status_code == 400
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["invalidParams"][0]["name"] == "params"
+
+
+def test_rejects_unavailable_networkit_stochastic_block_model() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={
+            "algorithm": "stochastic_block_model",
+            "backend": "networkit",
+            "params": {"n": 10, "nBlocks": 2, "membership": [0] * 10, "affinity": [[0.5, 0.1], [0.1, 0.5]]},
+        },
+    )
+
+    assert response.status_code == 400
+    assert any(error["name"] == "backend" for error in response.json()["invalidParams"])
+
+
 @patch("app.adapters.networkx_adapter.nx.barabasi_albert_graph")
 def test_routes_barabasi_albert_to_networkx(mock_generate: MagicMock) -> None:
     response = client.post(
@@ -433,6 +458,17 @@ def test_graph_resource_lifecycle() -> None:
     assert client.get(graph["_links"]["self"]).status_code == 404
 
 
+def test_graph_store_evicts_oldest_resource_at_capacity() -> None:
+    payload = {"algorithm": "barabasi_albert", "backend": "networkx", "params": {"n": 5, "m": 1}}
+
+    with patch("app.main.MAX_STORED_GRAPHS", 1):
+        first = client.post("/v1/graphs", json=payload).json()
+        second = client.post("/v1/graphs", json=payload).json()
+
+    assert client.get(first["_links"]["self"]).status_code == 404
+    assert client.get(second["_links"]["self"]).status_code == 200
+
+
 def test_edge_list_export_from_networkx() -> None:
     create_response = client.post(
         "/v1/graphs",
@@ -541,16 +577,6 @@ def test_rejects_incompatible_graph6_options() -> None:
             "algorithm": "stochastic_block_model",
             "backend": "igraph",
             "params": {"n": 10, "block_sizes": [5, 5], "pref_matrix": [[0.5, 0.1], [0.1, 0.5]]},
-        },
-        {
-            "algorithm": "stochastic_block_model",
-            "backend": "networkit",
-            "params": {
-                "n": 10,
-                "nBlocks": 2,
-                "membership": [0, 0, 0, 0, 0, 1, 1, 1, 1, 1],
-                "affinity": [[0.5, 0.1], [0.1, 0.5]],
-            },
         },
         {"algorithm": "random_regular", "backend": "networkx", "params": {"n": 10, "d": 2}},
         {"algorithm": "random_regular", "backend": "igraph", "params": {"n": 10, "k": 2}},
@@ -790,7 +816,7 @@ def test_catalog_exposes_complete_two_level_spec_a_union() -> None:
     algorithms = catalog["algorithms"]
     components = app.openapi()["components"]["schemas"]
 
-    assert len(algorithms) == 42
+    assert len(algorithms) == 41
     assert len({entry["algorithm"] for entry in algorithms}) == 23
     for algorithm in {entry["algorithm"] for entry in algorithms}:
         backends = [entry for entry in algorithms if entry["algorithm"] == algorithm]
