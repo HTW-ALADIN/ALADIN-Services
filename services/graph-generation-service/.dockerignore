@@ -1,0 +1,12 @@
+.bootstrap-venv
+.coverage
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.uv-cache
+.venv
+__pycache__
+coverage.xml
+dist
+htmlcov
+*.openapi.json

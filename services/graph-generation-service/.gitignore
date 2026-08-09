@@ -1,0 +1,2 @@
+*.openapi.json
+.mypy_cache/
