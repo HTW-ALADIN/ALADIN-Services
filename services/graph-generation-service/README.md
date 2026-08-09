@@ -50,6 +50,13 @@ Example request:
 Supported exports are `edge_list`, `adjacency`, `graphml`, `gml`, and `graph6`. JSON formats are returned
 directly; GraphML, GML, and graph6 are streamed with format-specific content types.
 
+The CLI runs the same validation, adapter routing, and export logic without starting the API:
+
+```sh
+graph-generation-service generate request.json
+cat request.json | graph-generation-service generate -
+```
+
 Requests are limited to 10,000 generated nodes. Up to 100 graphs are retained in memory, with the oldest resource
 evicted when the limit is reached. Durable storage and asynchronous generation are not implemented yet.
 

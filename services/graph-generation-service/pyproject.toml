@@ -13,6 +13,9 @@ dependencies = [
     "uvicorn[standard]>=0.34.0",
 ]
 
+[project.scripts]
+graph-generation-service = "app.cli:main"
+
 [dependency-groups]
 dev = [
     "httpx2>=2.10.0",
