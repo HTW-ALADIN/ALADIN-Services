@@ -2,12 +2,13 @@ use std::{
     collections::BTreeMap,
     fs,
     io::{self, Read, Write},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde_json::{Map, Value};
 use utoipa::OpenApi;
+
+pub use crate::cli_args::{Cli, CliAutoescape, CliUndefined, Command, OpenapiFormat, RenderArgs};
 
 use crate::{
     config::Limits,
@@ -17,83 +18,6 @@ use crate::{
     renderer,
 };
 
-#[derive(Debug, Parser)]
-#[command(name = "text-template-service")]
-#[command(about = "Render MiniJinja text templates through a local CLI or REST server")]
-pub struct Cli {
-    #[command(subcommand)]
-    pub command: Command,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum Command {
-    /// Start the REST API.
-    Server {
-        #[arg(long, default_value = "0.0.0.0")]
-        host: String,
-        #[arg(long, default_value_t = 8000)]
-        port: u16,
-    },
-    /// Render a template locally through the same core used by the REST API.
-    Render(RenderArgs),
-    /// Write the generated OpenAPI document.
-    Openapi {
-        #[arg(long, value_enum, default_value_t = OpenapiFormat::Yaml)]
-        format: OpenapiFormat,
-        #[arg(long)]
-        output: Option<PathBuf>,
-    },
-}
-
-#[derive(Debug, Args)]
-pub struct RenderArgs {
-    /// Template file, or '-' to read the template from stdin.
-    #[arg(
-        long,
-        required_unless_present = "template_dir",
-        conflicts_with = "template_dir"
-    )]
-    pub template: Option<PathBuf>,
-    /// Directory containing an in-memory template bundle.
-    #[arg(
-        long,
-        required_unless_present = "template",
-        conflicts_with = "template"
-    )]
-    pub template_dir: Option<PathBuf>,
-    /// Bundle entrypoint, relative to --template-dir.
-    #[arg(long, requires = "template_dir")]
-    pub entrypoint: Option<String>,
-    /// JSON context file, or '-' to read context from stdin.
-    #[arg(long)]
-    pub context: PathBuf,
-    #[arg(long, value_enum, default_value_t = CliUndefined::Strict)]
-    pub undefined: CliUndefined,
-    #[arg(long, value_enum, default_value_t = CliAutoescape::None)]
-    pub autoescape: CliAutoescape,
-    /// Strip one trailing newline using MiniJinja's standard behavior.
-    #[arg(long)]
-    pub strip_trailing_newline: bool,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum CliUndefined {
-    Strict,
-    Lenient,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum CliAutoescape {
-    None,
-    Html,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum OpenapiFormat {
-    Json,
-    Yaml,
-}
-
 pub fn execute_render(args: RenderArgs, limits: &Limits) -> Result<String, ServiceError> {
     if args.template.as_deref() == Some(Path::new("-")) && args.context == Path::new("-") {
         return Err(ServiceError::invalid(
@@ -101,7 +25,7 @@ pub fn execute_render(args: RenderArgs, limits: &Limits) -> Result<String, Servi
         ));
     }
 
-    let context_text = read_text(&args.context, "context")?;
+    let context_text = read_text(&args.context, "context", limits.max_context_bytes)?;
     let context: Map<String, Value> = serde_json::from_str::<Value>(&context_text)
         .map_err(|error| ServiceError::invalid(format!("context is not valid JSON: {error}")))?
         .as_object()
@@ -110,7 +34,7 @@ pub fn execute_render(args: RenderArgs, limits: &Limits) -> Result<String, Servi
 
     let source = if let Some(template_path) = args.template {
         TemplateSource::Inline {
-            template: read_text(&template_path, "template")?,
+            template: read_text(&template_path, "template", limits.max_template_bytes)?,
             name: template_path
                 .file_name()
                 .and_then(|name| name.to_str())
@@ -126,7 +50,7 @@ pub fn execute_render(args: RenderArgs, limits: &Limits) -> Result<String, Servi
             .ok_or_else(|| ServiceError::invalid("--entrypoint is required for a bundle"))?;
         TemplateSource::Bundle {
             entrypoint,
-            templates: load_bundle(&directory)?,
+            templates: load_bundle(&directory, limits)?,
         }
     };
 
@@ -171,20 +95,32 @@ pub fn write_problem(error: &ServiceError) {
     let _ = writeln!(io::stderr(), "{text}");
 }
 
-fn read_text(path: &Path, kind: &str) -> Result<String, ServiceError> {
+fn read_text(path: &Path, kind: &str, maximum: usize) -> Result<String, ServiceError> {
     if path == Path::new("-") {
-        let mut text = String::new();
-        io::stdin()
-            .read_to_string(&mut text)
-            .map_err(|error| ServiceError::invalid(format!("could not read {kind}: {error}")))?;
-        return Ok(text);
+        return read_limited(io::stdin().lock(), kind, maximum);
     }
-    fs::read_to_string(path).map_err(|error| {
-        ServiceError::invalid(format!("could not read {kind} {}: {error}", path.display()))
-    })
+    let label = format!("{kind} {}", path.display());
+    let file = fs::File::open(path)
+        .map_err(|error| ServiceError::invalid(format!("could not read {label}: {error}")))?;
+    read_limited(file, &label, maximum)
 }
 
-fn load_bundle(root: &Path) -> Result<BTreeMap<String, String>, ServiceError> {
+fn read_limited(reader: impl Read, label: &str, maximum: usize) -> Result<String, ServiceError> {
+    let mut bytes = Vec::with_capacity(maximum.min(8192));
+    reader
+        .take(maximum.saturating_add(1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|error| ServiceError::invalid(format!("could not read {label}: {error}")))?;
+    if bytes.len() > maximum {
+        return Err(ServiceError::payload_too_large(format!(
+            "{label} exceeds {maximum} bytes"
+        )));
+    }
+    String::from_utf8(bytes)
+        .map_err(|error| ServiceError::invalid(format!("{label} is not readable UTF-8: {error}")))
+}
+
+fn load_bundle(root: &Path, limits: &Limits) -> Result<BTreeMap<String, String>, ServiceError> {
     let root = root.canonicalize().map_err(|error| {
         ServiceError::invalid(format!(
             "could not open template directory {}: {error}",
@@ -195,47 +131,91 @@ fn load_bundle(root: &Path) -> Result<BTreeMap<String, String>, ServiceError> {
         return Err(ServiceError::invalid("--template-dir must be a directory"));
     }
     let mut templates = BTreeMap::new();
-    collect_bundle_files(&root, &root, &mut templates)?;
+    collect_bundle_files(&root, &mut templates, limits)?;
     Ok(templates)
 }
 
 fn collect_bundle_files(
     root: &Path,
-    directory: &Path,
     templates: &mut BTreeMap<String, String>,
+    limits: &Limits,
 ) -> Result<(), ServiceError> {
-    let entries =
-        fs::read_dir(directory).map_err(|error| directory_read_error(directory, error))?;
-    for entry in entries {
-        let entry = entry.map_err(directory_entry_error)?;
-        let file_type = entry
-            .file_type()
-            .map_err(|error| inspect_path_error(&entry.path(), error))?;
-        if file_type.is_symlink() {
-            return Err(ServiceError::invalid(format!(
-                "symlinks are not allowed in template bundles: {}",
-                entry.path().display()
-            )));
-        }
-        if file_type.is_dir() {
-            collect_bundle_files(root, &entry.path(), templates)?;
-        } else if file_type.is_file() {
-            let path = entry.path();
-            let relative = path.strip_prefix(root).map_err(|_| escaped_path_error())?;
-            let logical_name = relative
-                .components()
-                .map(|component| component.as_os_str().to_string_lossy())
-                .collect::<Vec<_>>()
-                .join("/");
-            let source = fs::read_to_string(&path).map_err(|error| {
-                ServiceError::invalid(format!(
-                    "template {} is not readable UTF-8: {error}",
-                    path.display()
-                ))
-            })?;
-            templates.insert(logical_name, source);
+    let mut directories = vec![root.to_path_buf()];
+    let maximum_entries = limits
+        .max_bundle_templates
+        .saturating_mul(2)
+        .saturating_add(1);
+    let mut entries_seen = 0usize;
+    while let Some(directory) = directories.pop() {
+        let entries =
+            fs::read_dir(&directory).map_err(|error| directory_read_error(&directory, error))?;
+        for entry in entries {
+            let entry = entry.map_err(directory_entry_error)?;
+            entries_seen += 1;
+            if entries_seen > maximum_entries {
+                return Err(ServiceError::payload_too_large(format!(
+                    "bundle traversal exceeds {maximum_entries} entries"
+                )));
+            }
+            let file_type = entry
+                .file_type()
+                .map_err(|error| inspect_path_error(&entry.path(), error))?;
+            if file_type.is_symlink() {
+                return Err(ServiceError::invalid(format!(
+                    "symlinks are not allowed in template bundles: {}",
+                    entry.path().display()
+                )));
+            }
+            if file_type.is_dir() {
+                directories.push(entry.path());
+            } else if file_type.is_file() {
+                if templates.len() >= limits.max_bundle_templates {
+                    return Err(ServiceError::payload_too_large(format!(
+                        "bundle contains more than {} templates",
+                        limits.max_bundle_templates
+                    )));
+                }
+                let path = entry.path();
+                let relative = path.strip_prefix(root).map_err(|_| escaped_path_error())?;
+                let logical_name = logical_template_name(relative)?;
+                if logical_name.len() > limits.max_template_name_bytes {
+                    return Err(ServiceError::payload_too_large(format!(
+                        "template name exceeds {} bytes: {logical_name}",
+                        limits.max_template_name_bytes
+                    )));
+                }
+                let source = read_text(&path, "template", limits.max_template_bytes)?;
+                insert_template(templates, logical_name, source)?;
+            }
         }
     }
+    Ok(())
+}
+
+fn logical_template_name(relative: &Path) -> Result<String, ServiceError> {
+    relative
+        .components()
+        .map(|component| {
+            component
+                .as_os_str()
+                .to_str()
+                .ok_or_else(|| ServiceError::invalid("template bundle paths must be valid UTF-8"))
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(|components| components.join("/"))
+}
+
+fn insert_template(
+    templates: &mut BTreeMap<String, String>,
+    logical_name: String,
+    source: String,
+) -> Result<(), ServiceError> {
+    if templates.contains_key(&logical_name) {
+        return Err(ServiceError::invalid(format!(
+            "duplicate template name: {logical_name}"
+        )));
+    }
+    templates.insert(logical_name, source);
     Ok(())
 }
 
@@ -260,11 +240,14 @@ fn escaped_path_error() -> ServiceError {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, io};
+    use std::{collections::BTreeMap, fs, io};
+
+    use clap::Parser;
 
     use super::{
         directory_entry_error, directory_read_error, escaped_path_error, execute_render,
-        inspect_path_error, load_bundle, read_text, CliAutoescape, CliUndefined, RenderArgs,
+        insert_template, inspect_path_error, load_bundle, logical_template_name, read_limited,
+        read_text, Cli, CliAutoescape, CliUndefined, RenderArgs,
     };
     use crate::config::Limits;
 
@@ -281,15 +264,33 @@ mod tests {
     }
 
     #[test]
+    fn parses_cli_defaults() {
+        let server = Cli::try_parse_from(["text-template-service", "server"]).unwrap();
+        std::hint::black_box(server);
+        let openapi = Cli::try_parse_from(["text-template-service", "openapi"]).unwrap();
+        std::hint::black_box(openapi);
+        let render = Cli::try_parse_from([
+            "text-template-service",
+            "render",
+            "--template",
+            "template.j2",
+            "--context",
+            "context.json",
+        ])
+        .unwrap();
+        std::hint::black_box(render);
+    }
+
+    #[test]
     fn reports_missing_files_and_directories() {
         let directory = tempfile::tempdir().unwrap();
         let missing = directory.path().join("missing");
 
-        assert!(read_text(&missing, "template")
+        assert!(read_text(&missing, "template", 1024)
             .unwrap_err()
             .detail
             .contains("could not read template"));
-        assert!(load_bundle(&missing)
+        assert!(load_bundle(&missing, &Limits::default())
             .unwrap_err()
             .detail
             .contains("could not open template directory"));
@@ -302,7 +303,7 @@ mod tests {
         fs::write(&file, "template").unwrap();
 
         assert_eq!(
-            load_bundle(&file).unwrap_err().detail,
+            load_bundle(&file, &Limits::default()).unwrap_err().detail,
             "--template-dir must be a directory"
         );
     }
@@ -327,7 +328,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         fs::write(directory.path().join("invalid.txt"), [0xff]).unwrap();
 
-        assert!(load_bundle(directory.path())
+        assert!(load_bundle(directory.path(), &Limits::default())
             .unwrap_err()
             .detail
             .contains("is not readable UTF-8"));
@@ -363,7 +364,9 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let _socket = UnixListener::bind(directory.path().join("service.sock")).unwrap();
 
-        assert!(load_bundle(directory.path()).unwrap().is_empty());
+        assert!(load_bundle(directory.path(), &Limits::default())
+            .unwrap()
+            .is_empty());
     }
 
     #[cfg(unix)]
@@ -376,9 +379,95 @@ mod tests {
         fs::write(&target, "target").unwrap();
         symlink(&target, directory.path().join("link.txt")).unwrap();
 
-        assert!(load_bundle(directory.path())
+        assert!(load_bundle(directory.path(), &Limits::default())
             .unwrap_err()
             .detail
             .contains("symlinks are not allowed"));
+    }
+
+    #[test]
+    fn bounded_reads_reject_oversized_and_unreadable_inputs() {
+        assert_eq!(
+            read_limited(&b"too long"[..], "template", 3)
+                .unwrap_err()
+                .status,
+            axum::http::StatusCode::PAYLOAD_TOO_LARGE
+        );
+        assert!(read_limited(&[0xff][..], "template", 1)
+            .unwrap_err()
+            .detail
+            .contains("not readable UTF-8"));
+
+        struct FailingReader;
+        impl io::Read for FailingReader {
+            fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+                Err(io::Error::other("failure"))
+            }
+        }
+        assert!(read_limited(FailingReader, "template", 1)
+            .unwrap_err()
+            .detail
+            .contains("could not read template"));
+    }
+
+    #[test]
+    fn bundle_loading_enforces_file_directory_and_name_limits() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(directory.path().join("one.txt"), "one").unwrap();
+        fs::write(directory.path().join("two.txt"), "two").unwrap();
+        let one_template = Limits {
+            max_bundle_templates: 1,
+            ..Limits::default()
+        };
+        assert!(load_bundle(directory.path(), &one_template)
+            .unwrap_err()
+            .detail
+            .contains("more than 1 templates"));
+
+        let nested = tempfile::tempdir().unwrap();
+        fs::create_dir_all(nested.path().join("a/b/c/d")).unwrap();
+        let one_directory = Limits {
+            max_bundle_templates: 1,
+            ..Limits::default()
+        };
+        assert!(load_bundle(nested.path(), &one_directory)
+            .unwrap_err()
+            .detail
+            .contains("traversal exceeds 3 entries"));
+
+        let named = tempfile::tempdir().unwrap();
+        fs::write(named.path().join("long.txt"), "source").unwrap();
+        let short_names = Limits {
+            max_template_name_bytes: 3,
+            ..Limits::default()
+        };
+        assert!(load_bundle(named.path(), &short_names)
+            .unwrap_err()
+            .detail
+            .contains("template name exceeds 3 bytes"));
+    }
+
+    #[test]
+    fn duplicate_logical_names_are_rejected() {
+        let mut templates = BTreeMap::new();
+        insert_template(&mut templates, "same.txt".into(), "first".into()).unwrap();
+        assert!(
+            insert_template(&mut templates, "same.txt".into(), "second".into())
+                .unwrap_err()
+                .detail
+                .contains("duplicate template name")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_non_utf8_bundle_paths() {
+        use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+
+        let path = std::path::PathBuf::from(OsString::from_vec(vec![0xff]));
+        assert!(logical_template_name(&path)
+            .unwrap_err()
+            .detail
+            .contains("paths must be valid UTF-8"));
     }
 }

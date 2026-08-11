@@ -1,5 +1,6 @@
 pub mod api;
 pub mod cli;
+mod cli_args;
 pub mod config;
 pub mod error;
 pub mod model;

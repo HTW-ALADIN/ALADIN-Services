@@ -111,6 +111,8 @@ pub struct LimitInfo {
     pub max_context_bytes: usize,
     pub max_template_bytes: usize,
     pub max_bundle_templates: usize,
+    pub max_template_name_bytes: usize,
+    pub max_concurrent_renders: usize,
     pub max_output_bytes: usize,
     pub fuel: u64,
     pub recursion_limit: usize,

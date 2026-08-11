@@ -5,6 +5,15 @@ A stateless REST and CLI wrapper around
 text from Jinja-compatible templates and JSON context while keeping templates,
 includes, and inheritance inside an in-memory request boundary.
 
+## Engine selection and wrapper rationale
+
+MiniJinja already provides an embeddable Rust API and a standalone
+`minijinja-cli`, but it does not provide the REST API or OpenAPI contract
+required by this repository. This service therefore embeds MiniJinja and adds
+only the required REST/OpenAPI layer and a mirroring CLI. Template parsing,
+evaluation, filters, tests, includes, inheritance, and macros remain delegated
+to MiniJinja rather than being reimplemented by the wrapper.
+
 ## Public contract
 
 | Method | Path | Purpose |
@@ -63,7 +72,9 @@ cannot install native functions, filters, tests, loaders, or execution limits.
 
 ## CLI
 
-The CLI calls the same renderer as the REST endpoint.
+The CLI calls the same renderer as the REST endpoint. Context and template
+reads, bundle file counts and directory traversal, and logical template names
+are bounded before rendering.
 
 ```sh
 cargo run -- render --template template.j2 --context context.json
@@ -125,6 +136,7 @@ variables:
 | `TEXT_TEMPLATE_MAX_TEMPLATE_BYTES` | 262,144 per template |
 | `TEXT_TEMPLATE_MAX_BUNDLE_TEMPLATES` | 32 |
 | `TEXT_TEMPLATE_MAX_TEMPLATE_NAME_BYTES` | 255 |
+| `TEXT_TEMPLATE_MAX_CONCURRENT_RENDERS` | 4 |
 | `TEXT_TEMPLATE_MAX_OUTPUT_BYTES` | 1,048,576 |
 | `TEXT_TEMPLATE_FUEL` | 250,000 instructions |
 | `TEXT_TEMPLATE_RECURSION_LIMIT` | 100 |
@@ -133,7 +145,8 @@ variables:
 Output is bounded while it is rendered rather than after allocating the full
 result. Fuel and recursion bounds terminate expensive template execution. The
 wall-clock timeout bounds the HTTP wait; fuel remains the hard in-process
-execution bound for the synchronous renderer.
+execution bound for the synchronous renderer. Concurrent render work is capped;
+requests receive `503 Service Unavailable` while every render slot is occupied.
 
 ## Hardware requirements
 

@@ -5,6 +5,7 @@ pub const DEFAULT_MAX_CONTEXT_BYTES: usize = 1024 * 1024;
 pub const DEFAULT_MAX_TEMPLATE_BYTES: usize = 256 * 1024;
 pub const DEFAULT_MAX_BUNDLE_TEMPLATES: usize = 32;
 pub const DEFAULT_MAX_TEMPLATE_NAME_BYTES: usize = 255;
+pub const DEFAULT_MAX_CONCURRENT_RENDERS: usize = 4;
 pub const DEFAULT_MAX_OUTPUT_BYTES: usize = 1024 * 1024;
 pub const DEFAULT_FUEL: u64 = 250_000;
 pub const DEFAULT_RECURSION_LIMIT: usize = 100;
@@ -17,6 +18,7 @@ pub struct Limits {
     pub max_template_bytes: usize,
     pub max_bundle_templates: usize,
     pub max_template_name_bytes: usize,
+    pub max_concurrent_renders: usize,
     pub max_output_bytes: usize,
     pub fuel: u64,
     pub recursion_limit: usize,
@@ -31,6 +33,7 @@ impl Default for Limits {
             max_template_bytes: DEFAULT_MAX_TEMPLATE_BYTES,
             max_bundle_templates: DEFAULT_MAX_BUNDLE_TEMPLATES,
             max_template_name_bytes: DEFAULT_MAX_TEMPLATE_NAME_BYTES,
+            max_concurrent_renders: DEFAULT_MAX_CONCURRENT_RENDERS,
             max_output_bytes: DEFAULT_MAX_OUTPUT_BYTES,
             fuel: DEFAULT_FUEL,
             recursion_limit: DEFAULT_RECURSION_LIMIT,
@@ -42,6 +45,15 @@ impl Default for Limits {
 impl Limits {
     pub fn from_env() -> Result<Self, String> {
         let defaults = Self::default();
+        let max_concurrent_renders = read_env(
+            "TEXT_TEMPLATE_MAX_CONCURRENT_RENDERS",
+            defaults.max_concurrent_renders,
+        )?;
+        if max_concurrent_renders == 0 {
+            return Err(
+                "TEXT_TEMPLATE_MAX_CONCURRENT_RENDERS must be greater than zero".to_string(),
+            );
+        }
         Ok(Self {
             max_body_bytes: read_env("TEXT_TEMPLATE_MAX_BODY_BYTES", defaults.max_body_bytes)?,
             max_context_bytes: read_env(
@@ -60,6 +72,7 @@ impl Limits {
                 "TEXT_TEMPLATE_MAX_TEMPLATE_NAME_BYTES",
                 defaults.max_template_name_bytes,
             )?,
+            max_concurrent_renders,
             max_output_bytes: read_env(
                 "TEXT_TEMPLATE_MAX_OUTPUT_BYTES",
                 defaults.max_output_bytes,
@@ -93,12 +106,13 @@ mod tests {
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
-    const VARIABLES: [&str; 9] = [
+    const VARIABLES: [&str; 10] = [
         "TEXT_TEMPLATE_MAX_BODY_BYTES",
         "TEXT_TEMPLATE_MAX_CONTEXT_BYTES",
         "TEXT_TEMPLATE_MAX_TEMPLATE_BYTES",
         "TEXT_TEMPLATE_MAX_BUNDLE_TEMPLATES",
         "TEXT_TEMPLATE_MAX_TEMPLATE_NAME_BYTES",
+        "TEXT_TEMPLATE_MAX_CONCURRENT_RENDERS",
         "TEXT_TEMPLATE_MAX_OUTPUT_BYTES",
         "TEXT_TEMPLATE_FUEL",
         "TEXT_TEMPLATE_RECURSION_LIMIT",
@@ -130,10 +144,11 @@ mod tests {
         assert_eq!(limits.max_template_bytes, 3);
         assert_eq!(limits.max_bundle_templates, 4);
         assert_eq!(limits.max_template_name_bytes, 5);
-        assert_eq!(limits.max_output_bytes, 6);
-        assert_eq!(limits.fuel, 7);
-        assert_eq!(limits.recursion_limit, 8);
-        assert_eq!(limits.timeout_ms, 9);
+        assert_eq!(limits.max_concurrent_renders, 6);
+        assert_eq!(limits.max_output_bytes, 7);
+        assert_eq!(limits.fuel, 8);
+        assert_eq!(limits.recursion_limit, 9);
+        assert_eq!(limits.timeout_ms, 10);
     }
 
     #[test]
@@ -146,6 +161,17 @@ mod tests {
             assert!(error.contains(&format!("invalid {variable} value")));
             env::remove_var(variable);
         }
+    }
+
+    #[test]
+    fn rejects_zero_render_concurrency() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let _cleanup = EnvCleanup;
+        env::set_var("TEXT_TEMPLATE_MAX_CONCURRENT_RENDERS", "0");
+
+        let error = Limits::from_env().unwrap_err();
+
+        assert!(error.contains("must be greater than zero"));
     }
 
     #[cfg(unix)]

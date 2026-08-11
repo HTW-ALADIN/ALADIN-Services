@@ -88,6 +88,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: All render workers are busy
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
 components:
   schemas:
     Autoescape:
@@ -182,6 +188,8 @@ components:
       - maxContextBytes
       - maxTemplateBytes
       - maxBundleTemplates
+      - maxTemplateNameBytes
+      - maxConcurrentRenders
       - maxOutputBytes
       - fuel
       - recursionLimit
@@ -197,6 +205,9 @@ components:
         maxBundleTemplates:
           type: integer
           minimum: 0
+        maxConcurrentRenders:
+          type: integer
+          minimum: 0
         maxContextBytes:
           type: integer
           minimum: 0
@@ -204,6 +215,9 @@ components:
           type: integer
           minimum: 0
         maxTemplateBytes:
+          type: integer
+          minimum: 0
+        maxTemplateNameBytes:
           type: integer
           minimum: 0
         recursionLimit:
@@ -315,6 +329,7 @@ components:
             - 'null'
           template:
             type: string
+        additionalProperties: false
       - type: object
         required:
         - entrypoint
@@ -333,6 +348,10 @@ components:
               type: string
             propertyNames:
               type: string
+            minProperties: 1
+        additionalProperties: false
+      discriminator:
+        propertyName: kind
     UndefinedBehavior:
       type: string
       enum:

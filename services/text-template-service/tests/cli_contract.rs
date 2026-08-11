@@ -220,6 +220,58 @@ fn cli_rejects_conflicting_stdin_and_invalid_context() {
         .stderr(predicate::str::contains("context is not valid JSON"));
 }
 
+#[test]
+fn cli_enforces_input_and_bundle_limits_before_rendering() {
+    let directory = tempfile::tempdir().unwrap();
+    let template = directory.path().join("message.j2");
+    let context = directory.path().join("context.json");
+    fs::write(&template, "template is too long").unwrap();
+    fs::write(&context, r#"{"value":"context is too long"}"#).unwrap();
+
+    Command::cargo_bin("text-template-service")
+        .unwrap()
+        .arg("render")
+        .arg("--template")
+        .arg(&template)
+        .arg("--context")
+        .arg(&context)
+        .env("TEXT_TEMPLATE_MAX_CONTEXT_BYTES", "2")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("resource-limit"));
+
+    fs::write(&context, "{}").unwrap();
+    Command::cargo_bin("text-template-service")
+        .unwrap()
+        .arg("render")
+        .arg("--template")
+        .arg(&template)
+        .arg("--context")
+        .arg(&context)
+        .env("TEXT_TEMPLATE_MAX_TEMPLATE_BYTES", "2")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("resource-limit"));
+
+    let templates = directory.path().join("templates");
+    fs::create_dir(&templates).unwrap();
+    fs::write(templates.join("one.j2"), "one").unwrap();
+    fs::write(templates.join("two.j2"), "two").unwrap();
+    Command::cargo_bin("text-template-service")
+        .unwrap()
+        .arg("render")
+        .arg("--template-dir")
+        .arg(&templates)
+        .arg("--entrypoint")
+        .arg("one.j2")
+        .arg("--context")
+        .arg(&context)
+        .env("TEXT_TEMPLATE_MAX_BUNDLE_TEMPLATES", "1")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("resource-limit"));
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn cli_reports_stdout_write_failures() {

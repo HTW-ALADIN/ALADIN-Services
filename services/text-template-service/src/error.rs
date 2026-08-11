@@ -66,6 +66,15 @@ impl ServiceError {
         )
     }
 
+    pub fn unavailable(detail: impl Into<String>) -> Self {
+        Self::new(
+            "render-capacity-exhausted",
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Render capacity exhausted",
+            detail,
+        )
+    }
+
     pub fn internal(detail: impl Into<String>) -> Self {
         Self::new(
             "internal-error",

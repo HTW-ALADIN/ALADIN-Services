@@ -24,6 +24,7 @@ start:
 
 clean:
 	cargo clean
+	rm -f coverage.lcov
 
 docker-build:
 	docker build -t $(SERVICE) .

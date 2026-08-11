@@ -176,6 +176,54 @@ async fn exposes_health_capabilities_and_openapi() {
 }
 
 #[tokio::test]
+async fn capabilities_expose_configurable_limits() {
+    let response = app()
+        .oneshot(
+            Request::get("/v1/capabilities")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 1024 * 1024).await.unwrap())
+            .unwrap();
+
+    assert_eq!(body["limits"]["maxTemplateNameBytes"], 255);
+    assert_eq!(body["limits"]["maxConcurrentRenders"], 4);
+}
+
+#[tokio::test]
+async fn rejects_rendering_when_capacity_is_exhausted() {
+    let response = router(AppState::new(Limits {
+        max_concurrent_renders: 0,
+        ..Limits::default()
+    }))
+    .oneshot(
+        Request::post("/v1/render")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                json!({
+                    "source": {"kind": "inline", "template": "ok"},
+                    "context": {}
+                })
+                .to_string(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let body: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 1024).await.unwrap()).unwrap();
+    assert_eq!(
+        body["type"],
+        "urn:problem:text-template:render-capacity-exhausted"
+    );
+}
+
+#[tokio::test]
 async fn rejects_unsupported_response_media_types() {
     let response = app()
         .oneshot(
@@ -257,4 +305,28 @@ fn generated_openapi_describes_the_public_routes() {
             "missing path: {path}"
         );
     }
+
+    assert!(document["components"]["schemas"]["LimitInfo"]["properties"]
+        .get("maxTemplateNameBytes")
+        .is_some());
+    assert!(document["components"]["schemas"]["LimitInfo"]["properties"]
+        .get("maxConcurrentRenders")
+        .is_some());
+    assert_eq!(
+        document["components"]["schemas"]["TemplateSource"]["discriminator"]["propertyName"],
+        "kind"
+    );
+    for variant in document["components"]["schemas"]["TemplateSource"]["oneOf"]
+        .as_array()
+        .unwrap()
+    {
+        assert_eq!(variant["additionalProperties"], false);
+    }
+    let bundle = document["components"]["schemas"]["TemplateSource"]["oneOf"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|variant| variant["properties"].get("templates").is_some())
+        .unwrap();
+    assert_eq!(bundle["properties"]["templates"]["minProperties"], 1);
 }

@@ -3,11 +3,13 @@ set -eu
 
 report="${COVERAGE_REPORT:-coverage.lcov}"
 
+# Exclude executable wiring and Clap's generated argument-declaration spans;
+# CLI behavior is covered by tests/cli_contract.rs.
 cargo llvm-cov \
   --locked \
   --all-features \
   --workspace \
-  --ignore-filename-regex 'src/main.rs' \
+  --ignore-filename-regex 'src/(main|cli_args).rs' \
   --lcov \
   --output-path "$report"
 
