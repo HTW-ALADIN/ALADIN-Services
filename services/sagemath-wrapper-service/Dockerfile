@@ -17,11 +17,18 @@ COPY registry/ registry/
 # deps in production image) so the published image is reproducible, then
 # install them with sage's own pip. `uv` itself is only a build-time tool
 # and is not installed into the image's runtime environment.
-RUN pip install --no-cache-dir uv \
-    && uv export --frozen --no-dev --no-hashes --no-emit-project -o /tmp/requirements.lock.txt \
+# SAGE_MAX_MEMORY_MB and SAGE_MAX_CONCURRENCY are tuned for the 2 GB RAM
+# minimum deployment target (see README.md). SAGE_CONTAINER_MEMORY_MB is
+# set to a safe estimate so the startup sanity check in executor.py passes.
+ENV SAGE_MAX_MEMORY_MB=2048 \
+    SAGE_MAX_CONCURRENCY=2 \
+    SAGE_MAX_PROCESSES=512 \
+    SAGE_CONTAINER_MEMORY_MB=4096
+RUN sage -python -m pip install --no-cache-dir uv \
+    && sage -python -m uv export --frozen --no-dev --no-hashes --no-emit-project -o /tmp/requirements.lock.txt \
     && sage -python -m pip install --no-cache-dir -r /tmp/requirements.lock.txt \
     && sage -python -m pip install --no-cache-dir --no-deps -e "." \
-    && pip uninstall --yes uv \
+    && sage -python -m pip uninstall --yes uv \
     && rm -f /tmp/requirements.lock.txt \
     && rm -rf /root/.cache /home/sage/.cache /tmp/*
 
@@ -30,8 +37,12 @@ RUN pip install --no-cache-dir uv \
 RUN sage -python -m pip install --force-reinstall --no-cache-dir --no-binary=cysignals cysignals \
     && rm -rf /home/sage/.cache /tmp/*
 
-# Health check: curl is available in the base image
-HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+# Install curl for health check (not available in sagemath base image)
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=2 \
     CMD curl -f http://localhost:8000/healthz || exit 1
 
 EXPOSE 8000
