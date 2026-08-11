@@ -2,5 +2,6 @@ target
 .git
 .gitignore
 coverage
+coverage.lcov
 *.md
 tests

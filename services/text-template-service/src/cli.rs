@@ -204,22 +204,13 @@ fn collect_bundle_files(
     directory: &Path,
     templates: &mut BTreeMap<String, String>,
 ) -> Result<(), ServiceError> {
-    let entries = fs::read_dir(directory).map_err(|error| {
-        ServiceError::invalid(format!(
-            "could not read template directory {}: {error}",
-            directory.display()
-        ))
-    })?;
+    let entries =
+        fs::read_dir(directory).map_err(|error| directory_read_error(directory, error))?;
     for entry in entries {
-        let entry = entry.map_err(|error| {
-            ServiceError::invalid(format!("could not read template directory entry: {error}"))
-        })?;
-        let file_type = entry.file_type().map_err(|error| {
-            ServiceError::invalid(format!(
-                "could not inspect {}: {error}",
-                entry.path().display()
-            ))
-        })?;
+        let entry = entry.map_err(directory_entry_error)?;
+        let file_type = entry
+            .file_type()
+            .map_err(|error| inspect_path_error(&entry.path(), error))?;
         if file_type.is_symlink() {
             return Err(ServiceError::invalid(format!(
                 "symlinks are not allowed in template bundles: {}",
@@ -230,9 +221,7 @@ fn collect_bundle_files(
             collect_bundle_files(root, &entry.path(), templates)?;
         } else if file_type.is_file() {
             let path = entry.path();
-            let relative = path.strip_prefix(root).map_err(|_| {
-                ServiceError::invalid("template path escaped the selected directory")
-            })?;
+            let relative = path.strip_prefix(root).map_err(|_| escaped_path_error())?;
             let logical_name = relative
                 .components()
                 .map(|component| component.as_os_str().to_string_lossy())
@@ -248,4 +237,148 @@ fn collect_bundle_files(
         }
     }
     Ok(())
+}
+
+fn directory_read_error(directory: &Path, error: io::Error) -> ServiceError {
+    ServiceError::invalid(format!(
+        "could not read template directory {}: {error}",
+        directory.display()
+    ))
+}
+
+fn directory_entry_error(error: io::Error) -> ServiceError {
+    ServiceError::invalid(format!("could not read template directory entry: {error}"))
+}
+
+fn inspect_path_error(path: &Path, error: io::Error) -> ServiceError {
+    ServiceError::invalid(format!("could not inspect {}: {error}", path.display()))
+}
+
+fn escaped_path_error() -> ServiceError {
+    ServiceError::invalid("template path escaped the selected directory")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{fs, io};
+
+    use super::{
+        directory_entry_error, directory_read_error, escaped_path_error, execute_render,
+        inspect_path_error, load_bundle, read_text, CliAutoescape, CliUndefined, RenderArgs,
+    };
+    use crate::config::Limits;
+
+    fn render_args(context: &std::path::Path) -> RenderArgs {
+        RenderArgs {
+            template: None,
+            template_dir: None,
+            entrypoint: None,
+            context: context.to_path_buf(),
+            undefined: CliUndefined::Strict,
+            autoescape: CliAutoescape::None,
+            strip_trailing_newline: false,
+        }
+    }
+
+    #[test]
+    fn reports_missing_files_and_directories() {
+        let directory = tempfile::tempdir().unwrap();
+        let missing = directory.path().join("missing");
+
+        assert!(read_text(&missing, "template")
+            .unwrap_err()
+            .detail
+            .contains("could not read template"));
+        assert!(load_bundle(&missing)
+            .unwrap_err()
+            .detail
+            .contains("could not open template directory"));
+    }
+
+    #[test]
+    fn rejects_a_file_as_the_bundle_root() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("template.txt");
+        fs::write(&file, "template").unwrap();
+
+        assert_eq!(
+            load_bundle(&file).unwrap_err().detail,
+            "--template-dir must be a directory"
+        );
+    }
+
+    #[test]
+    fn execute_render_requires_a_template_source_and_bundle_entrypoint() {
+        let directory = tempfile::tempdir().unwrap();
+        let context = directory.path().join("context.json");
+        fs::write(&context, "{}").unwrap();
+
+        let missing_source = execute_render(render_args(&context), &Limits::default()).unwrap_err();
+        assert_eq!(missing_source.detail, "--template-dir is required");
+
+        let mut missing_entrypoint = render_args(&context);
+        missing_entrypoint.template_dir = Some(directory.path().to_path_buf());
+        let error = execute_render(missing_entrypoint, &Limits::default()).unwrap_err();
+        assert_eq!(error.detail, "--entrypoint is required for a bundle");
+    }
+
+    #[test]
+    fn rejects_non_utf8_bundle_files() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(directory.path().join("invalid.txt"), [0xff]).unwrap();
+
+        assert!(load_bundle(directory.path())
+            .unwrap_err()
+            .detail
+            .contains("is not readable UTF-8"));
+    }
+
+    #[test]
+    fn formats_low_level_bundle_io_errors() {
+        let error = || io::Error::other("failure");
+        assert!(
+            directory_read_error(std::path::Path::new("templates"), error())
+                .detail
+                .contains("could not read template directory templates")
+        );
+        assert!(directory_entry_error(error())
+            .detail
+            .contains("could not read template directory entry"));
+        assert!(
+            inspect_path_error(std::path::Path::new("template.txt"), error())
+                .detail
+                .contains("could not inspect template.txt")
+        );
+        assert_eq!(
+            escaped_path_error().detail,
+            "template path escaped the selected directory"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ignores_non_file_directory_entries() {
+        use std::os::unix::net::UnixListener;
+
+        let directory = tempfile::tempdir().unwrap();
+        let _socket = UnixListener::bind(directory.path().join("service.sock")).unwrap();
+
+        assert!(load_bundle(directory.path()).unwrap().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlinks_in_bundle_directories() {
+        use std::os::unix::fs::symlink;
+
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("target.txt");
+        fs::write(&target, "target").unwrap();
+        symlink(&target, directory.path().join("link.txt")).unwrap();
+
+        assert!(load_bundle(directory.path())
+            .unwrap_err()
+            .detail
+            .contains("symlinks are not allowed"));
+    }
 }

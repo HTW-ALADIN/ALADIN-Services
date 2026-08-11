@@ -85,8 +85,14 @@ both use stdin. Bundle directory symlinks are rejected.
 ```sh
 make prep
 make test
+make coverage
 make start
 ```
+
+`make coverage` uses `cargo-llvm-cov` and fails unless the testable library
+surface has 100% line coverage. The small `src/main.rs` process bootstrap is
+excluded from that percentage; its CLI exit paths are exercised by integration
+tests and the long-running server path is covered by the Docker smoke test.
 
 The server listens on `0.0.0.0:8000` by default. Override it with:
 
@@ -149,6 +155,7 @@ The service implements every monorepo Makefile target:
 make prep
 make build
 make test
+make coverage
 make lint
 make start
 make clean

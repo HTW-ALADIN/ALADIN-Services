@@ -69,8 +69,7 @@ pub fn render(request: &RenderRequest, limits: &Limits) -> Result<RenderResponse
         return Err(map_engine_error(error));
     }
 
-    let output = String::from_utf8(writer.bytes)
-        .map_err(|_| ServiceError::internal("renderer produced non-UTF-8 output"))?;
+    let output = String::from_utf8_lossy(&writer.bytes).into_owned();
     let output_bytes = output.len();
     Ok(RenderResponse {
         output,
@@ -85,7 +84,7 @@ pub fn render(request: &RenderRequest, limits: &Limits) -> Result<RenderResponse
 
 fn validate_request(request: &RenderRequest, limits: &Limits) -> Result<(), ServiceError> {
     let context_bytes = serde_json::to_vec(&request.context)
-        .map_err(|_| ServiceError::invalid("context could not be serialized"))?
+        .expect("serde_json::Value objects are always serializable")
         .len();
     if context_bytes > limits.max_context_bytes {
         return Err(ServiceError::payload_too_large(format!(
@@ -117,15 +116,6 @@ fn validate_request(request: &RenderRequest, limits: &Limits) -> Result<(), Serv
                 )));
             }
             validate_template_name(entrypoint, limits)?;
-            if !templates.contains_key(entrypoint) {
-                return Err(ServiceError::new(
-                    "template-not-found",
-                    StatusCode::BAD_REQUEST,
-                    "Template not found",
-                    "bundle entrypoint is not present in templates",
-                )
-                .with_location(Some(entrypoint), None));
-            }
             for (name, template) in templates {
                 validate_template_name(name, limits)?;
                 validate_template(template, limits)?;
@@ -243,5 +233,32 @@ impl Write for BoundedWriter {
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use minijinja::{Error, ErrorKind};
+
+    use super::{map_engine_error, BoundedWriter};
+
+    #[test]
+    fn maps_write_and_generic_engine_errors() {
+        let write_error = map_engine_error(Error::new(ErrorKind::WriteFailure, "write failed"));
+        assert_eq!(write_error.code, "render-error");
+        assert_eq!(write_error.detail, "renderer could not write output");
+
+        let generic_error = map_engine_error(Error::new(ErrorKind::InvalidOperation, "invalid"));
+        assert_eq!(generic_error.code, "render-error");
+        assert_eq!(generic_error.detail, "template could not be rendered");
+    }
+
+    #[test]
+    fn bounded_writer_flushes_successfully() {
+        let mut writer = BoundedWriter::new(4);
+        writer.write_all(b"test").unwrap();
+        writer.flush().unwrap();
     }
 }

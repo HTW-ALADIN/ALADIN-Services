@@ -197,6 +197,55 @@ async fn rejects_unsupported_response_media_types() {
     assert_eq!(response.status(), StatusCode::NOT_ACCEPTABLE);
 }
 
+#[tokio::test]
+async fn negotiates_json_and_application_wildcards() {
+    for accept in ["application/json", "application/*", "*/*"] {
+        let response = app()
+            .oneshot(
+                Request::post("/v1/render")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::ACCEPT, accept)
+                    .body(Body::from(
+                        json!({
+                            "source": {"kind": "inline", "template": "ok"},
+                            "context": {}
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK, "failed Accept: {accept}");
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+    }
+}
+
+#[tokio::test]
+async fn rejects_missing_json_content_type() {
+    let response = app()
+        .oneshot(
+            Request::post("/v1/render")
+                .body(Body::from(
+                    json!({
+                        "source": {"kind": "inline", "template": "ok"},
+                        "context": {}
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    assert_eq!(
+        response.headers()[header::CONTENT_TYPE],
+        "application/problem+json"
+    );
+}
+
 #[test]
 fn generated_openapi_describes_the_public_routes() {
     let document = serde_json::to_value(ApiDoc::openapi()).unwrap();

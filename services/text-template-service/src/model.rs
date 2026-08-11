@@ -132,3 +132,13 @@ pub struct CapabilitiesResponse {
 pub struct HealthResponse {
     pub status: &'static str,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::default_keep_trailing_newline;
+
+    #[test]
+    fn trailing_newline_default_is_enabled() {
+        assert!(default_keep_trailing_newline());
+    }
+}

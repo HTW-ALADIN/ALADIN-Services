@@ -127,3 +127,16 @@ impl IntoResponse for ServiceError {
         response
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ServiceError;
+
+    #[test]
+    fn internal_errors_have_a_stable_display_contract() {
+        let error = ServiceError::internal("private failure");
+
+        assert_eq!(error.code, "internal-error");
+        assert_eq!(error.to_string(), "Internal server error: private failure");
+    }
+}

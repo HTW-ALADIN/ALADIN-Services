@@ -123,10 +123,7 @@ pub async fn render_template(
     let limits = (*state.limits).clone();
     let timeout = Duration::from_millis(limits.timeout_ms);
     let task = tokio::task::spawn_blocking(move || renderer::render(&request, &limits));
-    let rendered = tokio::time::timeout(timeout, task)
-        .await
-        .map_err(|_| ServiceError::resource_limit("template rendering timed out"))?
-        .map_err(|_| ServiceError::internal("renderer task failed"))??;
+    let rendered = await_render_task(task, timeout).await?;
 
     if wants_text {
         let mut response = Response::new(Body::from(rendered.output));
@@ -138,6 +135,16 @@ pub async fn render_template(
     } else {
         Ok(Json(rendered).into_response())
     }
+}
+
+async fn await_render_task(
+    task: tokio::task::JoinHandle<Result<RenderResponse, ServiceError>>,
+    timeout: Duration,
+) -> Result<RenderResponse, ServiceError> {
+    tokio::time::timeout(timeout, task)
+        .await
+        .map_err(|_| ServiceError::resource_limit("template rendering timed out"))?
+        .map_err(|_| ServiceError::internal("renderer task failed"))?
 }
 
 pub async fn openapi_document() -> Json<utoipa::openapi::OpenApi> {
@@ -185,5 +192,43 @@ fn map_json_rejection(rejection: axum::extract::rejection::JsonRejection) -> Ser
         )
     } else {
         ServiceError::invalid(detail)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
+
+    use super::{await_render_task, negotiate_response};
+    use crate::{error::ServiceError, model::RenderResponse};
+
+    #[test]
+    fn rejects_non_ascii_accept_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::ACCEPT, HeaderValue::from_bytes(&[0xff]).unwrap());
+
+        let error = negotiate_response(&headers).unwrap_err();
+
+        assert_eq!(error.status, StatusCode::NOT_ACCEPTABLE);
+    }
+
+    #[tokio::test]
+    async fn maps_timed_out_and_panicked_renderer_tasks() {
+        let slow = tokio::task::spawn_blocking(|| {
+            std::thread::sleep(Duration::from_millis(25));
+            Err(ServiceError::invalid("unused"))
+        });
+        let timeout = await_render_task(slow, Duration::ZERO).await.unwrap_err();
+        assert_eq!(timeout.code, "resource-limit");
+
+        let panicked = tokio::task::spawn_blocking(|| -> Result<RenderResponse, ServiceError> {
+            panic!("renderer panic for contract test")
+        });
+        let internal = await_render_task(panicked, Duration::from_secs(1))
+            .await
+            .unwrap_err();
+        assert_eq!(internal.code, "internal-error");
     }
 }

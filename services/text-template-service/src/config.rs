@@ -84,3 +84,81 @@ where
         Err(error) => Err(format!("could not read {name}: {error}")),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{env, ffi::OsString, sync::Mutex};
+
+    use super::Limits;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    const VARIABLES: [&str; 9] = [
+        "TEXT_TEMPLATE_MAX_BODY_BYTES",
+        "TEXT_TEMPLATE_MAX_CONTEXT_BYTES",
+        "TEXT_TEMPLATE_MAX_TEMPLATE_BYTES",
+        "TEXT_TEMPLATE_MAX_BUNDLE_TEMPLATES",
+        "TEXT_TEMPLATE_MAX_TEMPLATE_NAME_BYTES",
+        "TEXT_TEMPLATE_MAX_OUTPUT_BYTES",
+        "TEXT_TEMPLATE_FUEL",
+        "TEXT_TEMPLATE_RECURSION_LIMIT",
+        "TEXT_TEMPLATE_TIMEOUT_MS",
+    ];
+
+    struct EnvCleanup;
+
+    impl Drop for EnvCleanup {
+        fn drop(&mut self) {
+            for variable in VARIABLES {
+                env::remove_var(variable);
+            }
+        }
+    }
+
+    #[test]
+    fn reads_every_limit_from_the_environment() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let _cleanup = EnvCleanup;
+        for (index, variable) in VARIABLES.into_iter().enumerate() {
+            env::set_var(variable, (index + 1).to_string());
+        }
+
+        let limits = Limits::from_env().unwrap();
+
+        assert_eq!(limits.max_body_bytes, 1);
+        assert_eq!(limits.max_context_bytes, 2);
+        assert_eq!(limits.max_template_bytes, 3);
+        assert_eq!(limits.max_bundle_templates, 4);
+        assert_eq!(limits.max_template_name_bytes, 5);
+        assert_eq!(limits.max_output_bytes, 6);
+        assert_eq!(limits.fuel, 7);
+        assert_eq!(limits.recursion_limit, 8);
+        assert_eq!(limits.timeout_ms, 9);
+    }
+
+    #[test]
+    fn rejects_invalid_numeric_values() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let _cleanup = EnvCleanup;
+        for variable in VARIABLES {
+            env::set_var(variable, "not-a-number");
+            let error = Limits::from_env().unwrap_err();
+            assert!(error.contains(&format!("invalid {variable} value")));
+            env::remove_var(variable);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_non_unicode_values() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let _lock = ENV_LOCK.lock().unwrap();
+        let _cleanup = EnvCleanup;
+        env::set_var("TEXT_TEMPLATE_TIMEOUT_MS", OsString::from_vec(vec![0xff]));
+
+        let error = Limits::from_env().unwrap_err();
+
+        assert!(error.contains("could not read TEXT_TEMPLATE_TIMEOUT_MS"));
+    }
+}

@@ -1,7 +1,7 @@
 SERVICE := text-template-service
 OPENAPI := openapi/openapi.yaml
 
-.PHONY: prep build test lint start clean docker-build generate-openapi docker-smoke
+.PHONY: prep build test coverage lint start clean docker-build generate-openapi docker-smoke
 
 prep:
 	cargo fetch --locked
@@ -11,6 +11,9 @@ build:
 
 test:
 	cargo test --locked
+
+coverage:
+	./tests/check_coverage.sh
 
 lint:
 	cargo fmt --check
