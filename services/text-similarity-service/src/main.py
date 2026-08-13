@@ -28,7 +28,7 @@ from .similarity import DEFAULT_BACKENDS, SIMILARITY_DISPATCH, compute_similarit
 app = FastAPI(
     title="Text Similarity Service",
     version="0.1.0",
-    description="Unified REST API for text similarity — 23 algorithm families over 8 backends.",
+    description="Unified REST API for semantic text similarity — 13 algorithm families over 6 backends.",
 )
 
 
@@ -97,6 +97,15 @@ def _run_batch(
             raise
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from None
+        except ModuleNotFoundError as e:
+            module_name = e.name or "unknown"
+            raise HTTPException(
+                status_code=501,
+                detail=(
+                    f"Algorithm '{algorithm}' requires the optional 'model' extra "
+                    f"(missing module '{module_name}'). Install it with: pip install -e '.[model]'"
+                ),
+            ) from None
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=500, detail=f"Computation error: {e!s}") from None
         total_ms += res.get("compute_time_ms", 0)

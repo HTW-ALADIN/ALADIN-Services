@@ -15,12 +15,12 @@ def test_health():
 
 
 def test_algorithms_catalog():
-    """GET /v1/text/algorithms lists all 23 algorithm families with backends."""
+    """GET /v1/text/algorithms lists all 13 semantic algorithm families."""
     resp = client.get("/v1/text/algorithms")
     assert resp.status_code == 200
     catalog = resp.json()
     algorithms = {e["algorithm"] for e in catalog}
-    assert len(algorithms) == 23
+    assert len(algorithms) == 13
     # Verify all entries have required fields
     for entry in catalog:
         assert "operation" in entry
@@ -29,59 +29,74 @@ def test_algorithms_catalog():
         assert "families" in entry
         assert "result_type" in entry
         assert "description" in entry
-    # Verify specific algorithms exist
-    assert "levenshtein" in algorithms
+    # Verify semantic algorithms exist
+    assert "wordnet_similarity" in algorithms
+    assert "embedding_cosine" in algorithms
     assert "sbert_cosine" in algorithms
-    assert "synonym" in algorithms
-    assert "semantic_search" in algorithms
-    assert "sequence_alignment" in algorithms
-    assert "compression_ncd" in algorithms
-    assert "phonetic" in algorithms
+    assert "wmd" in algorithms
+    assert "cross_encoder" in algorithms
     assert "tfidf_cosine" in algorithms
     assert "bertscore" in algorithms
     assert "topic_model" in algorithms
     assert "structural_stylistic" in algorithms
-    # levenshtein should have nltk + rapidfuzz + textdistance backends
-    lev = [e for e in catalog if e["algorithm"] == "levenshtein"]
-    assert {e["backend"] for e in lev} == {"nltk", "rapidfuzz", "textdistance"}
-    # the first backend is the auto-selected default
-    assert lev[0]["default"] is True
+    assert "semantic_search" in algorithms
+    assert "synonym" in algorithms
+    assert "antonym" in algorithms
+    assert "hypernym" in algorithms
+    # Removed char-based families must not be listed anymore
+    removed = {
+        "levenshtein",
+        "damerau_levenshtein",
+        "jaro_winkler",
+        "token_set",
+        "sequence_alignment",
+        "compression_ncd",
+        "phonetic",
+        "fuzzy_extract",
+    }
+    for name in removed:
+        assert name not in algorithms, f"{name} should have been removed"
 
 
-def test_compute_levenshtein():
-    """POST /v1/text/distance with levenshtein returns a similarity result."""
+def test_compute_tfidf():
+    """POST /v1/text/distance with tfidf_cosine returns a similarity result."""
     resp = client.post(
         "/v1/text/distance",
         json={
-            "algorithm": "levenshtein",
+            "algorithm": "tfidf_cosine",
             "params": {},
-            "inputs": [{"id": "p1", "a": "kitten", "b": "sitting"}],
+            "inputs": [{"id": "p1", "a": "the cat sat on the mat", "b": "a dog sat on the rug"}],
         },
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["algorithm"] == "levenshtein"
-    assert body["backend"] == "nltk"  # auto-selected default backend
+    assert body["algorithm"] == "tfidf_cosine"
+    assert body["backend"] == "sklearn"  # auto-selected default backend
     assert len(body["results"]) == 1
     assert body["results"][0]["id"] == "p1"
-    assert body["results"][0]["result"]["raw"] == 3
+    assert "similarity" in body["results"][0]["result"]
 
 
-def test_compute_levenshtein_rapidfuzz():
-    """POST /v1/text/distance with an explicit backend."""
+def test_compute_wordnet():
+    """POST /v1/text/distance with wordnet_similarity (path)."""
+    try:
+        from nltk.corpus import wordnet as wn
+
+        _ = wn.synsets("dog")
+    except LookupError:
+        pytest.skip("NLTK wordnet data not downloaded")
     resp = client.post(
         "/v1/text/distance",
         json={
-            "algorithm": "levenshtein",
-            "backend": "rapidfuzz",
-            "params": {},
-            "inputs": [{"id": "p1", "a": "kitten", "b": "sitting"}],
+            "algorithm": "wordnet_similarity",
+            "params": {"variant": "path"},
+            "inputs": [{"id": "p1", "a": "car", "b": "automobile"}],
         },
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["backend"] == "rapidfuzz"
-    assert body["results"][0]["result"]["raw"] == 3
+    assert body["backend"] == "nltk"
+    assert body["results"][0]["result"]["raw"] > 0
 
 
 def test_compute_batch():
@@ -89,18 +104,17 @@ def test_compute_batch():
     resp = client.post(
         "/v1/text/distance",
         json={
-            "algorithm": "levenshtein",
+            "algorithm": "tfidf_cosine",
             "params": {},
             "inputs": [
-                {"id": "p1", "a": "kitten", "b": "sitting"},
-                {"id": "p2", "a": "hello", "b": "hello"},
+                {"id": "p1", "a": "the cat sat", "b": "a dog sat"},
+                {"id": "p2", "a": "hello world", "b": "hello world"},
             ],
         },
     )
     assert resp.status_code == 200
     body = resp.json()
     assert len(body["results"]) == 2
-    assert body["results"][1]["result"]["raw"] == 0
 
 
 def test_compute_unknown_algorithm():
@@ -118,24 +132,25 @@ def test_compute_unsupported_backend():
     """Unsupported backend for an algorithm returns 400."""
     resp = client.post(
         "/v1/text/distance",
-        json={"algorithm": "levenshtein", "backend": "nonexistent", "params": {}, "inputs": [{"id": "p1", "a": "a", "b": "b"}]},
+        json={"algorithm": "wordnet_similarity", "backend": "nonexistent", "params": {}, "inputs": [{"id": "p1", "a": "a", "b": "b"}]},
     )
     assert resp.status_code == 400
 
 
-def test_compute_fuzzy_extract():
-    """POST /v1/text/retrieval with fuzzy_extract."""
+def test_compute_semantic_search():
+    """POST /v1/text/retrieval with semantic_search (gensim/TF-IDF)."""
     resp = client.post(
         "/v1/text/retrieval",
         json={
-            "algorithm": "fuzzy_extract",
-            "params": {},
-            "inputs": [{"id": "q1", "query": "kitten", "candidates": ["sitting", "kitchen", "kitten"]}],
+            "algorithm": "semantic_search",
+            "backend": "gensim",
+            "params": {"top_k": 3},
+            "inputs": [{"id": "q1", "query": "cat", "candidates": ["dog", "car", "house", "kitten", "mouse"]}],
         },
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["algorithm"] == "fuzzy_extract"
+    assert body["algorithm"] == "semantic_search"
     assert body["results"][0]["result"]["count"] > 0
 
 

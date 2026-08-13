@@ -44,8 +44,8 @@ def _parse_params(items: tuple[str, ...]) -> dict[str, Any]:
     """Parse --param/-p arguments into a JSON-compatible dict.
 
     Each item is either:
-      - Full JSON:  ``{"variant": "jaro", "score_cutoff": 80}``
-      - Shorthand:  ``variant=jaro``
+      - Full JSON:  ``{"variant": "wup", "score_cutoff": 80}``
+      - Shorthand:  ``variant=wup``
 
     Shorthand automatically converts ``true``/``false``/``null`` and
     numeric strings to their JSON types.
@@ -159,8 +159,8 @@ def list_algorithms(ctx: click.Context) -> None:
     "params",
     multiple=True,
     help=(
-        'JSON param value, e.g. -p "{"variant": "jaro"}" '
-        "or shorthand -p variant=jaro. "
+        'JSON param value, e.g. -p "{"variant": "wup"}" '
+        "or shorthand -p variant=wup. "
         "Shorthand converts true/false/null and numbers to their JSON types."
     ),
 )
@@ -175,7 +175,7 @@ def list_algorithms(ctx: click.Context) -> None:
     "-i",
     "inline_inputs",
     multiple=True,
-    help=('Inline input as JSON, e.g. -i \'{"id":"p1","a":"kitten","b":"sitting"}\'. Can be repeated for batching.'),
+    help=('Inline input as JSON, e.g. -i \'{"id":"p1","a":"car","b":"automobile"}\'. Can be repeated for batching.'),
 )
 @click.pass_context
 def distance(
@@ -186,10 +186,10 @@ def distance(
     input_file: str | None,
     inline_inputs: tuple[str, ...],
 ) -> None:
-    """Compute text similarity for one or more text pairs.
+    """Compute semantic text similarity for one or more text pairs.
 
     ALGORITHM is one of the algorithms listed by list-algorithms
-    (e.g. levenshtein). Inputs use the shape {"id", "a", "b"} and are
+    (e.g. wordnet_similarity). Inputs use the shape {"id", "a", "b"} and are
     provided via --input-file, one or more --input/-i options, or a
     minimal default example. When --backend is omitted the default
     backend is auto-selected.
@@ -201,7 +201,7 @@ def distance(
 
     inputs = _load_inputs(input_file, inline_inputs)
     if not inputs:
-        inputs = [{"id": "p1", "a": "kitten", "b": "sitting"}]
+        inputs = [{"id": "p1", "a": "car", "b": "automobile"}]
     payload["inputs"] = inputs
 
     data = _request("POST", "/v1/text/distance", ctx.obj["base"], json=payload)
@@ -236,7 +236,7 @@ def distance(
     "-i",
     "inline_inputs",
     multiple=True,
-    help=('Inline input as JSON, e.g. -i \'{"id":"q1","query":"kitten","candidates":["sitting","kitchen","kitten"]}\'. Can be repeated.'),
+    help=('Inline input as JSON, e.g. -i \'{"id":"q1","query":"car","candidates":["automobile","house","vehicle"]}\'. Can be repeated.'),
 )
 @click.pass_context
 def retrieval(
@@ -250,7 +250,7 @@ def retrieval(
     """Rank query candidates for one or more retrieval queries.
 
     ALGORITHM is one of the algorithms listed by list-algorithms
-    (e.g. fuzzy_extract). Inputs use the shape {"id", "query", "candidates"}
+    (e.g. semantic_search). Inputs use the shape {"id", "query", "candidates"}
     and are provided via --input-file, one or more --input/-i options, or a
     minimal default example.
     """
@@ -261,7 +261,7 @@ def retrieval(
 
     inputs = _load_inputs(input_file, inline_inputs)
     if not inputs:
-        inputs = [{"id": "q1", "query": "kitten", "candidates": ["sitting", "kitchen", "kitten"]}]
+        inputs = [{"id": "q1", "query": "car", "candidates": ["automobile", "house", "vehicle"]}]
     payload["inputs"] = inputs
 
     data = _request("POST", "/v1/text/retrieval", ctx.obj["base"], json=payload)

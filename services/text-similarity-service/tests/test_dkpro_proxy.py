@@ -22,21 +22,15 @@ class TestIsDkproRequest:
         assert is_dkpro_request("structural_stylistic", None) is True
 
     def test_backend_extension_routes_when_dkpro(self):
-        assert is_dkpro_request("token_set", "dkpro") is True
-        assert is_dkpro_request("lcs", "dkpro") is True
-        assert is_dkpro_request("phonetic", "dkpro") is True
         assert is_dkpro_request("tfidf_cosine", "dkpro") is True
         assert is_dkpro_request("wordnet_similarity", "dkpro") is True
 
     def test_backend_extension_does_not_route_for_other_backends(self):
-        assert is_dkpro_request("token_set", "nltk") is False
-        assert is_dkpro_request("lcs", "rapidfuzz") is False
-        assert is_dkpro_request("phonetic", "textdistance") is False
         assert is_dkpro_request("tfidf_cosine", "sklearn") is False
         assert is_dkpro_request("wordnet_similarity", "nltk") is False
 
     def test_normal_measure_does_not_route(self):
-        assert is_dkpro_request("levenshtein", None) is False
+        assert is_dkpro_request("sbert_cosine", None) is False
 
 
 class TestSidecarFailure:
@@ -61,7 +55,7 @@ class TestSidecarFailure:
         """Optional DKPro backends should also return clean 502/503 on failure."""
         monkeypatch.setattr("src.dkpro_proxy.SIDECAR_BASE_URL", "http://127.0.0.1:59999")
 
-        for algorithm in ("token_set", "lcs", "phonetic", "tfidf_cosine", "wordnet_similarity"):
+        for algorithm in ("tfidf_cosine", "wordnet_similarity"):
             resp = client.post(
                 "/v1/text/distance",
                 json={
@@ -71,9 +65,7 @@ class TestSidecarFailure:
                     "inputs": [{"id": "p1", "a": "test a", "b": "test b"}],
                 },
             )
-            assert resp.status_code in (502, 503), (
-                f"Algorithm {algorithm} did not return 502/503 on sidecar failure: {resp.status_code}"
-            )
+            assert resp.status_code in (502, 503), f"Algorithm {algorithm} did not return 502/503 on sidecar failure: {resp.status_code}"
             body = resp.json()
             assert "title" in body
             assert "detail" in body

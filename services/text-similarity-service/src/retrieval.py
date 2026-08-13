@@ -1,32 +1,7 @@
-"""Retrieval computations: fuzzy extract (RapidFuzz) and semantic search (SBERT/gensim)."""
+"""Retrieval computations: semantic search (SBERT/gensim)."""
 
 import time
 from typing import Any
-
-from rapidfuzz import fuzz, process
-
-_SCORERS = {
-    "ratio": fuzz.ratio,
-    "partial_ratio": fuzz.partial_ratio,
-    "token_sort_ratio": fuzz.token_sort_ratio,
-    "token_set_ratio": fuzz.token_set_ratio,
-    "WRatio": fuzz.WRatio,
-}
-
-
-def _fuzzy_extract_rapidfuzz(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
-    query = input_data.get("query", "")
-    candidates = input_data.get("candidates", [])
-    scorer = _SCORERS.get(params.get("scorer", "WRatio"), fuzz.WRatio)
-    results = process.extract(
-        query,
-        candidates,
-        scorer=scorer,
-        limit=params.get("limit", 5),
-        score_cutoff=params.get("score_cutoff"),
-    )
-    ranked = [{"candidate": r[0], "score": float(r[1]), "index": r[2]} for r in results]
-    return {"matches": ranked, "count": len(ranked)}
 
 
 def _semantic_search_sbert(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
@@ -72,13 +47,11 @@ def _semantic_search_gensim(input_data: dict[str, Any], params: dict[str, Any]) 
 # ─── Dispatcher ───────────────────────────────────────────────────────────────
 
 RETRIEVAL_DISPATCH: dict[tuple[str, str], Any] = {
-    ("fuzzy_extract", "rapidfuzz"): _fuzzy_extract_rapidfuzz,
     ("semantic_search", "sentence_transformers"): _semantic_search_sbert,
     ("semantic_search", "gensim"): _semantic_search_gensim,
 }
 
 DEFAULT_RETRIEVAL_BACKENDS: dict[str, str] = {
-    "fuzzy_extract": "rapidfuzz",
     "semantic_search": "sentence_transformers",
 }
 
@@ -86,7 +59,7 @@ DEFAULT_RETRIEVAL_BACKENDS: dict[str, str] = {
 def compute_retrieval(method: str, backend: str | None, input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
     """Compute a retrieval operation and return the result dict."""
     if backend is None:
-        backend = DEFAULT_RETRIEVAL_BACKENDS.get(method, "rapidfuzz")
+        backend = DEFAULT_RETRIEVAL_BACKENDS.get(method, "")
 
     key = (method, backend)
     func = RETRIEVAL_DISPATCH.get(key)

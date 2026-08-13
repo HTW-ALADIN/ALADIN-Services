@@ -5,35 +5,6 @@ from src.lexical import compute_lexical
 from src.retrieval import compute_retrieval
 
 
-class TestFuzzyExtract:
-    def test_rapidfuzz_basic(self):
-        result = compute_retrieval(
-            "fuzzy_extract",
-            "rapidfuzz",
-            {
-                "query": "kitten",
-                "candidates": ["sitting", "kitchen", "kitten", "mitten", "bitten"],
-            },
-            {"limit": 3},
-        )
-        assert result["count"] > 0
-        assert len(result["matches"]) <= 3
-        assert result["compute_time_ms"] > 0
-
-    def test_rapidfuzz_exact_match(self):
-        result = compute_retrieval(
-            "fuzzy_extract",
-            "rapidfuzz",
-            {
-                "query": "kitten",
-                "candidates": ["kitten", "sitting", "dog"],
-            },
-            {},
-        )
-        # Exact match should be first
-        assert result["matches"][0]["candidate"] == "kitten"
-
-
 class TestSemanticSearch:
     def test_gensim_tfidf(self):
         """Test gensim-based semantic search using TF-IDF."""

@@ -83,7 +83,55 @@ jobs:
           pip install --upgrade pip
           pip install -e ".[dev]"
       - name: Run tests
-        run: pytest -v --tb=short
+        # Model-based measures need the optional `model` extra (PyTorch,
+        # ~2.5 GB) and download HuggingFace/gensim models — skipped by default,
+        # as documented in pytest.ini and the coverage report.
+        run: pytest -v --tb=short -m "not model_download"
+      - name: Run smoke tests
+        run: |
+          set -e
+          # Start the server in the background
+          uvicorn src.main:app --host 0.0.0.0 --port 8000 &
+          SERVER_PID=$!
+
+          # Wait for the server to be ready
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8000/health | grep -q '"status":"ok"'; then
+              echo "Server is ready"
+              break
+            fi
+            echo "Waiting for server... ($i/30)"
+            sleep 1
+          done
+
+          # Smoke test: health endpoint
+          echo "=== Health check ==="
+          curl -sf http://localhost:8000/health | python -c "import sys,json; d=json.load(sys.stdin); assert d['status']=='ok', f'Health failed: {d}'"
+          echo "Health: OK"
+
+          # Smoke test: algorithms discovery
+          echo "=== Text algorithms discovery ==="
+          curl -sf http://localhost:8000/v1/text/algorithms | python -c "import sys,json; d=json.load(sys.stdin); assert len(d)>0, 'No algorithms'; print(f'Found {len(d)} algorithm/backend entries')"
+
+          # Smoke test: distance compute
+          echo "=== Distance compute ==="
+          curl -sf -X POST http://localhost:8000/v1/text/distance \
+            -H 'Content-Type: application/json' \
+            -d '{"algorithm":"levenshtein","params":{},"inputs":[{"id":"p1","a":"kitten","b":"sitting"}]}' \
+            | python -c "import sys,json; d=json.load(sys.stdin); assert d['algorithm']=='levenshtein'; assert len(d['results'])==1; assert d['results'][0]['result']['raw']==3; print('Levenshtein: OK')"
+
+          # Smoke test: retrieval compute
+          echo "=== Retrieval compute ==="
+          curl -sf -X POST http://localhost:8000/v1/text/retrieval \
+            -H 'Content-Type: application/json' \
+            -d '{"algorithm":"fuzzy_extract","params":{},"inputs":[{"id":"q1","query":"kitten","candidates":["sitting","kitchen","kitten"]}]}' \
+            | python -c "import sys,json; d=json.load(sys.stdin); assert d['algorithm']=='fuzzy_extract'; assert d['results'][0]['result']['count']>0; print('FuzzyExtract: OK')"
+
+          echo "=== All smoke tests passed ==="
+
+          # Stop the server
+          kill $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
@@ -93,8 +141,8 @@ jobs:
           fail_ci_if_error: false
         if: always()
 
-  build:
-    name: Build
+  generate-openapi:
+    name: Generate OpenAPI Spec
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -114,8 +162,50 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -e ".[dev]"
-      - name: Build
-        run: make build
+      - name: Generate OpenAPI spec
+        run: make generate-openapi
+      - name: Upload OpenAPI spec
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-spec-text-similarity-service
+          path: services/text-similarity-service/text-similarity-service.openapi.json
+
+  build:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: generate-openapi
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/text-similarity-service
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: services/text-similarity-service
+          file: services/text-similarity-service/Dockerfile
+          # Default image stays small (no PyTorch). Build the full model stack
+          # with INSTALL_MODEL=true when model-based measures are required.
+          build-args: |
+            INSTALL_MODEL=false
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
   # ── OPTIONAL: DKPro Java sidecar ─────────────────────────────────────────
   # Only runs when dkpro-sidecar/** changed. Non-blocking for the Python path

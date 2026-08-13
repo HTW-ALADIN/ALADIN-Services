@@ -1,5 +1,15 @@
+# syntax=docker/dockerfile:1
+
 # Stage 1: Build
 FROM python:3.12-slim AS builder
+
+# Model-based measures (sbert_cosine, cross_encoder, semantic_search via
+# sentence-transformers, bertscore, embedding_cosine/wmd via gensim) pull in
+# PyTorch (~2.5 GB CUDA wheel) and download models at runtime. They are
+# therefore OPT-IN: the default image stays small (~100-150 MB of deps).
+# Build with the full model stack using:
+#   docker build --build-arg INSTALL_MODEL=true -t text-similarity-service .
+ARG INSTALL_MODEL=false
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -14,8 +24,13 @@ WORKDIR /app
 COPY pyproject.toml .
 COPY src/ src/
 
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e ".[dev]"
+# --mount=type=cache reuses pip downloads across builds (BuildKit), so the
+# (optional) torch layer is only downloaded once. Without INSTALL_MODEL the
+# light dependency set is installed in seconds.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e . && \
+    if [ "$INSTALL_MODEL" = "true" ]; then pip install --no-cache-dir -e ".[model]"; fi
 
 # Stage 2: Runtime
 FROM python:3.12-slim

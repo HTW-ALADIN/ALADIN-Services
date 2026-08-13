@@ -54,73 +54,7 @@ def _entry(
 
 
 CATALOG: list[dict[str, Any]] = [
-    # ── similarity ──────────────────────────────────────────────────────────
-    *_entry(
-        "similarity",
-        "levenshtein",
-        _backends(
-            ("nltk", "nltk.edit_distance"),
-            ("rapidfuzz", "rapidfuzz.distance.Levenshtein"),
-            ("textdistance", "textdistance.levenshtein"),
-        ),
-        "Levenshtein edit distance",
-        score_direction="lower_is_similar",
-        score_range="[0,inf)",
-    ),
-    *_entry(
-        "similarity",
-        "damerau_levenshtein",
-        _backends(
-            ("nltk", "nltk.edit_distance(transpositions=True)"),
-            ("rapidfuzz", "rapidfuzz.distance.DamerauLevenshtein"),
-            ("textdistance", "textdistance.damerau_levenshtein"),
-        ),
-        "Damerau-Levenshtein distance",
-        score_direction="lower_is_similar",
-        score_range="[0,inf)",
-    ),
-    *_entry(
-        "similarity",
-        "jaro_winkler",
-        _backends(
-            ("rapidfuzz", "rapidfuzz.distance.Jaro/JaroWinkler"),
-            ("textdistance", "textdistance.jaro/jaro_winkler"),
-        ),
-        "Jaro / Jaro-Winkler similarity",
-    ),
-    *_entry(
-        "similarity",
-        "hamming",
-        _backends(
-            ("rapidfuzz", "rapidfuzz.distance.Hamming"),
-            ("textdistance", "textdistance.hamming"),
-        ),
-        "Hamming distance",
-        score_direction="lower_is_similar",
-        score_range="[0,inf)",
-    ),
-    *_entry(
-        "similarity",
-        "lcs",
-        _backends(
-            ("rapidfuzz", "rapidfuzz.distance.LCSseq/Indel"),
-            ("textdistance", "textdistance.lcsseq/ratcliff_obershelp"),
-            ("dkpro", "DKPro LongestCommonSubstringComparator (Java sidecar)"),
-        ),
-        "Longest Common Subsequence",
-    ),
-    *_entry(
-        "similarity",
-        "token_set",
-        _backends(
-            ("nltk", "nltk.jaccard_distance/masi_distance/binary_distance"),
-            ("textdistance", "textdistance.jaccard/sorensen_dice/tversky/overlap/cosine/monge_elkan/bag"),
-            ("dkpro", "DKPro WordNGramJaccardMeasure (Java sidecar)"),
-        ),
-        "Token-set similarity — Jaccard/MASI/Binary distance",
-        score_direction="lower_is_similar",
-        granularity="token",
-    ),
+    # ── similarity (semantic) ────────────────────────────────────────────────
     *_entry(
         "similarity",
         "embedding_cosine",
@@ -172,28 +106,6 @@ CATALOG: list[dict[str, Any]] = [
     ),
     *_entry(
         "similarity",
-        "sequence_alignment",
-        _backends(("textdistance", "textdistance.needleman_wunsch/gotoh/smith_waterman")),
-        "Sequence alignment — Needleman-Wunsch/Gotoh/Smith-Waterman",
-    ),
-    *_entry(
-        "similarity",
-        "compression_ncd",
-        _backends(("textdistance", "textdistance entropy_ncd and NCD variants")),
-        "Compression-based Normalized Compression Distance",
-        score_direction="lower_is_similar",
-    ),
-    *_entry(
-        "similarity",
-        "phonetic",
-        _backends(
-            ("textdistance", "textdistance.editex / MRA"),
-            ("dkpro", "DKPro phonetic comparator (Java sidecar)"),
-        ),
-        "Phonetic encoding comparison — Editex/MRA",
-    ),
-    *_entry(
-        "similarity",
         "tfidf_cosine",
         _backends(
             ("sklearn", "sklearn TfidfVectorizer + cosine_similarity"),
@@ -230,14 +142,6 @@ CATALOG: list[dict[str, Any]] = [
         stateful=True,
     ),
     # ── retrieval ──────────────────────────────────────────────────────────
-    *_entry(
-        "retrieval",
-        "fuzzy_extract",
-        _backends(("rapidfuzz", "RapidFuzz process.extract/extractOne")),
-        "Fuzzy string matching / best-match extraction",
-        score_range="[0,100]",
-        symmetric=False,
-    ),
     *_entry(
         "retrieval",
         "semantic_search",

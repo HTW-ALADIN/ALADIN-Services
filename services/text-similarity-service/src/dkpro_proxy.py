@@ -20,9 +20,6 @@ DKPRO_MEASURES = {"topic_model", "structural_stylistic"}
 
 # Optional dkpro backend extensions — routed only when backend == "dkpro"
 DKPRO_BACKEND_EXTENSIONS = {
-    "token_set",
-    "lcs",
-    "phonetic",
     "tfidf_cosine",
     "wordnet_similarity",
 }
