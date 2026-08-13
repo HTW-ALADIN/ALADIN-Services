@@ -1,0 +1,6 @@
+server:
+  port: 8100
+
+spring:
+  application:
+    name: text-similarity-dkpro-service
