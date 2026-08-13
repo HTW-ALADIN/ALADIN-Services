@@ -1,4 +1,4 @@
-"""Tests for the BERTScore tag (Spec C §6.1, §6.4).
+"""Tests for the BERTScore tag.
 
 BERTScore requires downloading a model — these tests are marked with
 @pytest.mark.model_download and skipped by default.
@@ -39,24 +39,3 @@ class TestBertscoreNamedField:
             "bertscore", "bertscore", {"text_a": "The cat sat on the mat.", "text_b": "The cat sat on the mat."}, {}
         )
         assert result["f1"] > 0.95
-
-
-class TestBertscoreAsyncFlow:
-    """BERTScore should default to the async path (202)."""
-
-    @pytest.mark.model_download
-    def test_async_202(self):
-        from fastapi.testclient import TestClient
-        from src.main import app
-
-        client = TestClient(app)
-        resp = client.post(
-            "/v1/compute",
-            json={
-                "operation": "similarity",
-                "measure": "bertscore",
-                "input": {"text_a": "The cat sat on the mat.", "text_b": "The cat is sitting on the mat."},
-            },
-        )
-        assert resp.status_code == 202
-        assert resp.json()["status"] == "pending"

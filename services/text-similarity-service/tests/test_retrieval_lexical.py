@@ -1,4 +1,4 @@
-"""Tests for retrieval and lexical relations computation (Tier 1)."""
+"""Tests for retrieval and lexical relations computation."""
 
 import pytest
 from src.lexical import compute_lexical

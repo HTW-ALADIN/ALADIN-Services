@@ -1,4 +1,4 @@
-"""Tests for the DKPro sidecar proxy (Prompt 6.1).
+"""Tests for the DKPro sidecar proxy.
 
 Verifies:
 1. topic_model requests route to the sidecar and return a normal Result envelope
@@ -45,12 +45,11 @@ class TestSidecarFailure:
         monkeypatch.setattr("src.dkpro_proxy.SIDECAR_BASE_URL", "http://127.0.0.1:59999")
 
         resp = client.post(
-            "/v1/compute",
+            "/v1/text/distance",
             json={
-                "operation": "similarity",
-                "measure": "topic_model",
-                "input": {"text_a": "The cat sat on the mat.", "text_b": "A dog sat on the rug."},
+                "algorithm": "topic_model",
                 "params": {"variant": "lsa"},
+                "inputs": [{"id": "p1", "a": "The cat sat on the mat.", "b": "A dog sat on the rug."}],
             },
         )
         assert resp.status_code in (502, 503)
@@ -62,17 +61,19 @@ class TestSidecarFailure:
         """Optional DKPro backends should also return clean 502/503 on failure."""
         monkeypatch.setattr("src.dkpro_proxy.SIDECAR_BASE_URL", "http://127.0.0.1:59999")
 
-        for measure in ("token_set", "lcs", "phonetic", "tfidf_cosine", "wordnet_similarity"):
+        for algorithm in ("token_set", "lcs", "phonetic", "tfidf_cosine", "wordnet_similarity"):
             resp = client.post(
-                "/v1/compute",
+                "/v1/text/distance",
                 json={
-                    "operation": "similarity",
-                    "measure": measure,
+                    "algorithm": algorithm,
                     "backend": "dkpro",
-                    "input": {"text_a": "test a", "text_b": "test b"},
+                    "params": {},
+                    "inputs": [{"id": "p1", "a": "test a", "b": "test b"}],
                 },
             )
-            assert resp.status_code in (502, 503), f"Measure {measure} did not return 502/503 on sidecar failure: {resp.status_code}"
+            assert resp.status_code in (502, 503), (
+                f"Algorithm {algorithm} did not return 502/503 on sidecar failure: {resp.status_code}"
+            )
             body = resp.json()
             assert "title" in body
             assert "detail" in body

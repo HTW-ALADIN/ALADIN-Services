@@ -1,76 +1,50 @@
-"""Similarity computation implementations for Tier 1 (Spec A).
+"""Similarity measures — one function per (measure, backend).
 
 Each function takes input dict and params dict, returns a result dict
 with 'raw', 'similarity' (normalized to [0,1]), and 'distance' keys.
+DKPro-sidecar measures (topic_model, structural_stylistic) are routed
+externally via dkpro_proxy and have no in-process implementation here.
 """
 
 import math
 import time
 from typing import Any
 
+# (measure, backend) pairs whose raw output is already a similarity in [0,1].
+_SIMILARITY_KEYS = {
+    ("jaro_winkler", "rapidfuzz"),
+    ("jaro_winkler", "textdistance"),
+    ("lcs", "rapidfuzz"),
+    ("lcs", "textdistance"),
+    ("token_set", "textdistance"),
+    ("phonetic", "textdistance"),
+    ("tfidf_cosine", "sklearn"),
+    ("embedding_cosine", "gensim"),
+    ("sbert_cosine", "sentence_transformers"),
+    ("cross_encoder", "sentence_transformers"),
+    ("wordnet_similarity", "nltk"),
+}
 
-def _normalize_similarity(raw: float, measure: str, backend: str, **kwargs) -> dict[str, Any]:
-    """Normalize raw output to similarity [0,1] and distance.
+# (measure, backend) pairs whose raw output is a distance in [0,1] (invert via 1-x).
+_UNIT_DISTANCE_KEYS = {("token_set", "nltk"), ("compression_ncd", "textdistance")}
 
-    Returns dict with raw, similarity, distance keys.
-    """
+
+def _normalize_similarity(raw: float, measure: str, backend: str) -> dict[str, Any]:
+    """Normalize raw output to {'raw', 'similarity', 'distance'} with similarity in [0,1]."""
     result: dict[str, Any] = {"raw": raw}
-
-    # Measures that are already similarity in [0,1]
-    if measure in ("jaro_winkler", "lcs") and backend == "rapidfuzz":
+    key = (measure, backend)
+    if key in _SIMILARITY_KEYS:
         result["similarity"] = raw
-        result["distance"] = 1.0 - raw
-    elif measure == "token_set" and backend == "nltk":
-        # NLTK returns distance (0 = identical)
-        result["distance"] = raw
-        result["similarity"] = 1.0 - raw
-    elif measure == "token_set" and backend == "textdistance":
-        # textdistance token algorithms return similarity in [0,1]
-        result["similarity"] = raw
-        result["distance"] = 1.0 - raw
-    elif measure == "sequence_alignment" and backend == "textdistance":
-        result["distance"] = raw
-        result["similarity"] = 1.0 / (1.0 + raw) if raw >= 0 else 0.0
-    elif measure == "compression_ncd" and backend == "textdistance":
-        result["distance"] = raw
-        result["similarity"] = 1.0 - raw
-    elif measure == "phonetic" and backend == "textdistance":
-        result["similarity"] = raw
-        result["distance"] = 1.0 - raw
-    elif measure == "tfidf_cosine" and backend == "sklearn":
-        result["similarity"] = raw
-        result["distance"] = 1.0 - raw
-    elif backend == "textdistance" and measure in ("levenshtein", "damerau_levenshtein", "hamming"):
-        # textdistance distance functions return int distance
-        result["distance"] = raw
-        result["similarity"] = 1.0 / (1.0 + raw) if raw >= 0 else 0.0
-    elif backend == "textdistance" and measure in ("jaro_winkler", "lcs"):
-        # textdistance similarity functions return float in [0,1]
-        result["similarity"] = raw
-        result["distance"] = 1.0 - raw
-    elif measure == "embedding_cosine" and backend == "gensim":
-        result["similarity"] = raw
-        result["distance"] = 1.0 - raw
-    elif measure == "sbert_cosine" and backend == "sentence_transformers":
-        result["similarity"] = raw
-        result["distance"] = 1.0 - raw
-    elif measure == "cross_encoder" and backend == "sentence_transformers":
-        result["similarity"] = raw
-        result["distance"] = 1.0 - raw
-    elif measure == "wordnet_similarity" and backend == "nltk":
-        # WordNet path/wup are [0,1], lch is unbounded
-        result["similarity"] = raw
-        result["distance"] = 1.0 - min(raw, 1.0) if raw <= 1.0 else 0.0
+        result["distance"] = 1.0 - min(raw, 1.0) if measure == "wordnet_similarity" else 1.0 - raw
     elif measure == "wmd" and backend == "gensim":
-        # WMD returns distance (lower = more similar)
         result["distance"] = raw
-        # Normalize: exp(-distance) maps [0,inf) to (0,1]
         result["similarity"] = math.exp(-raw)
+    elif key in _UNIT_DISTANCE_KEYS:
+        result["distance"] = raw
+        result["similarity"] = 1.0 - raw
     else:
-        # Default: treat as distance, invert
         result["distance"] = raw
         result["similarity"] = 1.0 / (1.0 + raw) if raw >= 0 else 0.0
-
     return result
 
 
@@ -322,22 +296,184 @@ def _wordnet_similarity_nltk(input_data: dict[str, Any], params: dict[str, Any])
     return _normalize_similarity(best, "wordnet_similarity", "nltk")
 
 
+# ─── textdistance / scikit-learn ─────────────────────────────────────────────
+
+
+def _sequence_alignment_textdistance(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    import textdistance
+
+    a = input_data.get("text_a", "")
+    b = input_data.get("text_b", "")
+    variant = params.get("variant", "needleman_wunsch")
+
+    if variant == "needleman_wunsch":
+        raw = textdistance.needleman_wunsch.distance(a, b)
+    elif variant == "smith_waterman":
+        raw = textdistance.smith_waterman.distance(a, b)
+    elif variant == "gotoh":
+        raw = textdistance.gotoh.distance(a, b)
+    else:
+        raise ValueError(f"Unknown sequence_alignment variant: {variant}")
+
+    return _normalize_similarity(raw, "sequence_alignment", "textdistance")
+
+
+def _compression_ncd_textdistance(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    import textdistance
+
+    a = input_data.get("text_a", "")
+    b = input_data.get("text_b", "")
+    variant = params.get("variant", "entropy")
+    name = {
+        "entropy": "entropy_ncd",
+        "arithmetic": "arith_ncd",
+        "rle": "rle_ncd",
+        "bwt_rle": "bwtrle_ncd",
+        "sqrt": "sqrt_ncd",
+    }.get(variant)
+    if name is None:
+        raise ValueError(f"Unknown compression_ncd variant: {variant}")
+
+    return _normalize_similarity(getattr(textdistance, name)(a, b), "compression_ncd", "textdistance")
+
+
+def _phonetic_textdistance(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    import textdistance
+
+    a = input_data.get("text_a", "")
+    b = input_data.get("text_b", "")
+    variant = params.get("variant", "editex")
+    alg = {"editex": textdistance.editex, "mra": textdistance.mra}.get(variant)
+    if alg is None:
+        raise ValueError(f"Unknown phonetic variant: {variant}")
+
+    return _normalize_similarity(alg.normalized_similarity(a, b), "phonetic", "textdistance")
+
+
+def _tfidf_cosine_sklearn(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    a = input_data.get("text_a", "")
+    b = input_data.get("text_b", "")
+    vectorizer = TfidfVectorizer(
+        max_features=params.get("max_features"),
+        ngram_range=tuple(params.get("ngram_range", (1, 1))),
+    )
+    tfidf = vectorizer.fit_transform([a, b])
+    sim = float(cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0])
+    return _normalize_similarity(sim, "tfidf_cosine", "sklearn")
+
+
+def _levenshtein_textdistance(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    import textdistance
+
+    a = input_data.get("text_a", "")
+    b = input_data.get("text_b", "")
+    return _normalize_similarity(textdistance.levenshtein.distance(a, b), "levenshtein", "textdistance")
+
+
+def _damerau_levenshtein_textdistance(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    import textdistance
+
+    a = input_data.get("text_a", "")
+    b = input_data.get("text_b", "")
+    return _normalize_similarity(textdistance.damerau_levenshtein.distance(a, b), "levenshtein", "textdistance")
+
+
+def _jaro_winkler_textdistance(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    import textdistance
+
+    a = input_data.get("text_a", "")
+    b = input_data.get("text_b", "")
+    alg = textdistance.jaro if params.get("variant") == "jaro" else textdistance.jaro_winkler
+    return _normalize_similarity(alg.normalized_similarity(a, b), "jaro_winkler", "textdistance")
+
+
+def _hamming_textdistance(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    import textdistance
+
+    a = input_data.get("text_a", "")
+    b = input_data.get("text_b", "")
+    return _normalize_similarity(textdistance.hamming.distance(a, b), "levenshtein", "textdistance")
+
+
+def _lcs_textdistance(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    import textdistance
+
+    a = input_data.get("text_a", "")
+    b = input_data.get("text_b", "")
+    alg = textdistance.ratcliff_obershelp if params.get("variant") == "ratcliff_obershelp" else textdistance.lcsseq
+    return _normalize_similarity(alg.normalized_similarity(a, b), "lcs", "textdistance")
+
+
+def _token_set_textdistance(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    import textdistance
+
+    a, b = input_data.get("text_a", "").split(), input_data.get("text_b", "").split()
+    variant = params.get("variant", "jaccard")
+    if variant == "tversky":
+        raw = textdistance.tversky(a, b, alpha=params.get("alpha", 1.0), beta=params.get("beta", 1.0))
+    else:
+        alg = {
+            "jaccard": textdistance.jaccard,
+            "sorensen_dice": textdistance.sorensen_dice,
+            "overlap": textdistance.overlap,
+            "cosine": textdistance.cosine,
+            "monge_elkan": textdistance.monge_elkan,
+            "bag": textdistance.bag,
+        }.get(variant)
+        if alg is None:
+            raise ValueError(f"Unknown token_set variant: {variant}")
+        raw = alg(a, b)
+
+    return _normalize_similarity(raw, "token_set", "textdistance")
+
+
+# ─── BERTScore ────────────────────────────────────────────────────────────────
+
+
+def _bertscore(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    import bert_score
+
+    P, R, F1 = bert_score.score(
+        [input_data.get("text_a", "")],
+        [input_data.get("text_b", "")],
+        model_type=params.get("model_type"),
+        lang=params.get("lang"),
+        idf=params.get("idf", False),
+        rescale_with_baseline=params.get("rescale_with_baseline", False),
+    )
+    return {"precision": float(P[0]), "recall": float(R[0]), "f1": float(F1[0])}
+
+
 # ─── Dispatcher ───────────────────────────────────────────────────────────────
 
 SIMILARITY_DISPATCH: dict[tuple[str, str], Any] = {
     ("levenshtein", "nltk"): _levenshtein_nltk,
     ("levenshtein", "rapidfuzz"): _levenshtein_rapidfuzz,
+    ("levenshtein", "textdistance"): _levenshtein_textdistance,
     ("damerau_levenshtein", "nltk"): _damerau_levenshtein_nltk,
     ("damerau_levenshtein", "rapidfuzz"): _damerau_levenshtein_rapidfuzz,
+    ("damerau_levenshtein", "textdistance"): _damerau_levenshtein_textdistance,
     ("jaro_winkler", "rapidfuzz"): _jaro_winkler_rapidfuzz,
+    ("jaro_winkler", "textdistance"): _jaro_winkler_textdistance,
     ("hamming", "rapidfuzz"): _hamming_rapidfuzz,
+    ("hamming", "textdistance"): _hamming_textdistance,
     ("lcs", "rapidfuzz"): _lcs_rapidfuzz,
+    ("lcs", "textdistance"): _lcs_textdistance,
     ("token_set", "nltk"): _token_set_nltk,
+    ("token_set", "textdistance"): _token_set_textdistance,
     ("embedding_cosine", "gensim"): _embedding_cosine_gensim,
     ("sbert_cosine", "sentence_transformers"): _sbert_cosine,
     ("wmd", "gensim"): _wmd_gensim,
     ("cross_encoder", "sentence_transformers"): _cross_encoder,
     ("wordnet_similarity", "nltk"): _wordnet_similarity_nltk,
+    ("sequence_alignment", "textdistance"): _sequence_alignment_textdistance,
+    ("compression_ncd", "textdistance"): _compression_ncd_textdistance,
+    ("phonetic", "textdistance"): _phonetic_textdistance,
+    ("tfidf_cosine", "sklearn"): _tfidf_cosine_sklearn,
+    ("bertscore", "bertscore"): _bertscore,
 }
 
 DEFAULT_BACKENDS: dict[str, str] = {
@@ -352,6 +488,14 @@ DEFAULT_BACKENDS: dict[str, str] = {
     "wmd": "gensim",
     "cross_encoder": "sentence_transformers",
     "wordnet_similarity": "nltk",
+    "sequence_alignment": "textdistance",
+    "compression_ncd": "textdistance",
+    "phonetic": "textdistance",
+    "tfidf_cosine": "sklearn",
+    "bertscore": "bertscore",
+    # DKPro-sidecar measures: known measures, computed externally via dkpro_proxy.
+    "topic_model": "dkpro",
+    "structural_stylistic": "dkpro",
 }
 
 
@@ -370,22 +514,3 @@ def compute_similarity(measure: str, backend: str | None, input_data: dict[str, 
     elapsed = time.monotonic() - start
     result["compute_time_ms"] = round(elapsed * 1000, 2)
     return result
-
-
-# ─── Spec B / Spec C extension registration ──────────────────────────────────
-# Imported at the bottom to avoid circular imports: the extension modules
-# mutate SIMILARITY_DISPATCH / DEFAULT_BACKENDS, which must exist first.
-# Importing here ensures `from src.similarity import compute_similarity` always
-# sees the full catalog regardless of what the caller imports.
-
-try:
-    from . import (
-        similarity_spec_b,  # noqa: F401
-        similarity_spec_c,  # noqa: F401
-    )
-except ImportError:  # pragma: no cover
-    # similarity_spec_c may not exist until Phase 4/5; don't fail on import
-    try:
-        from . import similarity_spec_b  # noqa: F401
-    except ImportError:  # pragma: no cover
-        pass

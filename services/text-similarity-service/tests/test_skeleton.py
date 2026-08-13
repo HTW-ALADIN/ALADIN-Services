@@ -1,4 +1,4 @@
-"""Tests for the text similarity service skeleton."""
+"""Tests for the text similarity service API skeleton."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,184 +14,133 @@ def test_health():
     assert resp.json()["service"] == "text-similarity-service"
 
 
-def test_measures_spec_c():
-    """GET /v1/measures returns 23 Spec C entries with merged backends."""
-    resp = client.get("/v1/measures")
+def test_algorithms_catalog():
+    """GET /v1/text/algorithms lists all 23 algorithm families with backends."""
+    resp = client.get("/v1/text/algorithms")
     assert resp.status_code == 200
     catalog = resp.json()
-    assert len(catalog) == 23
+    algorithms = {e["algorithm"] for e in catalog}
+    assert len(algorithms) == 23
     # Verify all entries have required fields
     for entry in catalog:
         assert "operation" in entry
-        assert "tag" in entry
-        assert "backends" in entry
+        assert "algorithm" in entry
+        assert "backend" in entry
+        assert "families" in entry
+        assert "result_type" in entry
         assert "description" in entry
-    # Verify specific tags exist
-    tags = {e["tag"] for e in catalog}
-    assert "levenshtein" in tags
-    assert "sbert_cosine" in tags
-    assert "synonym" in tags
-    assert "semantic_search" in tags
-    assert "sequence_alignment" in tags
-    assert "compression_ncd" in tags
-    assert "phonetic" in tags
-    assert "tfidf_cosine" in tags
-    assert "bertscore" in tags
-    assert "topic_model" in tags
-    assert "structural_stylistic" in tags
-    # Verify merged backends: levenshtein should have nltk + rapidfuzz + textdistance
-    lev_entry = [e for e in catalog if e["tag"] == "levenshtein"][0]
-    backend_names = {b["name"] for b in lev_entry["backends"]}
-    assert "nltk" in backend_names
-    assert "rapidfuzz" in backend_names
-    assert "textdistance" in backend_names
+    # Verify specific algorithms exist
+    assert "levenshtein" in algorithms
+    assert "sbert_cosine" in algorithms
+    assert "synonym" in algorithms
+    assert "semantic_search" in algorithms
+    assert "sequence_alignment" in algorithms
+    assert "compression_ncd" in algorithms
+    assert "phonetic" in algorithms
+    assert "tfidf_cosine" in algorithms
+    assert "bertscore" in algorithms
+    assert "topic_model" in algorithms
+    assert "structural_stylistic" in algorithms
+    # levenshtein should have nltk + rapidfuzz + textdistance backends
+    lev = [e for e in catalog if e["algorithm"] == "levenshtein"]
+    assert {e["backend"] for e in lev} == {"nltk", "rapidfuzz", "textdistance"}
+    # the first backend is the auto-selected default
+    assert lev[0]["default"] is True
 
 
 def test_compute_levenshtein():
-    """POST /v1/compute with levenshtein returns 201 with result."""
+    """POST /v1/text/distance with levenshtein returns a similarity result."""
     resp = client.post(
-        "/v1/compute",
+        "/v1/text/distance",
         json={
-            "operation": "similarity",
-            "measure": "levenshtein",
-            "input": {"text_a": "kitten", "text_b": "sitting"},
+            "algorithm": "levenshtein",
+            "params": {},
+            "inputs": [{"id": "p1", "a": "kitten", "b": "sitting"}],
         },
     )
-    assert resp.status_code == 201
+    assert resp.status_code == 200
     body = resp.json()
-    assert body["status"] == "completed"
-    assert body["measure"] == "levenshtein"
-    assert body["result"]["raw"] == 3
+    assert body["algorithm"] == "levenshtein"
+    assert body["backend"] == "nltk"  # auto-selected default backend
+    assert len(body["results"]) == 1
+    assert body["results"][0]["id"] == "p1"
+    assert body["results"][0]["result"]["raw"] == 3
 
 
 def test_compute_levenshtein_rapidfuzz():
-    """POST /v1/compute with explicit backend."""
+    """POST /v1/text/distance with an explicit backend."""
     resp = client.post(
-        "/v1/compute",
+        "/v1/text/distance",
         json={
-            "operation": "similarity",
-            "measure": "levenshtein",
+            "algorithm": "levenshtein",
             "backend": "rapidfuzz",
-            "input": {"text_a": "kitten", "text_b": "sitting"},
+            "params": {},
+            "inputs": [{"id": "p1", "a": "kitten", "b": "sitting"}],
         },
     )
-    assert resp.status_code == 201
-    assert resp.json()["result"]["raw"] == 3
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["backend"] == "rapidfuzz"
+    assert body["results"][0]["result"]["raw"] == 3
 
 
-def test_get_result():
-    """GET /v1/results/{id} returns stored result."""
-    # First create a result
-    create_resp = client.post(
-        "/v1/compute",
+def test_compute_batch():
+    """Batch inputs return one result per input."""
+    resp = client.post(
+        "/v1/text/distance",
         json={
-            "operation": "similarity",
-            "measure": "levenshtein",
-            "input": {"text_a": "a", "text_b": "b"},
+            "algorithm": "levenshtein",
+            "params": {},
+            "inputs": [
+                {"id": "p1", "a": "kitten", "b": "sitting"},
+                {"id": "p2", "a": "hello", "b": "hello"},
+            ],
         },
     )
-    assert create_resp.status_code == 201
-    result_id = create_resp.json()["id"]
-
-    # Then retrieve it
-    get_resp = client.get(f"/v1/results/{result_id}")
-    assert get_resp.status_code == 200
-    assert get_resp.json()["id"] == result_id
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["results"]) == 2
+    assert body["results"][1]["result"]["raw"] == 0
 
 
-def test_delete_result():
-    """DELETE /v1/results/{id} removes stored result."""
-    create_resp = client.post(
-        "/v1/compute",
-        json={
-            "operation": "similarity",
-            "measure": "levenshtein",
-            "input": {"text_a": "a", "text_b": "b"},
-        },
+def test_compute_unknown_algorithm():
+    """Unknown algorithm returns 400 problem+json."""
+    resp = client.post(
+        "/v1/text/distance",
+        json={"algorithm": "nonexistent", "params": {}, "inputs": [{"id": "p1", "a": "a", "b": "b"}]},
     )
-    result_id = create_resp.json()["id"]
-
-    del_resp = client.delete(f"/v1/results/{result_id}")
-    assert del_resp.status_code == 204
-
-    # Verify it's gone
-    get_resp = client.get(f"/v1/results/{result_id}")
-    assert get_resp.status_code == 404
-
-
-def test_compute_invalid_operation():
-    """Unknown operation returns 400 problem+json with invalidParams."""
-    resp = client.post("/v1/compute", json={"operation": "unknown_op"})
     assert resp.status_code == 400
     body = resp.json()
-    assert body["title"] == "Invalid operation"
-    assert "invalidParams" in body
-    assert body["invalidParams"][0]["name"] == "operation"
-
-
-def test_compute_missing_measure():
-    """Similarity without measure returns 400."""
-    resp = client.post("/v1/compute", json={"operation": "similarity", "input": {"text_a": "a", "text_b": "b"}})
-    assert resp.status_code == 400
-
-
-def test_compute_missing_method():
-    """Retrieval without method returns 400."""
-    resp = client.post("/v1/compute", json={"operation": "retrieval", "input": {"query": "a", "candidates": ["b"]}})
-    assert resp.status_code == 400
-
-
-def test_compute_missing_relation():
-    """Lexical_relations without relation returns 400."""
-    resp = client.post("/v1/compute", json={"operation": "lexical_relations", "input": {"word": "dog"}})
-    assert resp.status_code == 400
-
-
-def test_compute_unknown_measure():
-    """Unknown measure returns 400."""
-    resp = client.post(
-        "/v1/compute",
-        json={
-            "operation": "similarity",
-            "measure": "nonexistent",
-            "input": {"text_a": "a", "text_b": "b"},
-        },
-    )
-    assert resp.status_code == 400
+    assert "Unknown algorithm" in body["title"]
 
 
 def test_compute_unsupported_backend():
-    """Unsupported backend for measure returns 400."""
+    """Unsupported backend for an algorithm returns 400."""
     resp = client.post(
-        "/v1/compute",
-        json={
-            "operation": "similarity",
-            "measure": "levenshtein",
-            "backend": "nonexistent",
-            "input": {"text_a": "a", "text_b": "b"},
-        },
+        "/v1/text/distance",
+        json={"algorithm": "levenshtein", "backend": "nonexistent", "params": {}, "inputs": [{"id": "p1", "a": "a", "b": "b"}]},
     )
     assert resp.status_code == 400
 
 
 def test_compute_fuzzy_extract():
-    """POST /v1/compute with retrieval/fuzzy_extract."""
+    """POST /v1/text/retrieval with fuzzy_extract."""
     resp = client.post(
-        "/v1/compute",
+        "/v1/text/retrieval",
         json={
-            "operation": "retrieval",
-            "method": "fuzzy_extract",
-            "input": {"query": "kitten", "candidates": ["sitting", "kitchen", "kitten"]},
+            "algorithm": "fuzzy_extract",
+            "params": {},
+            "inputs": [{"id": "q1", "query": "kitten", "candidates": ["sitting", "kitchen", "kitten"]}],
         },
     )
-    assert resp.status_code == 201
+    assert resp.status_code == 200
     body = resp.json()
-    assert body["operation"] == "retrieval"
-    assert body["result"]["count"] > 0
+    assert body["algorithm"] == "fuzzy_extract"
+    assert body["results"][0]["result"]["count"] > 0
 
 
 def test_compute_synonym():
-    """POST /v1/compute with lexical_relations/synonym."""
+    """POST /v1/text/lexical with synonym."""
     try:
         from nltk.corpus import wordnet as wn
 
@@ -199,14 +148,9 @@ def test_compute_synonym():
     except LookupError:
         pytest.skip("NLTK wordnet data not downloaded")
     resp = client.post(
-        "/v1/compute",
-        json={
-            "operation": "lexical_relations",
-            "relation": "synonym",
-            "input": {"word": "dog"},
-        },
+        "/v1/text/lexical",
+        json={"algorithm": "synonym", "params": {}, "inputs": [{"id": "w1", "word": "dog"}]},
     )
-    assert resp.status_code == 201
+    assert resp.status_code == 200
     body = resp.json()
-    assert body["operation"] == "lexical_relations"
-    assert body["result"]["count"] > 0
+    assert body["results"][0]["result"]["count"] > 0

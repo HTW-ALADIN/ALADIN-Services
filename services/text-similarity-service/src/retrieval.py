@@ -1,35 +1,30 @@
-"""Retrieval computation implementations for Tier 1 (Spec A).
-
-Each function takes input dict and params dict, returns a result dict
-with the ranked list of matches.
-"""
+"""Retrieval computations: fuzzy extract (RapidFuzz) and semantic search (SBERT/gensim)."""
 
 import time
 from typing import Any
 
+from rapidfuzz import fuzz, process
+
+_SCORERS = {
+    "ratio": fuzz.ratio,
+    "partial_ratio": fuzz.partial_ratio,
+    "token_sort_ratio": fuzz.token_sort_ratio,
+    "token_set_ratio": fuzz.token_set_ratio,
+    "WRatio": fuzz.WRatio,
+}
+
 
 def _fuzzy_extract_rapidfuzz(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
-    from rapidfuzz import process
-
     query = input_data.get("query", "")
     candidates = input_data.get("candidates", [])
-    scorer_name = params.get("scorer", "WRatio")
-    limit = params.get("limit", 5)
-    score_cutoff = params.get("score_cutoff")
-
-    # Map scorer name to function
-    from rapidfuzz import fuzz
-
-    scorer_map = {
-        "ratio": fuzz.ratio,
-        "partial_ratio": fuzz.partial_ratio,
-        "token_sort_ratio": fuzz.token_sort_ratio,
-        "token_set_ratio": fuzz.token_set_ratio,
-        "WRatio": fuzz.WRatio,
-    }
-    scorer = scorer_map.get(scorer_name, fuzz.WRatio)
-
-    results = process.extract(query, candidates, scorer=scorer, limit=limit, score_cutoff=score_cutoff)
+    scorer = _SCORERS.get(params.get("scorer", "WRatio"), fuzz.WRatio)
+    results = process.extract(
+        query,
+        candidates,
+        scorer=scorer,
+        limit=params.get("limit", 5),
+        score_cutoff=params.get("score_cutoff"),
+    )
     ranked = [{"candidate": r[0], "score": float(r[1]), "index": r[2]} for r in results]
     return {"matches": ranked, "count": len(ranked)}
 

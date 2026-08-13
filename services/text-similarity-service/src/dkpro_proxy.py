@@ -1,7 +1,7 @@
 """HTTP proxy to the text-similarity-dkpro-service (Java sidecar).
 
 Routes requests with backend "dkpro" (topic_model, structural_stylistic, and
-optional Phase-5.3 backend extensions) to the sidecar's internal HTTP endpoint.
+the optional dkpro backend extensions) to the sidecar's HTTP endpoint.
 
 The sidecar's base URL is configurable via the TEXT_SIMILARITY_DKPRO_URL
 environment variable (defaults to http://localhost:8100).
@@ -15,13 +15,10 @@ import httpx
 
 SIDECAR_BASE_URL = os.environ.get("TEXT_SIMILARITY_DKPRO_URL", "http://localhost:8100")
 
-# Measures that route to the DKPro sidecar
-DKPRO_MEASURES = {
-    "topic_model",  # family 22 — mandatory for 100% coverage
-    "structural_stylistic",  # family 23 — mandatory for 100% coverage
-}
+# Measures implemented only by the DKPro sidecar
+DKPRO_MEASURES = {"topic_model", "structural_stylistic"}
 
-# Optional Phase-5.3 backend extensions — routed only when backend == "dkpro"
+# Optional dkpro backend extensions — routed only when backend == "dkpro"
 DKPRO_BACKEND_EXTENSIONS = {
     "token_set",
     "lcs",

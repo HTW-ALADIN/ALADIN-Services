@@ -1,65 +1,13 @@
-"""Tests for async computation and model lifecycle.
+"""Tests for model lifecycle and WordNet IC handling.
 
-The model-dependent tests (sbert_cosine, cross_encoder) are marked with
+The API is fully synchronous/stateless; the model-dependent algorithms
+(sbert_cosine, cross_encoder, bertscore) are marked with
 @pytest.mark.model_download since they require downloading models from
-HuggingFace. They are skipped by default; run with --run-model-downloads
-to execute them.
+HuggingFace. They are skipped by default.
 """
 
 import pytest
-from fastapi.testclient import TestClient
-from src.main import app
 from src.model_cache import clear_all
-
-client = TestClient(app)
-
-
-class TestAsyncPath:
-    """Async operations should return 202 then transition to completed."""
-
-    @pytest.mark.model_download
-    def test_async_returns_202(self):
-        """sbert_cosine should return 202 Accepted."""
-        resp = client.post(
-            "/v1/compute",
-            json={
-                "operation": "similarity",
-                "measure": "sbert_cosine",
-                "input": {"text_a": "hello world", "text_b": "hi there"},
-            },
-        )
-        assert resp.status_code == 202
-        body = resp.json()
-        assert body["status"] == "pending"
-        assert "id" in body
-
-    @pytest.mark.model_download
-    def test_cross_encoder_async(self):
-        """cross_encoder should return 202 Accepted."""
-        resp = client.post(
-            "/v1/compute",
-            json={
-                "operation": "similarity",
-                "measure": "cross_encoder",
-                "input": {"text_a": "hello world", "text_b": "hi there"},
-                "params": {"model_name": "cross-encoder/stsb-roberta-base"},
-            },
-        )
-        assert resp.status_code == 202
-        assert resp.json()["status"] == "pending"
-
-    def test_sync_returns_201(self):
-        """Stateless measures should return 201 Created."""
-        resp = client.post(
-            "/v1/compute",
-            json={
-                "operation": "similarity",
-                "measure": "levenshtein",
-                "input": {"text_a": "a", "text_b": "b"},
-            },
-        )
-        assert resp.status_code == 201
-        assert resp.json()["status"] == "completed"
 
 
 class TestModelCache:

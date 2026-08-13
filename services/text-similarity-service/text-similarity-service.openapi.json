@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Text Similarity Service",
-    "description": "Unified REST API for text similarity \u2014 23 algorithm families over 8 backends (Spec C / full coverage).",
+    "description": "Unified REST API for text similarity \u2014 23 algorithm families over 8 backends.",
     "version": "0.1.0"
   },
   "paths": {
@@ -22,33 +22,40 @@
         }
       }
     },
-    "/v1/measures": {
+    "/v1/text/algorithms": {
       "get": {
-        "summary": "List Measures",
-        "description": "Discovery: list all operation/measure/backend combinations with metadata.",
-        "operationId": "list_measures_v1_measures_get",
+        "summary": "List Algorithms",
+        "description": "Discovery: list all algorithm/backend combinations with metadata.",
+        "operationId": "list_algorithms_v1_text_algorithms_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Algorithms V1 Text Algorithms Get"
+                }
               }
             }
           }
         }
       }
     },
-    "/v1/compute": {
+    "/v1/text/distance": {
       "post": {
-        "summary": "Compute",
-        "description": "Run a computation. Returns 201 (sync) or 202 (async) with a Result resource.",
-        "operationId": "compute_v1_compute_post",
+        "summary": "Text Distance",
+        "description": "Compute similarity scores for a batch of text pairs (synchronous).",
+        "operationId": "text_distance_v1_text_distance_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ComputeRequest"
+                "$ref": "#/components/schemas/TextDistanceRequest"
               }
             }
           },
@@ -59,7 +66,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TextComputeResponse"
+                }
               }
             }
           },
@@ -76,28 +85,29 @@
         }
       }
     },
-    "/v1/results/{result_id}": {
-      "get": {
-        "summary": "Get Result",
-        "description": "Retrieve a previously computed result.",
-        "operationId": "get_result_v1_results__result_id__get",
-        "parameters": [
-          {
-            "name": "result_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Result Id"
+    "/v1/text/retrieval": {
+      "post": {
+        "summary": "Text Retrieval",
+        "description": "Rank query candidates for a batch of retrieval queries (synchronous).",
+        "operationId": "text_retrieval_v1_text_retrieval_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetrievalRequest"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TextComputeResponse"
+                }
               }
             }
           },
@@ -112,25 +122,33 @@
             }
           }
         }
-      },
-      "delete": {
-        "summary": "Delete Result",
-        "description": "Release a stored result resource.",
-        "operationId": "delete_result_v1_results__result_id__delete",
-        "parameters": [
-          {
-            "name": "result_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Result Id"
+      }
+    },
+    "/v1/text/lexical": {
+      "post": {
+        "summary": "Text Lexical",
+        "description": "Look up lexical relations for a batch of words (synchronous).",
+        "operationId": "text_lexical_v1_text_lexical_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LexicalRequest"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
-          "204": {
-            "description": "Successful Response"
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextComputeResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -148,83 +166,6 @@
   },
   "components": {
     "schemas": {
-      "ComputeRequest": {
-        "properties": {
-          "operation": {
-            "type": "string",
-            "title": "Operation",
-            "description": "Top-level discriminator: similarity | retrieval | lexical_relations"
-          },
-          "measure": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Measure",
-            "description": "Required for similarity operations"
-          },
-          "method": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Method",
-            "description": "Required for retrieval operations"
-          },
-          "relation": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Relation",
-            "description": "Required for lexical_relations operations"
-          },
-          "backend": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Backend"
-          },
-          "input": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Input"
-          },
-          "params": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Params"
-          },
-          "output": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Output"
-          }
-        },
-        "type": "object",
-        "required": [
-          "operation"
-        ],
-        "title": "ComputeRequest",
-        "description": "Discriminated union request body for POST /v1/compute.\n\nUses a manual discriminator via `operation` field. At runtime,\nthe handler inspects `operation` and delegates to the appropriate\nsub-model for validation."
-      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -237,6 +178,249 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "LexicalInput": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "word": {
+            "type": "string",
+            "maxLength": 100000,
+            "title": "Word"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "word"
+        ],
+        "title": "LexicalInput",
+        "description": "One word for POST /v1/text/lexical."
+      },
+      "LexicalRequest": {
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/LexicalInput"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Inputs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "algorithm",
+          "inputs"
+        ],
+        "title": "LexicalRequest",
+        "description": "Request body for POST /v1/text/lexical."
+      },
+      "RetrievalInput": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "query": {
+            "type": "string",
+            "maxLength": 100000,
+            "title": "Query"
+          },
+          "candidates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Candidates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "query",
+          "candidates"
+        ],
+        "title": "RetrievalInput",
+        "description": "One query + candidate list for POST /v1/text/retrieval."
+      },
+      "RetrievalRequest": {
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/RetrievalInput"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Inputs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "algorithm",
+          "inputs"
+        ],
+        "title": "RetrievalRequest",
+        "description": "Request body for POST /v1/text/retrieval."
+      },
+      "SimilarityInput": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "a": {
+            "type": "string",
+            "maxLength": 100000,
+            "title": "A"
+          },
+          "b": {
+            "type": "string",
+            "maxLength": 100000,
+            "title": "B"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "a",
+          "b"
+        ],
+        "title": "SimilarityInput",
+        "description": "One text pair for POST /v1/text/distance."
+      },
+      "TextComputeResponse": {
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "title": "Backend"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/TextResult"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "meta": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Meta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "algorithm",
+          "backend",
+          "results"
+        ],
+        "title": "TextComputeResponse",
+        "description": "Response for every POST /v1/text/* endpoint."
+      },
+      "TextDistanceRequest": {
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/SimilarityInput"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Inputs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "algorithm",
+          "inputs"
+        ],
+        "title": "TextDistanceRequest",
+        "description": "Request body for POST /v1/text/distance."
+      },
+      "TextResult": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "result": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "TextResult",
+        "description": "One computation result, keyed by the caller-supplied input id."
       },
       "ValidationError": {
         "properties": {

@@ -1,4 +1,4 @@
-"""Tests for similarity computation (Tier 1 stateless measures).
+"""Tests for similarity computation (stateless measures).
 
 Tests the stateless measures that don't require model downloads:
 levenshtein, damerau_levenshtein, jaro_winkler, hamming, lcs, token_set.

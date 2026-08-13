@@ -1,4 +1,4 @@
-"""Tests for Spec B similarity measures (textdistance + scikit-learn additions)."""
+"""Tests for the textdistance + scikit-learn similarity measures."""
 
 from src.similarity import compute_similarity
 
@@ -56,7 +56,7 @@ class TestTfidfCosine:
 
 
 class TestTextdistanceBackends:
-    """Test textdistance as an alternative backend on existing Tier-1 tags."""
+    """Test textdistance as an alternative backend on existing core tags."""
 
     def test_levenshtein_textdistance(self):
         result = compute_similarity("levenshtein", "textdistance", {"text_a": "kitten", "text_b": "sitting"}, {})

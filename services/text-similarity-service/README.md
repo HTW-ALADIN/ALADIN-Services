@@ -4,50 +4,80 @@ Unified REST API for text similarity — 23 algorithm families over 8 backends
 (NLTK, RapidFuzz, sentence-transformers, gensim, scikit-learn, textdistance,
 BERTScore, DKPro Similarity).
 
-## Overview
+## API Endpoints
 
-This service exposes a single 4-endpoint contract (`GET /v1/measures`,
-`POST /v1/compute`, `GET/DELETE /v1/results/{id}`) over a discriminated union of
-23 text-similarity algorithm families (Spec C / full coverage).
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Health check |
+| `GET` | `/v1/text/algorithms` | Discovery — list all algorithm/backend combinations with metadata |
+| `POST` | `/v1/text/distance` | Compute text similarity (synchronous, batch) |
+| `POST` | `/v1/text/retrieval` | Rank query candidates (synchronous, batch) |
+| `POST` | `/v1/text/lexical` | Look up lexical relations (synchronous, batch) |
 
-Families 1–21 run in-process (Python). Families 22–23 (`topic_model`,
-`structural_stylistic`) and the optional DKPro backends are handled by a Java
-sidecar located in [`dkpro-sidecar/`](dkpro-sidecar/), which is called
-internally via HTTP when `backend: "dkpro"` is requested.
+All compute endpoints are synchronous and stateless: every request takes
+`algorithm` (+ optional `backend`), `params` and a batch `inputs` list, and
+returns one result per input. When `backend` is omitted, the algorithm's
+default backend (marked `default: true` in `/v1/text/algorithms`) is
+auto-selected.
 
-## DKPro Sidecar (Optional)
+## Algorithms
 
-> ⚠️ **The DKPro sidecar is optional.** The Python service is fully functional
-> without it (21/23 families, 91% coverage). Enable it only if families 22–23
-> are a hard requirement.
+- **`/v1/text/distance`** (similarity) — two texts in, one normalized score out
+  (Levenshtein … BERTScore). Inputs: `{"id", "a", "b"}`.
+- **`/v1/text/retrieval`** (retrieval) — one query + candidates in, a ranked
+  match list out (`fuzzy_extract`, `semantic_search`). Inputs:
+  `{"id", "query", "candidates"}`.
+- **`/v1/text/lexical`** (lexical_relations) — one word in, a set of related
+  words out (`synonym`, `antonym`, `hypernym`). Inputs: `{"id", "word"}`.
 
-**What you get (the 9%):**
+## Example
 
-| Family | Tag | Description |
-|---|---|---|
-| 22 | `topic_model` | Topic-model similarity (LSA / ESA) |
-| 23 | `structural_stylistic` | Structural/stylistic similarity (n-gram containment, type-token ratio, greedy string tiling) |
+```sh
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "algorithm": "levenshtein",
+    "params": {},
+    "inputs": [
+      {"id": "p1", "a": "kitten", "b": "sitting"}
+    ]
+  }' | jq .
+```
 
-Plus 5 optional DKPro backend variants on already-covered tags (`token_set`,
-`lcs`, `phonetic`, `tfidf_cosine`, `wordnet_similarity`) — these add **no**
-new family coverage, only alternative implementations.
+```json
+{
+  "algorithm": "levenshtein",
+  "backend": "nltk",
+  "results": [
+    {
+      "id": "p1",
+      "result": {
+        "raw": 3,
+        "similarity": 0.25,
+        "distance": 3,
+        "compute_time_ms": 0.05
+      }
+    }
+  ],
+  "meta": {"compute_time_ms": 0.05}
+}
+```
 
-**What it costs:**
+## DKPro Sidecar (optional)
 
-- DKPro Similarity is **Java + Apache UIMA**: not published on Maven Central,
-  must be built from source (`git clone https://github.com/dkpro/dkpro-similarity
-  && mvn install`)
-- Requires JDK 21 + Maven + the UIMA runtime; roughly **8 years stale** upstream
-- Runs as a **separate process** (the sidecar), increasing deployment and
-  operational complexity (memory, JVM, separate container)
-- Requests to `topic_model`/`structural_stylistic` fail with a clean 502/503
-  problem+json if the sidecar is not running
+Two measures — `topic_model` and `structural_stylistic` — and the optional
+`backend: "dkpro"` variants on five other tags are implemented by a separate
+Java service in [`dkpro-sidecar/`](dkpro-sidecar/), called internally via HTTP.
 
-**How to skip it:** leave `TEXT_SIMILARITY_DKPRO_URL` unset or don't deploy the
-sidecar — every other measure works normally, and `GET /v1/measures` still lists
-the DKPro entries so clients can discover them (calls will fail if the sidecar
-is absent). The CI workflow only builds the sidecar when `dkpro-sidecar/**`
-changes, and no Python job depends on it.
+The Python service is fully functional without the sidecar: every other measure
+works, and `GET /v1/text/algorithms` still lists the DKPro entries. A request to a
+DKPro-backed measure returns a clean `502/503 problem+json` when the sidecar is
+not running.
+
+The sidecar requires building DKPro Similarity from source (`git clone
+https://github.com/dkpro/dkpro-similarity && mvn install`), JDK 21 + Maven, and
+an extra JVM process — enable it only if those two measures are a hard
+requirement.
 
 ## Development
 
@@ -58,34 +88,18 @@ make lint    # run ruff
 make start   # run uvicorn on :8000
 ```
 
-## Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Health check — returns `{"status": "ok", "service": "text-similarity-service"}` |
-| `GET` | `/v1/measures` | Discovery — list all 23 operation/measure/backend combinations with metadata |
-| `POST` | `/v1/compute` | Run a computation — accepts a discriminated-union body (operation → measure → backend → params). Returns `201 Created` (sync) or `202 Accepted` (async) with a Result resource envelope |
-| `GET` | `/v1/results/{id}` | Retrieve a previously computed result |
-| `DELETE` | `/v1/results/{id}` | Release a stored result resource |
-
-### Operations
-
-- **`similarity`** — two inputs in, one normalized score out (Levenshtein … BERTScore)
-- **`retrieval`** — one query + many candidates in, a ranked list out (fuzzy extract, semantic search)
-- **`lexical_relations`** — one word in, a set of related words/synsets out (synonym, antonym, hypernym)
-
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TEXT_SIMILARITY_DKPRO_URL` | `http://localhost:8100` | Base URL of the DKPro Java sidecar for `topic_model`, `structural_stylistic`, and optional `backend: "dkpro"` requests |
+| `TEXT_SIMILARITY_DKPRO_URL` | `http://localhost:8100` | Base URL of the DKPro Java sidecar |
 
 ## Data Dependencies
 
 - NLTK WordNet corpus (`nltk.download('wordnet')`) — required for
-  `wordnet_similarity`, `synonym`, `antonym`, `hypernym`, `hyponym`
-- NLTK Information Content corpus — required for `wordnet_similarity`
-  variants `res`/`jcn`/`lin` (documented in the API spec §7)
+  `wordnet_similarity`, `synonym`, `antonym`, `hypernym`, `hyponym`.
+- NLTK Information Content corpus — required for `wordnet_similarity` variants
+  `res`/`jcn`/`lin`.
 
 ## License
 
