@@ -17,7 +17,7 @@ COPY registry/ registry/
 # deps in production image) so the published image is reproducible, then
 # install them with sage's own pip. `uv` itself is only a build-time tool
 # and is not installed into the image's runtime environment.
-# SAGE_MAX_MEMORY_MB and SAGE_MAX_CONCURRENCY are tuned for the 2 GB RAM
+# SAGE_MAX_MEMORY_MB and SAGE_MAX_CONCURRENCY are tuned for the 4 GB RAM
 # minimum deployment target (see README.md). SAGE_CONTAINER_MEMORY_MB is
 # set to a safe estimate so the startup sanity check in executor.py passes.
 ENV SAGE_MAX_MEMORY_MB=2048 \

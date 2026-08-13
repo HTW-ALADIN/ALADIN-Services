@@ -48,7 +48,7 @@ def docker_container():
     subprocess.run(
         [
             "docker", "run", "--rm", "--name", CONTAINER_NAME,
-            "--memory=2g", "--cpus=2",
+            "--memory=4g", "--cpus=2",
             "-d", "-p", "8000:8000",
             IMAGE_TAG,
         ],
