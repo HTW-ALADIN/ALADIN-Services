@@ -15,7 +15,7 @@ families and their verification status via the compute endpoints
 | 7 | Token-set overlap (Jaccard/Dice) | `token_set_overlap` | similarity | builtin — variants `jaccard` / `dice` | base ✅ |
 | 8 | BM25 lexical retrieval | `bm25` | retrieval | builtin | base ✅ |
 | 9 | Semantic search / NN retrieval | `semantic_search` | retrieval | sentence-transformers | `[model]` ⏳ |
-| 10 | Static word/doc embedding | `embedding_cosine` | similarity | gensim — variants `glove` / `fasttext` / `conceptnet_numberbatch` | `[model]` ⏳ |
+| 10 | Static word/doc embedding | `embedding_cosine` | similarity | gensim — variants `glove` / `fasttext` (local); `conceptnet_numberbatch` **two backends** (`local` gensim / `remote` api.conceptnet.io, default) | `[model]` ⏳ (remote conceptnet: no extra needed) |
 | 11 | Transformer sentence embedding | `sbert_cosine` | similarity | sentence-transformers | `[model]` ⏳ |
 | 12 | Word Mover's Distance | `wmd` | similarity | gensim | `[model]` ⏳ |
 | 13 | Contextual eval metric (BERTScore) | `bertscore` | similarity | bert-score | `[model]` ⏳ |

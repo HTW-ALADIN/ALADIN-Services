@@ -54,11 +54,41 @@ _EMBEDDING_VARIANTS = {
 
 
 def _embedding_cosine_gensim(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    """Embedding cosine for the ``gensim`` backend.
+
+    ``params.variant`` selects the model. For ``conceptnet_numberbatch`` there
+    is an additional ``params.backend`` selector (a parameter *inside* params,
+    distinct from the top-level ``backend`` field which stays ``gensim``):
+
+    - ``params.backend: "remote"`` (default) — calls the public
+      api.conceptnet.io relatedness API instead of the local ~1.2 GB gensim
+      Numberbatch download (see ``conceptnet_api``).
+    - ``params.backend: "local"`` — the previous behaviour exactly: lazy-load /
+      download the gensim model through ``model_cache.get_gensim_model``.
+
+    ``glove`` / ``fasttext`` are local-only (no public similarity API exists),
+    so ``params.backend: "remote"`` on those variants is rejected.
+    """
+    variant = params.get("variant", "glove")
+    backend = params.get("backend")
+    if backend not in (None, "local", "remote"):
+        raise ValueError("params.backend must be 'local' or 'remote'")
+    if backend == "remote" and variant != "conceptnet_numberbatch":
+        raise ValueError(
+            f"params.backend='remote' is only available for variant 'conceptnet_numberbatch'; "
+            f"variant '{variant}' has no public similarity API and must use backend 'local'"
+        )
+    if variant == "conceptnet_numberbatch" and backend != "local":
+        # remote is the default for this variant — avoids the local ~1.2 GB
+        # Numberbatch download. Never silently falls back to local.
+        from .conceptnet_api import compute_relatedness_remote
+
+        return compute_relatedness_remote(input_data, params)
+
     from .model_cache import get_gensim_model
 
     a = input_data.get("text_a", "")
     b = input_data.get("text_b", "")
-    variant = params.get("variant", "glove")
     model_name = params.get("model_name") or _EMBEDDING_VARIANTS.get(variant, "glove-wiki-gigaword-50")
     kv = get_gensim_model(model_name)
 

@@ -187,6 +187,12 @@ class TestEmbeddingVariants:
         assert captured == ["fasttext-wiki-news-subwords-300"]
 
     def test_conceptnet_variant(self, monkeypatch):
+        """Local gensim path for conceptnet_numberbatch is selected via backend='local'.
+
+        ``params.backend`` defaults to ``"remote"`` for this variant (public
+        api.conceptnet.io API), so the local model-selection path must be
+        requested explicitly — see tests/test_conceptnet_remote.py.
+        """
         captured: list[str] = []
 
         def fake_get(name):
@@ -195,7 +201,9 @@ class TestEmbeddingVariants:
 
         monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
         clear_all()
-        compute_similarity("embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"variant": "conceptnet_numberbatch"})
+        compute_similarity(
+            "embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"variant": "conceptnet_numberbatch", "backend": "local"}
+        )
         assert captured == ["conceptnet-numberbatch-17-06-300"]
 
     def test_default_is_glove(self, monkeypatch):

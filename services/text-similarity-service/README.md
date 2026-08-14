@@ -147,7 +147,7 @@ sake of a few neural/embedding families.
 | Scope | Installed | Families enabled |
 |---|---|---|
 | **Base** (always) | `nltk`, `scikit-learn` (+ FastAPI stack) | WordNet similarity, TF-IDF, lexical relations (incl. `hyponym`), token-set overlap (`jaccard`/`dice` variants), `bm25` — **8/16** |
-| **`[model]` extra** | `sentence-transformers`, `bert-score`, `gensim` (+ PyTorch) | `embedding_cosine` (glove/fasttext/conceptnet_numberbatch), `sbert_cosine`, `wmd`, `cross_encoder`, `bertscore`, `semantic_search` — **+6/16** |
+| **`[model]` extra** | `sentence-transformers`, `bert-score`, `gensim` (+ PyTorch) | `embedding_cosine` (glove/fasttext local; `conceptnet_numberbatch` local **or** remote API — the remote default needs no extra), `sbert_cosine`, `wmd`, `cross_encoder`, `bertscore`, `semantic_search` — **+6/16** |
 | **`[de]` extra** | `wn` (small, pure Python, no PyTorch) | German lexical relations via Odenet (`synonym`, `antonym`, `hypernym`, `hyponym`, backend `odenet`) |
 | **DKPro sidecar** | separate Java service | `topic_model`, `structural_stylistic` (routed) — **2/16** |
 
@@ -164,7 +164,7 @@ sake of a few neural/embedding families.
 | 7 | Token-set overlap (`token_set_overlap`) — variants `jaccard` / `dice` (legacy aliases `jaccard`, `dice`) | builtin (pure Python) | base |
 | 8 | BM25 retrieval (`bm25`) | builtin (pure Python) | base |
 | 9 | Semantic search (`semantic_search`) | sentence-transformers | `[model]` (PyTorch) |
-| 10 | Static word/doc embedding (`embedding_cosine`) — variants `glove` / `fasttext` / `conceptnet_numberbatch` | gensim | `[model]` (+ model download) |
+| 10 | Static word/doc embedding (`embedding_cosine`) — variants `glove` / `fasttext` (local gensim) and `conceptnet_numberbatch` (**two backends:** `local` via gensim, `remote` via api.conceptnet.io — `remote` default) | gensim (+ remote ConceptNet API for `conceptnet_numberbatch`) | `[model]` (+ model download **only** for `local`; `remote` needs no download) |
 | 11 | Transformer sentence embedding (`sbert_cosine`) | sentence-transformers | `[model]` (PyTorch) |
 | 12 | Word Mover's Distance (`wmd`) | gensim | `[model]` (+ GloVe download) |
 | 13 | Contextual eval metric (`bertscore`) | bert-score | `[model]` (PyTorch) |
@@ -264,16 +264,53 @@ parameterised exactly like the existing `params.model_name` mechanism — the
 
 | `variant` | gensim-data model | Notes |
 |---|---|---|
-| `glove` (default) | `glove-wiki-gigaword-50` | same as before |
-| `fasttext` | `fasttext-wiki-news-subwords-300` | subword info — good for unknown/rare words, morphology, German |
-| `conceptnet_numberbatch` | `conceptnet-numberbatch-17-06-300` | ConceptNet Numberbatch, loaded as `KeyedVectors` in word2vec format (no custom framework) |
+| `glove` (default) | `glove-wiki-gigaword-50` | same as before — **local-only** |
+| `fasttext` | `fasttext-wiki-news-subwords-300` | subword info — good for unknown/rare words, morphology, German — **local-only** |
+| `conceptnet_numberbatch` | `conceptnet-numberbatch-17-06-300` (**local only**) | **two backends:** `local` (gensim download, ~1.2 GB) or `remote` (default — public api.conceptnet.io, no download). See below. |
 
-- A direct `params.model_name` always wins over `variant`, so any gensim-data
-  model is selectable without a new algorithm family.
+- A direct `params.model_name` always wins over `variant` (on the `local`
+  path), so any gensim-data model is selectable without a new algorithm family.
 - Everything goes through the existing `get_gensim_model` cache: lazy load,
   one download per model, reused across requests.
 - Models are downloaded at runtime and **never** committed or baked into the
   image.
+
+### `conceptnet_numberbatch`: `local` vs `remote` backend
+
+The `conceptnet_numberbatch` variant has **two execution backends**, selected
+via `params.backend` — a parameter *inside* `params`, distinct from the
+top-level `backend` field (which stays `gensim` for backward compatibility):
+
+| `params.backend` | What happens | Default |
+|---|---|---|
+| `remote` | Calls the public ConceptNet API (`GET https://api.conceptnet.io/relatedness?node1=/c/{lang}/{a}&node2=/c/{lang}/{b}`), which hosts a reduced Numberbatch matrix server-side. **No local download**, no `[model]` extra needed. | ✅ default |
+| `local` | Existing gensim behaviour: downloads/caches the ~1.2 GB `conceptnet-numberbatch-17-06-300` model. | opt-in |
+
+```json
+{
+  "algorithm": "embedding_cosine",
+  "params": {"variant": "conceptnet_numberbatch", "backend": "remote"},
+  "inputs": [{"id": "p1", "a": "cat", "b": "dog"}]
+}
+```
+
+- `remote` maps the API's `value` onto the usual result schema (`raw`,
+  `similarity`, `distance`, `compute_time_ms`) and adds `source: "conceptnet_api"`
+  so a result is traceable to the external API.
+- Words are normalized to ConceptNet URIs: whitespace → underscores
+  (`"cat in the hat"` → `/c/en/cat_in_the_hat`); `params.lang` overrides the
+  default language code `en`.
+- **`glove` and `fasttext` are local-only**: there is no public similarity API
+  for them (neither Stanford NLP nor Meta/fasttext.cc host an inference
+  endpoint), so `params.backend: "remote"` on those variants is rejected with a
+  clean `400`. Do **not** assume this pattern transfers 1:1 to other variants.
+- Explicit `params.backend: "local"` reproduces exactly the previous behaviour
+  (including `params.model_name` overrides). With `remote`, `params.model_name`
+  is ignored — the API exposes one fixed matrix.
+- **No silent fallback:** if the ConceptNet API fails (timeout, network error,
+  429 rate limit), the request returns a clean `502/503 problem+json` — it
+  never silently falls back to `local` (which would trigger the 1.2 GB
+  download). See [External API dependencies](#external-api-dependencies).
 
 ## Configurable sentence-transformers model (`model_name`)
 
@@ -344,6 +381,47 @@ https://github.com/dkpro/dkpro-similarity && mvn install`), JDK 21 + Maven, and
 an extra JVM process — enable it only if those two measures are a hard
 requirement.
 
+## External API dependencies
+
+One variant (`embedding_cosine` with `params.variant: "conceptnet_numberbatch"`
+and `params.backend: "remote"`, the default) calls a **public, third-party
+API** — analogous to the DKPro sidecar dependency, but external:
+
+| | |
+|---|---|
+| Endpoint | `GET https://api.conceptnet.io/relatedness?node1=/c/en/{a}&node2=/c/en/{b}` |
+| Purpose | hosts a reduced ConceptNet Numberbatch embedding matrix — replaces the local ~1.2 GB gensim download for this variant |
+| Auth | none (no API key) |
+| Rate limit | **3600 requests/hour** sustained, **120 requests/minute** burst |
+| Control | ❌ **outside our control** — a free public service with no SLA |
+
+Client-side protections (built into `src/conceptnet_api.py`):
+
+- **Per-request timeout** (~5 s) — a slow/hung upstream fails fast instead of
+  blocking a request.
+- **Batch cap** — `backend: "remote"` accepts at most
+  `CONCEPTNET_MAX_REMOTE_INPUTS` (default **60**) inputs per request; a single
+  batch of ≤ 60 stays within the 120/min burst. Larger batches are rejected
+  up-front with a clean `400` telling the caller to split the batch or use
+  `backend: "local"`.
+- **Throttling** — a minimum `CONCEPTNET_REMOTE_REQUEST_DELAY` (default 0.05 s)
+  is enforced between consecutive remote calls, so one batch does not burn the
+  3600/h sustained limit in seconds.
+- **Backoff on 429** — rate-limit responses are retried a few times with
+  exponential backoff before giving up.
+
+Failure handling (mirrors the DKPro sidecar pattern — **no silent fallback**):
+
+- Network error / timeout / HTTP 429 (after retries) → `503 problem+json`
+- Other upstream HTTP errors / malformed response → `502 problem+json`
+- The request **never** silently falls back to `backend: "local"` — doing so
+  would trigger the 1.2 GB Numberbatch download without the caller's knowledge.
+
+> ⚠️ Only `conceptnet_numberbatch` has a remote API. **`glove` and `fasttext`
+> have NO public similarity API** (neither Stanford NLP nor Meta/fasttext.cc
+> host an inference endpoint) and remain local gensim downloads. A later
+> maintainer must not assume this pattern transfers 1:1 to other variants.
+
 ## Development
 
 ```sh
@@ -358,6 +436,9 @@ make start   # run uvicorn on :8000
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TEXT_SIMILARITY_DKPRO_URL` | `http://localhost:8100` | Base URL of the DKPro Java sidecar |
+| `CONCEPTNET_API_URL` | `https://api.conceptnet.io` | Base URL of the public ConceptNet relatedness API (`params.backend: "remote"`) |
+| `CONCEPTNET_MAX_REMOTE_INPUTS` | `60` | Max inputs per request for `backend: "remote"` (rate-limit guard, see [External API dependencies](#external-api-dependencies)) |
+| `CONCEPTNET_REMOTE_REQUEST_DELAY` | `0.05` | Min seconds between consecutive ConceptNet API calls (client-side throttle) |
 
 ## Data Dependencies
 
@@ -372,7 +453,7 @@ in memory (`src/model_cache.py`). Sizes and requirements:
 | HuggingFace models (SBERT `all-MiniLM-L6-v2`, cross-encoder, BERTScore) | 100–400 MB each | `sbert_cosine`, `cross_encoder`, `bertscore`, `semantic_search` | ✅ `[model]` |
 | gensim GloVe vectors (`glove-wiki-gigaword-50`) | ~200 MB | `embedding_cosine` (glove), `wmd` | ✅ `[model]` |
 | gensim FastText vectors (`fasttext-wiki-news-subwords-300`) | ~2 GB | `embedding_cosine` variant `fasttext` | ✅ `[model]` |
-| gensim ConceptNet Numberbatch (`conceptnet-numberbatch-17-06-300`) | ~1.2 GB | `embedding_cosine` variant `conceptnet_numberbatch` | ✅ `[model]` |
+| gensim ConceptNet Numberbatch (`conceptnet-numberbatch-17-06-300`) | ~1.2 GB | `embedding_cosine` variant `conceptnet_numberbatch` — **only with `params.backend: "local"`** (the `remote` default uses the public api.conceptnet.io API instead, no download) | ✅ `[model]` |
 
 Run `nltk.download('wordnet')` once for the lexical measures. The HuggingFace,
 gensim and Odenet resources are fetched automatically on first use when the

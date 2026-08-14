@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from .catalog import CATALOG
+from .conceptnet_api import MAX_REMOTE_INPUTS, ConceptNetError
 from .dkpro_proxy import compute_via_sidecar, is_dkpro_request
 from .lexical import DEFAULT_LEXICAL_BACKENDS, compute_lexical
 from .models import (
@@ -136,9 +137,35 @@ async def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
             detail=f"Backend '{backend}' not supported for algorithm '{algorithm}'. Supported: {supported}",
         )
 
+    # The ConceptNet remote path makes one HTTP request per input against an
+    # externally rate-limited public API. Reject oversized batches up-front
+    # (instead of burning the 3600/h limit in seconds) with a clean 400.
+    _remote_conceptnet = (
+        algorithm == "embedding_cosine"
+        and backend == "gensim"
+        and request.params.get("variant", "glove") == "conceptnet_numberbatch"
+        and request.params.get("backend", "remote") in ("remote", None)
+    )
+    if _remote_conceptnet and len(request.inputs) > MAX_REMOTE_INPUTS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"embedding_cosine variant 'conceptnet_numberbatch' with params.backend='remote' supports at most "
+                f"{MAX_REMOTE_INPUTS} inputs per request (got {len(request.inputs)}) to stay within the "
+                f"api.conceptnet.io rate limit (3600/h, 120/min burst). Split the batch into smaller requests or "
+                f"set params.backend='local'."
+            ),
+        )
+
     def _compute(alg: str, bck: str, input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
         if (alg, bck) in SIMILARITY_DISPATCH:
-            return compute_similarity(alg, bck, input_data, params)
+            try:
+                return compute_similarity(alg, bck, input_data, params)
+            except ConceptNetError as e:
+                # External ConceptNet API failure -> clean 502/503 problem+json.
+                # Deliberately NO silent fallback to the local gensim model
+                # (that would trigger the ~1.2 GB Numberbatch download).
+                raise HTTPException(status_code=e.status, detail=f"ConceptNet API request failed: {e}") from None
         try:
             return compute_via_sidecar(alg, params.get("variant"), input_data, params)
         except Exception as e:  # noqa: BLE001

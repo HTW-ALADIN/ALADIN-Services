@@ -74,7 +74,9 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 # Model-download tests (BERTScore etc.) are skipped by default so the base
 # suite stays fast and offline. Run them explicitly with `-m model_download`.
-addopts = "-m 'not model_download'"
+# Network tests (real api.conceptnet.io calls) are likewise skipped by default.
+addopts = "-m 'not model_download and not network'"
 markers = [
     "model_download: tests that download models from HuggingFace (skipped by default)",
+    "network: tests that hit external public APIs like api.conceptnet.io (skipped by default)",
 ]
