@@ -85,11 +85,15 @@ def _embedding_cosine_gensim(input_data: dict[str, Any], params: dict[str, Any])
 
         return compute_relatedness_remote(input_data, params)
 
-    from .model_cache import get_gensim_model
+    from .model_cache import get_gensim_model, require_large_download_ok
 
     a = input_data.get("text_a", "")
     b = input_data.get("text_b", "")
     model_name = params.get("model_name") or _EMBEDDING_VARIANTS.get(variant, "glove-wiki-gigaword-50")
+    # Cost gate: fasttext (~2 GB) and conceptnet_numberbatch local (~1.2 GB)
+    # downloads need an explicit opt-in BEFORE the first download; glove and
+    # already-cached models pass through. (remote never reaches this path.)
+    require_large_download_ok(model_name, params)
     kv = get_gensim_model(model_name)
 
     # Try word-level first, fall back to n_similarity for multi-word
@@ -123,11 +127,14 @@ def _sbert_cosine(input_data: dict[str, Any], params: dict[str, Any]) -> dict[st
 
 
 def _wmd_gensim(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
-    from .model_cache import get_gensim_model
+    from .model_cache import get_gensim_model, require_large_download_ok
 
     a = input_data.get("text_a", "")
     b = input_data.get("text_b", "")
     model_name = params.get("model_name", "glove-wiki-gigaword-50")
+    # Same cost gate as embedding_cosine: wmd with a >500 MB model_name (e.g.
+    # fasttext) must not silently trigger the download either.
+    require_large_download_ok(model_name, params)
     kv = get_gensim_model(model_name)
     raw = float(kv.wmdistance(a.split(), b.split()))
     return _normalize_similarity(raw, "wmd", "gensim")

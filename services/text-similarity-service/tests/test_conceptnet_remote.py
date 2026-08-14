@@ -188,7 +188,10 @@ class TestLocalPath:
 
         clear_all()
         result = compute_similarity(
-            "embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"variant": "conceptnet_numberbatch", "backend": "local"}
+            "embedding_cosine",
+            "gensim",
+            {"text_a": "car", "text_b": "auto"},
+            {"variant": "conceptnet_numberbatch", "backend": "local", "confirm_large_download": True},
         )
         assert captured == ["conceptnet-numberbatch-17-06-300"]
         assert result["similarity"] == 0.4
@@ -300,7 +303,7 @@ class TestBatchCap:
 
         clear_all()
         inputs = [{"id": f"p{i}", "a": "cat", "b": "dog"} for i in range(conceptnet_api.MAX_REMOTE_INPUTS + 1)]
-        resp = _post_remote({"variant": "conceptnet_numberbatch", "backend": "local"}, inputs)
+        resp = _post_remote({"variant": "conceptnet_numberbatch", "backend": "local", "confirm_large_download": True}, inputs)
         assert resp.status_code == 200
         assert len(resp.json()["results"]) == conceptnet_api.MAX_REMOTE_INPUTS + 1
 

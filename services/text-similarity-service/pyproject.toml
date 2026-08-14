@@ -10,6 +10,9 @@ dependencies = [
     "pydantic>=2.0.0",
     "nltk>=3.9.0",
     "scikit-learn>=1.6.0",
+    # Static word embeddings (embedding_cosine/wmd). Pure NumPy/Python — NO
+    # PyTorch dependency, so it belongs in the base tier like nltk/sklearn.
+    "gensim>=4.4.0",
     "httpx>=0.27.0",
     # CLI (mirrors the REST endpoints)
     "click>=8.1.0",
@@ -17,17 +20,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Model-based measures. These pull in PyTorch (~2.5 GB CUDA wheel via
-# sentence-transformers / bert-score) and/or download large models at runtime
-# (HuggingFace for SBERT/BERTScore, gensim glove for embedding_cosine/wmd).
-# They are therefore NOT installed by default — the base service and Docker
-# image stay small. Install on demand with:
+# PyTorch-based measures only (sentence-transformers / bert-score). Everything
+# in this extra pulls in PyTorch (~2.5 GB CUDA wheel), which is why it is NOT
+# installed by default — the base service and Docker image stay small. Install
+# on demand with:
 #   pip install -e ".[model]"
 # The model-backed endpoints return a clean 501 error when this extra is
 # missing (all imports are lazy, so the rest of the service is unaffected).
 model = [
     "sentence-transformers>=3.0.0",
-    "gensim>=4.4.0",
     # BERTScore is flagged inactive upstream (no release in 12+ months).
     # Pin to the exact latest version and treat as vendored.
     "bert-score==0.3.13",

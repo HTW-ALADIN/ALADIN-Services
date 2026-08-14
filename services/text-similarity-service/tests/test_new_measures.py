@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from src.lexical import compute_lexical
 from src.main import app
-from src.model_cache import clear_all
+from src.model_cache import LargeModelDownloadBlocked, clear_all
 from src.retrieval import compute_retrieval
 from src.similarity import compute_similarity
 
@@ -183,7 +183,9 @@ class TestEmbeddingVariants:
 
         monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
         clear_all()
-        compute_similarity("embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"variant": "fasttext"})
+        compute_similarity(
+            "embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"variant": "fasttext", "confirm_large_download": True}
+        )
         assert captured == ["fasttext-wiki-news-subwords-300"]
 
     def test_conceptnet_variant(self, monkeypatch):
@@ -202,7 +204,10 @@ class TestEmbeddingVariants:
         monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
         clear_all()
         compute_similarity(
-            "embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"variant": "conceptnet_numberbatch", "backend": "local"}
+            "embedding_cosine",
+            "gensim",
+            {"text_a": "car", "text_b": "auto"},
+            {"variant": "conceptnet_numberbatch", "backend": "local", "confirm_large_download": True},
         )
         assert captured == ["conceptnet-numberbatch-17-06-300"]
 
@@ -240,9 +245,132 @@ class TestEmbeddingVariants:
 
         monkeypatch.setattr("gensim.downloader.load", fake_load)
         clear_all()
-        compute_similarity("embedding_cosine", "gensim", {"text_a": "a", "text_b": "b"}, {"variant": "fasttext"})
-        compute_similarity("embedding_cosine", "gensim", {"text_a": "a", "text_b": "b"}, {"variant": "fasttext"})
+        compute_similarity(
+            "embedding_cosine", "gensim", {"text_a": "a", "text_b": "b"}, {"variant": "fasttext", "confirm_large_download": True}
+        )
+        compute_similarity(
+            "embedding_cosine", "gensim", {"text_a": "a", "text_b": "b"}, {"variant": "fasttext", "confirm_large_download": True}
+        )
         assert calls["n"] == 1  # model loaded once, cached
+
+
+class TestCostGate:
+    """Large-download cost gate for embedding_cosine (fasttext / conceptnet local).
+
+    Downloads above the 500 MB threshold need an explicit opt-in BEFORE the
+    first download: ``params.confirm_large_download: true`` or the env var
+    ``ALLOW_LARGE_MODEL_DOWNLOADS=true``. Small models (glove) and already
+    cached models pass without opt-in.
+    """
+
+    FASTTEXT = "fasttext-wiki-news-subwords-300"
+
+    def test_fasttext_blocked_without_opt_in(self):
+        clear_all()
+        with pytest.raises(LargeModelDownloadBlocked):
+            compute_similarity("embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"variant": "fasttext"})
+
+    def test_fasttext_allowed_with_request_param(self, monkeypatch):
+        captured: list[str] = []
+
+        def fake_get(name):
+            captured.append(name)
+            return FakeKeyedVectors()
+
+        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
+        clear_all()
+        compute_similarity(
+            "embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"variant": "fasttext", "confirm_large_download": True}
+        )
+        assert captured == [self.FASTTEXT]
+
+    def test_fasttext_allowed_with_env_var(self, monkeypatch):
+        captured: list[str] = []
+
+        def fake_get(name):
+            captured.append(name)
+            return FakeKeyedVectors()
+
+        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
+        monkeypatch.setenv("ALLOW_LARGE_MODEL_DOWNLOADS", "true")
+        clear_all()
+        compute_similarity("embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"variant": "fasttext"})
+        assert captured == [self.FASTTEXT]
+
+    def test_cached_large_model_needs_no_opt_in(self, monkeypatch):
+        """A second call (model already cached) runs normally without opt-in."""
+        from src import model_cache
+
+        def fake_get(name):
+            return FakeKeyedVectors()
+
+        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
+        clear_all()
+        model_cache._models[f"gensim:{self.FASTTEXT}"] = FakeKeyedVectors()
+        try:
+            r = compute_similarity("embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"variant": "fasttext"})
+            assert r["similarity"] == 0.4
+        finally:
+            clear_all()
+
+    def test_conceptnet_local_blocked_without_opt_in(self):
+        clear_all()
+        with pytest.raises(LargeModelDownloadBlocked):
+            compute_similarity(
+                "embedding_cosine",
+                "gensim",
+                {"text_a": "car", "text_b": "auto"},
+                {"variant": "conceptnet_numberbatch", "backend": "local"},
+            )
+
+    def test_glove_default_needs_no_opt_in(self, monkeypatch):
+        """The default variant (glove, ~200 MB) is automatic — no gate."""
+        captured: list[str] = []
+
+        def fake_get(name):
+            captured.append(name)
+            return FakeKeyedVectors()
+
+        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
+        clear_all()
+        compute_similarity("embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {})
+        assert captured == ["glove-wiki-gigaword-50"]
+
+    def test_api_blocked_returns_400_problem_json(self):
+        clear_all()
+        resp = client.post(
+            "/v1/text/distance",
+            json={
+                "algorithm": "embedding_cosine",
+                "params": {"variant": "fasttext"},
+                "inputs": [{"id": "p1", "a": "car", "b": "auto"}],
+            },
+        )
+        assert resp.status_code == 400
+        body = resp.json()
+        assert "2048" in body["detail"]  # exact download size
+        assert "confirm_large_download" in body["detail"]  # per-request opt-in
+        assert "ALLOW_LARGE_MODEL_DOWNLOADS" in body["detail"]  # server-side opt-in
+
+    def test_api_allowed_with_opt_in(self, monkeypatch):
+        captured: list[str] = []
+
+        def fake_get(name):
+            captured.append(name)
+            return FakeKeyedVectors()
+
+        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
+        clear_all()
+        resp = client.post(
+            "/v1/text/distance",
+            json={
+                "algorithm": "embedding_cosine",
+                "params": {"variant": "fasttext", "confirm_large_download": True},
+                "inputs": [{"id": "p1", "a": "car", "b": "auto"}],
+            },
+        )
+        assert resp.status_code == 200
+        assert captured == [self.FASTTEXT]
 
 
 class TestOdenet:
@@ -369,7 +497,10 @@ class TestDiscoveryMetadata:
         assert emb["category"] == "word_embedding"
         assert "fasttext" in emb["variants"]
         assert "conceptnet_numberbatch" in emb["variants"]
-        assert emb["requires_model"] is True
+        # gensim is base-tier now (no [model] extra); large downloads are gated,
+        # not gated by a pip extra.
+        assert emb["requires_model"] is False
+        assert "extra" not in emb
 
         # semantic_search is now SBERT-only ([model]-only); no base TF-IDF backend.
         sbert = by_key[("semantic_search", "sentence_transformers")]

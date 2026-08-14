@@ -15,9 +15,9 @@ families and their verification status via the compute endpoints
 | 7 | Token-set overlap (Jaccard/Dice) | `token_set_overlap` | similarity | builtin — variants `jaccard` / `dice` | base ✅ |
 | 8 | BM25 lexical retrieval | `bm25` | retrieval | builtin | base ✅ |
 | 9 | Semantic search / NN retrieval | `semantic_search` | retrieval | sentence-transformers | `[model]` ⏳ |
-| 10 | Static word/doc embedding | `embedding_cosine` | similarity | gensim — variants `glove` / `fasttext` (local); `conceptnet_numberbatch` **two backends** (`local` gensim / `remote` api.conceptnet.io, default) | `[model]` ⏳ (remote conceptnet: no extra needed) |
+| 10 | Static word/doc embedding | `embedding_cosine` | similarity | gensim — variants `glove` / `fasttext` (local); `conceptnet_numberbatch` **two backends** (`local` gensim / `remote` api.conceptnet.io, default) | base ✅ (glove + numberbatch-remote automatic; fasttext + numberbatch-local gate-optional) |
 | 11 | Transformer sentence embedding | `sbert_cosine` | similarity | sentence-transformers | `[model]` ⏳ |
-| 12 | Word Mover's Distance | `wmd` | similarity | gensim | `[model]` ⏳ |
+| 12 | Word Mover's Distance | `wmd` | similarity | gensim | base ✅ (GloVe ~200 MB download, automatic) |
 | 13 | Contextual eval metric (BERTScore) | `bertscore` | similarity | bert-score | `[model]` ⏳ |
 | 14 | Cross-encoder reranking | `cross_encoder` | similarity | sentence-transformers | `[model]` ⏳ |
 | 15 | Topic-model (LSA/ESA) | `topic_model` | similarity | dkpro (Java sidecar) | optional sidecar ✅ (routed, mocked) |
@@ -54,9 +54,9 @@ themselves are placeholders until the DKPro library is built from source.
 
 ## Summary
 
-- **16/16 families covered** by the API contract (8 base + 6 `[model]` + 2 DKPro)
-- **8/16 verified end-to-end** in the default CI test run (base families 1–8)
-- **6/16 covered by model-download tests** (families 9–14, `[model]` extra)
+- **16/16 families covered** by the API contract (10 base + 4 `[model]` + 2 DKPro)
+- **10/16 verified end-to-end** in the default CI test run (base families 1–8, 10, 12)
+- **4/16 covered by model-download tests** (families 9, 11, 13, 14, `[model]` extra)
 - Families 15–16 are routed to the DKPro Java sidecar (tested with a mock)
 - 2 optional DKPro backend extensions registered and routed
 - 2 legacy aliases (`jaccard`, `dice`) map to `token_set_overlap`

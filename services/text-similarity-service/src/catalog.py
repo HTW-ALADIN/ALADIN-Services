@@ -9,7 +9,8 @@ measure they get without knowing the backing library:
 
 - ``category``: lexical | statistical | word_embedding | sentence_embedding |
   knowledge_graph | retrieval | evaluation | topic | structural
-- ``requires_model``: needs the ``[model]`` extra (PyTorch / large downloads)
+- ``requires_model``: needs the ``[model]`` extra (PyTorch / large downloads) —
+  base backends (incl. gensim) omit it
 - ``requires_gpu``: always false — the whole service is CPU-capable
 - ``language``: language the backend serves (e.g. ``de`` for Odenet)
 - ``extra``: pip extra needed to enable the backend (``model``, ``de``,
@@ -94,13 +95,15 @@ CATALOG: list[dict[str, Any]] = [
     *_entry(
         "similarity",
         "embedding_cosine",
-        _backends(("gensim", "gensim KeyedVectors.similarity/n_similarity", {"extra": "model"})),
+        _backends(("gensim", "gensim KeyedVectors.similarity/n_similarity")),
         "Static word/document embedding cosine similarity",
         score_range="[-1,1]",
         granularity="word",
         stateful=True,
         category="word_embedding",
-        requires_model=True,
+        # gensim is base-tier (no [model] extra needed). Large runtime downloads
+        # (fasttext ~2 GB, conceptnet_numberbatch local ~1.2 GB) are gated by an
+        # explicit opt-in, not by a pip extra — see README "Cost threshold".
         variants=["glove", "fasttext", "conceptnet_numberbatch"],
     ),
     *_entry(
@@ -117,14 +120,13 @@ CATALOG: list[dict[str, Any]] = [
     *_entry(
         "similarity",
         "wmd",
-        _backends(("gensim", "gensim KeyedVectors.wmdistance", {"extra": "model"})),
+        _backends(("gensim", "gensim KeyedVectors.wmdistance")),
         "Word Mover's Distance",
         score_direction="lower_is_similar",
         score_range="[0,inf)",
         granularity="document",
         stateful=True,
         category="word_embedding",
-        requires_model=True,
     ),
     *_entry(
         "similarity",

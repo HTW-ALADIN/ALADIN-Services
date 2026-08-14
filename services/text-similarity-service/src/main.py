@@ -16,6 +16,7 @@ from .catalog import CATALOG
 from .conceptnet_api import MAX_REMOTE_INPUTS, ConceptNetError
 from .dkpro_proxy import compute_via_sidecar, is_dkpro_request
 from .lexical import DEFAULT_LEXICAL_BACKENDS, compute_lexical
+from .model_cache import LargeModelDownloadBlocked
 from .models import (
     LexicalRequest,
     RetrievalRequest,
@@ -100,6 +101,11 @@ def _run_batch(
         except HTTPException:
             raise
         except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from None
+        except LargeModelDownloadBlocked as e:
+            # Cost gate: a >500 MB runtime model download was requested without
+            # an explicit opt-in (params.confirm_large_download / env var). The
+            # exception message names size, opt-in and how to enable it.
             raise HTTPException(status_code=400, detail=str(e)) from None
         except ModuleNotFoundError as e:
             module_name = e.name or "unknown"

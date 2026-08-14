@@ -16,14 +16,18 @@ text-distance-service   = Character/String-level distances
 text-similarity-service = Semantic/Lexical/Statistical similarity
 ```
 
-**Lightweight by default.** The base install ships only `nltk` (~1.8 MB wheel +
-WordNet corpus) and `scikit-learn` (~35-45 MB) — so the WordNet, TF-IDF,
-token-set overlap (Jaccard/Dice variants) and BM25 families work out of the box. Everything that
-needs a large model download (PyTorch-based SBERT/BERTScore, gensim word
-vectors) is an **opt-in extra** (`pip install -e ".[model]"`); German lexical
-lookups (Odenet) are a separate small **opt-in extra**
-(`pip install -e ".[de]"`). See
-[Model-based measures](#model-based-measures-optional) and
+**Lightweight by default.** The base install ships `nltk` (~1.8 MB wheel +
+WordNet corpus), `scikit-learn` (~35-45 MB) and `gensim` (~50 MB wheel, pure
+NumPy/Python, **no PyTorch**) — so the WordNet, TF-IDF, token-set overlap
+(Jaccard/Dice variants), BM25, static-embedding (`embedding_cosine` with the
+`glove` or `conceptnet_numberbatch`-remote variants) and `wmd` families work out
+of the box. Only the **PyTorch stack** (SBERT/BERTScore) is an **opt-in extra**
+(`pip install -e ".[model]"`); German lexical lookups (Odenet) are a separate
+small **opt-in extra** (`pip install -e ".[de]"`). Large *runtime* model
+downloads (`fasttext` ~2 GB, `conceptnet_numberbatch` local ~1.2 GB) are not
+blocked by a pip extra but by an explicit **cost gate** (see
+[Cost threshold for runtime downloads](#cost-threshold-for-runtime-downloads)).
+See [Model-based measures](#model-based-measures-optional) and
 [Odenet (German lexical relations)](#odenet-german-lexical-relations).
 
 ## API Endpoints
@@ -121,33 +125,57 @@ similarity is `1.0` — while e.g. `car` vs `banana` scores only ~`0.08`.
 
 ## Model-based measures (optional)
 
-**Design goal:** every library / algorithm that requires a model download is
-**optional**. The base install and the default Docker image stay small; the
-neural/embedding families are enabled explicitly.
+**Design goal:** keep the base install / default image small. Two independent
+mechanisms do this:
+
+1. **Install tier (pip wheels)** — everything that pulls in **PyTorch**
+   (`sentence-transformers`, `bert-score`, ~2.5 GB CUDA wheel) is an **opt-in
+   pip extra** (`[model]`). Pure-NumPy/Python libraries (`nltk`,
+   `scikit-learn`, `gensim`) are **base**.
+2. **Cost gate (runtime downloads)** — large *model-data* downloads
+   (> 500 MB) are not silently triggered. They need an explicit opt-in
+   (`params.confirm_large_download: true` or
+   `ALLOW_LARGE_MODEL_DOWNLOADS=true`), see
+   [Cost threshold for runtime downloads](#cost-threshold-for-runtime-downloads).
 
 ### Why this is needed
 
-The algorithm libraries themselves are tiny:
+**(a) Install / wheel size per library** — only the PyTorch stack is expensive
+to *install*:
 
-| Library | Size | Used by |
+| Library | Wheel size | Tier |
 |---|---|---|
-| `nltk` | ~1.8 MB wheel | WordNet lexical measures (+ ~12 MB WordNet corpus at runtime) |
-| `scikit-learn` | ~35-45 MB | TF-IDF vector-space cosine (`tfidf_cosine`) |
-| `gensim` | ~50 MB | static word embeddings (`embedding_cosine`, `wmd`) |
-| `sentence-transformers` + `torch` | **~2.5 GB** | SBERT cosine / cross-encoder / semantic search |
-| `bert-score` + `torch` | **~2.5 GB** | BERTScore evaluation metric |
+| `nltk` | ~1.8 MB | base |
+| `scikit-learn` | ~35-45 MB | base |
+| `gensim` | ~50 MB (pure NumPy/Python, **no PyTorch**) | base |
+| `sentence-transformers` + `torch` | **~2.5 GB** | `[model]` extra |
+| `bert-score` + `torch` | **~2.5 GB** | `[model]` extra |
 
-Only the last two rows pull in **PyTorch (~2.5 GB CUDA wheel)** and download
-models at runtime (HuggingFace checkpoints, gensim GloVe vectors ~200 MB).
-Bundling those into every install / image would inflate it to ~5 GB for the
-sake of a few neural/embedding families.
+Bundling the last two rows into every install / image would inflate it to ~5 GB
+for the sake of a few neural families. `gensim` carries no PyTorch dependency,
+so it belongs in the base tier next to `nltk` / `scikit-learn`.
+
+**(b) Runtime data size per model / corpus / vector file** — this is a *download*
+cost, governed by the 500 MB cost gate (see
+[Cost threshold](#cost-threshold-for-runtime-downloads)):
+
+| Data | Runtime download | Kosten-Tier | Freischaltung nötig? |
+|---|---|---|---|
+| NLTK WordNet corpus | ~12 MB | automatisch | — |
+| NLTK Information Content corpus | small | automatisch | — |
+| Odenet (`odenet:1.4`) | ~10-30 MB | automatisch (nach `[de]`-Installation) | `pip install -e ".[de]"` |
+| gensim GloVe (`glove-wiki-gigaword-50`) | ~200 MB | automatisch | — |
+| ConceptNet Numberbatch (**remote**) | 0 MB (externe API) | kein Download, externe API | — |
+| ConceptNet Numberbatch (**local**) | **~1.2 GB** | **kostenpflichtig-optional** | `params.confirm_large_download: true` **oder** `ALLOW_LARGE_MODEL_DOWNLOADS=true` |
+| gensim FastText (`fasttext-wiki-news-subwords-300`) | **~2 GB** | **kostenpflichtig-optional** | `params.confirm_large_download: true` **oder** `ALLOW_LARGE_MODEL_DOWNLOADS=true` |
+| HuggingFace SBERT/BERTScore checkpoints | 100-400 MB each | automatisch (nach `[model]`-Installation) | `pip install -e ".[model]"` |
 
 ### What is optional
 
 | Scope | Installed | Families enabled |
 |---|---|---|
-| **Base** (always) | `nltk`, `scikit-learn` (+ FastAPI stack) | WordNet similarity, TF-IDF, lexical relations (incl. `hyponym`), token-set overlap (`jaccard`/`dice` variants), `bm25` — **8/16** |
-| **`[model]` extra** | `sentence-transformers`, `bert-score`, `gensim` (+ PyTorch) | `embedding_cosine` (glove/fasttext local; `conceptnet_numberbatch` local **or** remote API — the remote default needs no extra), `sbert_cosine`, `wmd`, `cross_encoder`, `bertscore`, `semantic_search` — **+6/16** |
+| **Base** (always) | `nltk`, `scikit-learn`, `gensim` (+ FastAPI stack) | WordNet similarity, TF-IDF, lexical relations (incl. `hyponym`), token-set overlap (`jaccard`/`dice` variants), `bm25`, `embedding_cosine` (glove + `conceptnet_numberbatch`-remote automatic; `fasttext` + `conceptnet_numberbatch`-local gate-optional), `wmd` — **10/16** |
+| **`[model]` extra** | `sentence-transformers`, `bert-score` (+ PyTorch) | `sbert_cosine`, `cross_encoder`, `bertscore`, `semantic_search` — **+4/16** |
 | **`[de]` extra** | `wn` (small, pure Python, no PyTorch) | German lexical relations via Odenet (`synonym`, `antonym`, `hypernym`, `hyponym`, backend `odenet`) |
 | **DKPro sidecar** | separate Java service | `topic_model`, `structural_stylistic` (routed) — **2/16** |
 
@@ -164,9 +192,9 @@ sake of a few neural/embedding families.
 | 7 | Token-set overlap (`token_set_overlap`) — variants `jaccard` / `dice` (legacy aliases `jaccard`, `dice`) | builtin (pure Python) | base |
 | 8 | BM25 retrieval (`bm25`) | builtin (pure Python) | base |
 | 9 | Semantic search (`semantic_search`) | sentence-transformers | `[model]` (PyTorch) |
-| 10 | Static word/doc embedding (`embedding_cosine`) — variants `glove` / `fasttext` (local gensim) and `conceptnet_numberbatch` (**two backends:** `local` via gensim, `remote` via api.conceptnet.io — `remote` default) | gensim (+ remote ConceptNet API for `conceptnet_numberbatch`) | `[model]` (+ model download **only** for `local`; `remote` needs no download) |
+| 10 | Static word/doc embedding (`embedding_cosine`) — variants `glove` / `fasttext` (local gensim) and `conceptnet_numberbatch` (**two backends:** `local` via gensim, `remote` via api.conceptnet.io — `remote` default) | gensim (+ remote ConceptNet API for `conceptnet_numberbatch`) | base (`glove` + `numberbatch`-remote automatic; `fasttext` + `numberbatch`-local → gate-optional download) |
 | 11 | Transformer sentence embedding (`sbert_cosine`) | sentence-transformers | `[model]` (PyTorch) |
-| 12 | Word Mover's Distance (`wmd`) | gensim | `[model]` (+ GloVe download) |
+| 12 | Word Mover's Distance (`wmd`) | gensim | base (+ GloVe ~200 MB download, automatic) |
 | 13 | Contextual eval metric (`bertscore`) | bert-score | `[model]` (PyTorch) |
 | 14 | Cross-encoder reranking (`cross_encoder`) | sentence-transformers | `[model]` (PyTorch) |
 | 15 | Topic-model (`topic_model`) | dkpro (Java sidecar) | separate optional sidecar |
@@ -175,29 +203,40 @@ sake of a few neural/embedding families.
 ### Enabling optional stacks
 
 ```sh
-pip install -e ".[model]"   # sentence-transformers + gensim + bert-score (+ PyTorch)
+pip install -e ".[model]"   # sentence-transformers + bert-score (+ PyTorch) — SBERT/BERTScore/semantic_search
 pip install -e ".[de]"      # German lexical relations via Odenet (wn, no PyTorch)
 python -m wn download odenet:1.4   # once, for the [de] Odenet data (auto-downloaded on first use otherwise)
 ```
 
-- Imports are **lazy** — the base service never loads PyTorch/gensim/wn unless a
-  model-based algorithm is actually called.
+- Imports are **lazy** — the base service never loads PyTorch / `wn` /
+  sentence-transformers unless a model-based algorithm is actually called
+  (gensim is base-installed, but still imported lazily on first use).
 - The models / data themselves (HuggingFace SBERT/BERTScore checkpoints, gensim
   GloVe/FastText/Numberbatch vectors, Odenet) are **downloaded on first use and
   cached** (`src/model_cache.py`), not bundled into the image.
-- Without an extra, its endpoints return a clean `501 problem+json` naming the
-  missing module and the correct install command (`.[model]` vs `.[de]`); all
-  other measures keep working unchanged.
+- Without the `[model]` extra, the PyTorch-backed endpoints (`sbert_cosine`,
+  `cross_encoder`, `bertscore`, `semantic_search`) return a clean
+  `501 problem+json` naming the missing module and `pip install -e ".[model]"`;
+  without `[de]`, Odenet requests return `501` naming `.[de]`. `embedding_cosine`
+  / `wmd` need **no extra** (gensim is base) — their large downloads are
+  governed by the cost gate instead (`400`, see
+  [Cost threshold for runtime downloads](#cost-threshold-for-runtime-downloads)).
 
 ### Docker
 
 The default image is the light base (`docker build -f Dockerfile -t
-text-similarity-service .`, ~150 MB of deps + base image ≈ 750 MB). Build the
-full model stack explicitly:
+text-similarity-service .`, ~200 MB of deps + base image ≈ **800 MB**, now
+including `gensim` ~50 MB). Build the full PyTorch model stack explicitly:
 
 ```sh
 docker build --build-arg INSTALL_MODEL=true -t text-similarity-service .
 ```
+
+The **cost-gated runtime downloads are NEVER baked into the image** — not even
+with `ALLOW_LARGE_MODEL_DOWNLOADS=true`. That env var only unlocks *runtime*
+downloads on a running server; it changes nothing about the image build (there
+is no corresponding Docker build arg — models are always fetched on first use
+and cached, never committed).
 
 A BuildKit pip cache (`--mount=type=cache`) reuses downloads across builds, so
 rebuilding with the model stack is only expensive once.
@@ -262,11 +301,11 @@ parameterised exactly like the existing `params.model_name` mechanism — the
 }
 ```
 
-| `variant` | gensim-data model | Notes |
-|---|---|---|
-| `glove` (default) | `glove-wiki-gigaword-50` | same as before — **local-only** |
-| `fasttext` | `fasttext-wiki-news-subwords-300` | subword info — good for unknown/rare words, morphology, German — **local-only** |
-| `conceptnet_numberbatch` | `conceptnet-numberbatch-17-06-300` (**local only**) | **two backends:** `local` (gensim download, ~1.2 GB) or `remote` (default — public api.conceptnet.io, no download). See below. |
+| `variant` | gensim-data model | Runtime download | Kosten-Tier |
+|---|---|---|---|
+| `glove` (default) | `glove-wiki-gigaword-50` | ~200 MB | **automatisch** (Default) |
+| `fasttext` | `fasttext-wiki-news-subwords-300` | ~2 GB | **kostenpflichtig-optional** (Gate nötig) |
+| `conceptnet_numberbatch` | `conceptnet-numberbatch-17-06-300` (**local only**) | remote: 0 MB · local: ~1.2 GB | remote: **automatisch** (Default) · local: **kostenpflichtig-optional** (Gate nötig) |
 
 - A direct `params.model_name` always wins over `variant` (on the `local`
   path), so any gensim-data model is selectable without a new algorithm family.
@@ -284,7 +323,7 @@ top-level `backend` field (which stays `gensim` for backward compatibility):
 | `params.backend` | What happens | Default |
 |---|---|---|
 | `remote` | Calls the public ConceptNet API (`GET https://api.conceptnet.io/relatedness?node1=/c/{lang}/{a}&node2=/c/{lang}/{b}`), which hosts a reduced Numberbatch matrix server-side. **No local download**, no `[model]` extra needed. | ✅ default |
-| `local` | Existing gensim behaviour: downloads/caches the ~1.2 GB `conceptnet-numberbatch-17-06-300` model. | opt-in |
+| `local` | Existing gensim behaviour: downloads/caches the ~1.2 GB `conceptnet-numberbatch-17-06-300` model. | opt-in — **gated** (see [Cost threshold](#cost-threshold-for-runtime-downloads)) |
 
 ```json
 {
@@ -311,6 +350,62 @@ top-level `backend` field (which stays `gensim` for backward compatibility):
   429 rate limit), the request returns a clean `502/503 problem+json` — it
   never silently falls back to `local` (which would trigger the 1.2 GB
   download). See [External API dependencies](#external-api-dependencies).
+
+## Cost threshold for runtime downloads
+
+The service prefers the cheapest path that still provides coverage: small
+runtime downloads and external APIs (0 MB local storage) run **automatically**;
+downloads above the **500 MB threshold** are **gate-optional** — technically
+available, but they can never be triggered accidentally. The table below is the
+full tier split for `embedding_cosine`:
+
+| Variante / Backend | Download-Größe | Tier |
+|---|---|---|
+| `glove` (local, einziges Backend) | ~200 MB | **automatisch** / Default — läuft ohne weiteres Zutun |
+| `conceptnet_numberbatch`, `backend: "remote"` | 0 MB (externe API) | **automatisch** / Default — bleibt Standard-Backend dieser Variante |
+| `conceptnet_numberbatch`, `backend: "local"` | ~1.2 GB | **kostenpflichtig-optional** (Gate) |
+| `fasttext` (local, einziges Backend) | ~2 GB | **kostenpflichtig-optional** (Gate) |
+
+**Gate behavior:** before the *first* download of a gate-required model, the
+service requires an explicit opt-in — either per request
+(`params.confirm_large_download: true`) or server-wide
+(`ALLOW_LARGE_MODEL_DOWNLOADS=true`, default `false`). Without the opt-in the
+request fails loudly with a `400 problem+json` that names the **exact download
+size**, the **parameter / env var** that unlocks it and the way to enable it —
+no silent failure, no silent download. Already downloaded/cached models (a
+second call) run normally; the gate only ever applies before the first
+download. The threshold (500 MB) is enforced in `src/model_cache.py`
+(`LARGE_DOWNLOAD_THRESHOLD_MB`) with per-model sizes for the known large
+gensim-data resources.
+
+**Blocked request** — no opt-in:
+
+```sh
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{"algorithm": "embedding_cosine", "params": {"variant": "fasttext"},
+       "inputs": [{"id": "p1", "a": "cat", "b": "dog"}]}' | jq .
+```
+
+```json
+{
+  "type": "about:blank",
+  "title": "400",
+  "status": 400,
+  "detail": "Model 'fasttext-wiki-news-subwords-300' requires an ~2048 MB runtime download (above the 500 MB cost threshold). Explicitly opt in with params.confirm_large_download=true on this request, or set ALLOW_LARGE_MODEL_DOWNLOADS=true server-side, then retry. See README \"Cost threshold for runtime downloads\"."
+}
+```
+
+**Unblocked request** — per-request opt-in (or set `ALLOW_LARGE_MODEL_DOWNLOADS=true`
+once server-wide):
+
+```sh
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{"algorithm": "embedding_cosine",
+       "params": {"variant": "fasttext", "confirm_large_download": true},
+       "inputs": [{"id": "p1", "a": "cat", "b": "dog"}]}' | jq .
+```
 
 ## Configurable sentence-transformers model (`model_name`)
 
@@ -439,25 +534,30 @@ make start   # run uvicorn on :8000
 | `CONCEPTNET_API_URL` | `https://api.conceptnet.io` | Base URL of the public ConceptNet relatedness API (`params.backend: "remote"`) |
 | `CONCEPTNET_MAX_REMOTE_INPUTS` | `60` | Max inputs per request for `backend: "remote"` (rate-limit guard, see [External API dependencies](#external-api-dependencies)) |
 | `CONCEPTNET_REMOTE_REQUEST_DELAY` | `0.05` | Min seconds between consecutive ConceptNet API calls (client-side throttle) |
+| `ALLOW_LARGE_MODEL_DOWNLOADS` | `false` | Server-wide opt-in for runtime downloads > 500 MB (`fasttext`, `conceptnet_numberbatch` local). Default `false` — without it such requests must pass `params.confirm_large_download: true`. See [Cost threshold for runtime downloads](#cost-threshold-for-runtime-downloads) |
 
 ## Data Dependencies
 
 Data is never bundled into the image; it is downloaded on first use and cached
 in memory (`src/model_cache.py`). Sizes and requirements:
 
-| Data | Size | Needed by | Extra? |
-|------|------|-----------|--------|
-| NLTK WordNet corpus | ~12 MB download / ~35 MB unpacked | `wordnet_similarity`, `synonym`, `antonym`, `hypernym`, `hyponym` | — (small runtime download, base install) |
-| NLTK Information Content corpus | small | `wordnet_similarity` variants `res`/`jcn`/`lin` | — |
-| Odenet (`odenet:1.4`) | small (~10-30 MB) | German `synonym`/`antonym`/`hypernym`/`hyponym` via `backend: odenet` | ✅ `[de]` (`wn` library) |
-| HuggingFace models (SBERT `all-MiniLM-L6-v2`, cross-encoder, BERTScore) | 100–400 MB each | `sbert_cosine`, `cross_encoder`, `bertscore`, `semantic_search` | ✅ `[model]` |
-| gensim GloVe vectors (`glove-wiki-gigaword-50`) | ~200 MB | `embedding_cosine` (glove), `wmd` | ✅ `[model]` |
-| gensim FastText vectors (`fasttext-wiki-news-subwords-300`) | ~2 GB | `embedding_cosine` variant `fasttext` | ✅ `[model]` |
-| gensim ConceptNet Numberbatch (`conceptnet-numberbatch-17-06-300`) | ~1.2 GB | `embedding_cosine` variant `conceptnet_numberbatch` — **only with `params.backend: "local"`** (the `remote` default uses the public api.conceptnet.io API instead, no download) | ✅ `[model]` |
+| Data | Size | Needed by | Kosten-Tier | Freischaltung nötig? |
+|------|------|-----------|-------------|----------------------|
+| NLTK WordNet corpus | ~12 MB download / ~35 MB unpacked | `wordnet_similarity`, `synonym`, `antonym`, `hypernym`, `hyponym` | automatisch | — (small runtime download, base install) |
+| NLTK Information Content corpus | small | `wordnet_similarity` variants `res`/`jcn`/`lin` | automatisch | — |
+| Odenet (`odenet:1.4`) | small (~10-30 MB) | German `synonym`/`antonym`/`hypernym`/`hyponym` via `backend: odenet` | automatisch (nach `[de]`-Installation) | `pip install -e ".[de]"` |
+| HuggingFace models (SBERT `all-MiniLM-L6-v2`, cross-encoder, BERTScore) | 100–400 MB each | `sbert_cosine`, `cross_encoder`, `bertscore`, `semantic_search` | automatisch (nach `[model]`-Installation) | `pip install -e ".[model]"` |
+| gensim GloVe vectors (`glove-wiki-gigaword-50`) | ~200 MB | `embedding_cosine` (glove), `wmd` | automatisch | — |
+| gensim FastText vectors (`fasttext-wiki-news-subwords-300`) | ~2 GB | `embedding_cosine` variant `fasttext` | **kostenpflichtig-optional, Gate nötig** | `params.confirm_large_download: true` **oder** `ALLOW_LARGE_MODEL_DOWNLOADS=true` |
+| gensim ConceptNet Numberbatch (`conceptnet-numberbatch-17-06-300`) | ~1.2 GB | `embedding_cosine` variant `conceptnet_numberbatch` — **only with `params.backend: "local"`** | **kostenpflichtig-optional, Gate nötig** | `params.confirm_large_download: true` **oder** `ALLOW_LARGE_MODEL_DOWNLOADS=true` |
+| ConceptNet Numberbatch (**remote**) | 0 MB (externe API) | `embedding_cosine` variant `conceptnet_numberbatch` — default backend | kein Download, externe API | — |
 
-Run `nltk.download('wordnet')` once for the lexical measures. The HuggingFace,
-gensim and Odenet resources are fetched automatically on first use when the
-corresponding extra (`[model]` / `[de]`) is installed.
+Run `nltk.download('wordnet')` once for the lexical measures. The HuggingFace
+and Odenet resources are fetched automatically on first use when the
+corresponding extra (`[model]` / `[de]`) is installed; gensim resources are
+fetched on first use too — the large ones (> 500 MB) only after the cost-gate
+opt-in (see
+[Cost threshold for runtime downloads](#cost-threshold-for-runtime-downloads)).
 
 ## License
 
