@@ -15,7 +15,7 @@ text-distance-service   = character/string-level distances
 text-similarity-service = semantic/lexical/statistical similarity
 ```
 
-Two independent things keep the service cheap to run:
+Three independent things matter for how expensive the service is to run:
 
 1. **Install tier** — only the PyTorch stack (`sentence-transformers`,
    `bert-score`) is an opt-in pip extra. Everything else (`nltk`,
@@ -26,6 +26,12 @@ Two independent things keep the service cheap to run:
    not a monetary or paid-tier cost. Nothing in this service requires
    payment; see
    [Resource gate for large downloads](#resource-gate-for-large-downloads).
+3. **Host compute** — the optional model-backed measures don't just *download*
+   weights; at request time they also need **RAM to hold the loaded model** and
+   **CPU time (or a GPU) to run inference** on every request. The download size
+   alone understates what a measure needs at runtime. Concrete per-model
+   numbers (download, RAM to run, CPU vs. GPU) are in
+   [Runtime resource requirements](#runtime-resource-requirements-cpu-ram-gpu).
 
 ## API Endpoints
 
@@ -150,6 +156,9 @@ models skip the gate on later calls (the resource is already paid — in disk
 space, not money — so there's nothing left to guard). Threshold and per-model
 sizes live in `src/model_cache.py` (`LARGE_DOWNLOAD_THRESHOLD_MB`).
 
+> Note: the gate guards disk usage only. RAM/CPU/GPU needed to *run* a measure are a separate, additive cost — see
+> [Runtime resource requirements](#runtime-resource-requirements-cpu-ram-gpu).
+
 ```sh
 # blocked
 curl -s -X POST http://localhost:8000/v1/text/distance \
@@ -164,6 +173,62 @@ curl -s -X POST http://localhost:8000/v1/text/distance \
        "params": {"variant": "fasttext", "confirm_large_download": true},
        "inputs": [{"id": "p1", "a": "cat", "b": "dog"}]}' | jq .
 ```
+
+## Runtime resource requirements (CPU / RAM / GPU)
+
+The [Resource gate](#resource-gate-for-large-downloads) only limits *downloads*
+(disk space to cache weights). Every model-backed measure then needs **RAM to
+load the model into memory** and **CPU or GPU cycles to run inference** on each
+request — resources that are *separate from, and usually larger than*, the
+download size. For a float32 model, the in-memory footprint is roughly **4× the
+size of the downloaded file** (the safetensors file is already a compressed /
+near-raw float32 dump; at load time there is an additional copy plus the
+runtime/linear-algebra libraries), and PyTorch itself reserves several hundred
+MB of RAM just for its CUDA/cuBLAS and CPU tensor kernels.
+
+The base-tier measures (`wordnet_similarity`, `tfidf_cosine`,
+`token_set_overlap`, `bm25`, lexical relations, DKPro sidecar) are **not**
+listed here — they run comfortably on a small single-CPU host with a few
+hundred MB of RAM. Only the optional `[model]` measures and the large gensim
+embeddings need planning for **host compute**:
+
+| Measure | Model (default) | Download | RAM to run (inference) | CPU vs. GPU |
+|---|---|---|---|---|
+| `sbert_cosine`, `semantic_search` | `all-MiniLM-L6-v2` (SBERT) | ~90 MB | ~0.5–1 GB | **CPU fine**; small model (22.7M params, 384-d), fast on a modern x86 core. GPU optional (adds speed, no gain in quality). |
+| `sbert_cosine`, `semantic_search` | heavier SBERT via `params.model_name` (e.g. `all-mpnet-base-v2`, ~109M params) | ~420 MB | ~2–4 GB | CPU usable but slower; GPU recommended at higher throughput |
+| `cross_encoder` | `cross-encoder/stsb-roberta-base` | ~440 MB | ~2–4 GB | Runs on CPU but is a full transformer pass per pair — **GPU recommended** for real-time/volume use; single pairs fine on CPU |
+| `bertscore` | BERTScore's PyTorch transformer | several hundred MB | ~2–4 GB+ | Heaviest of the `[model]` measures — **GPU strongly recommended** (defaults to a large model); CPU possible but slow |
+| `embedding_cosine` / `wmd` — `glove` | `glove-wiki-gigaword-50` | ~200 MB | ~0.5–1 GB | **CPU fine**; pure vector dot-product / WMD (CPU-bound) |
+| `embedding_cosine` — `fasttext` | `fasttext-wiki-news-subwords-300` | ~2 GB download | **~4–8 GB RAM** to hold the 300-d matrix in memory | **CPU only** (no vector-GPU path used); WMD over this size is memory/CPU heavy |
+| `embedding_cosine` — ConceptNet **local** | `conceptnet-numberbatch-17-06-300` | ~1.2 GB download | **~3–6 GB RAM** | **CPU only**; large matrix |
+| `embedding_cosine` — ConceptNet **remote** | *(no local model)* | 0 MB, network-only | n/a (server-side) | Requires **network**, not local CPU/GPU — see [ConceptNet](#conceptnet-numberbatch-local-vs-remote) |
+
+Three practical consequences, beyond download size:
+
+- **RAM scales with model size, not download size.** A ~2 GB downloaded
+  float32 gensim model needs ~4–8 GB of resident RAM once loaded — and it
+  stays cached in `src/model_cache.py` for the life of the process. Loading
+  several heavy models at once (e.g. fasttext **and** BERTScore) can exhaust
+  a small server.
+- **Inference is per-request CPU/GPU work.** `sbert_cosine`,
+  `cross_encoder`, `bertscore` and `semantic_search` run the transformer
+  forward pass once per input pair (per candidate for `semantic_search`).
+  Throughput is bounded by CPU cores or GPU, *not* by bandwidth — these are
+  not disk-bound; they are compute-bound.
+- **The service is fully CPU-capable** (`requires_gpu: false` in the
+  catalog): no measure *requires* a GPU; GPU only reduces latency/raises
+  throughput for the heavy transformer measures. PyTorch (`[model]` extra)
+  installs in CPU-only mode by default and uses the GPU automatically if one
+  is present.
+
+**Summary sizing guidance** for the optional `[model]` extra on a shared host:
+
+- **Minimal** (`sbert_cosine` / `semantic_search` only, default MiniLM): ~2 CPU
+  cores, 2 GB RAM, ~0.5 GB disk for the model — no GPU.
+- **Recommended** (`cross_encoder` + `bertscore`): 4+ CPU cores, 8 GB RAM,
+  ~1–2 GB disk; a small GPU (e.g. 4–8 GB VRAM) for interactive latency.
+- **Heavy embeddings** (fasttext / ConceptNet Numberbatch local): 8–16 GB RAM
+  and plentiful disk; CPU-only, no GPU benefit.
 
 ## `embedding_cosine`
 
