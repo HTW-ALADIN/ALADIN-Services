@@ -426,6 +426,11 @@ class TestOdenetRelations:
 
 
 class TestSbertModelName:
+    @pytest.fixture(autouse=True)
+    def _require_sentence_transformers(self):
+        """Skips when the optional [model] extra (PyTorch) is not installed."""
+        pytest.importorskip("sentence_transformers")
+
     def test_default_model_name(self, monkeypatch):
         captured: list[str] = []
 

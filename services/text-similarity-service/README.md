@@ -352,6 +352,20 @@ make lint    # run ruff
 make start   # run uvicorn on :8000
 ```
 
+Test-suite notes (also enforced in CI):
+
+- Default addopts (`pyproject.toml`) deselect the `model_download` and
+  `network` markers, so the offline, no-PyTorch path is what `make test` runs:
+  `pytest -m "not model_download and not network"`.
+- Deselection is the responsibility of `-m`. **An explicit `-m` on the CLI
+  replaces (does not merge with) the `addopts -m`.** If you narrow the filter
+  (e.g. to `-m "not model_download"`), the `network` tests — which hit the
+  real `api.conceptnet.io` — will run and fail intermittently on a live 502.
+  Keep both markers in any override: `-m "not model_download and not network"`.
+- The WordNet-backed measures need the small NLTK corpora
+  (`wordnet`, `wordnet_ic`). `tests/conftest.py` downloads them automatically
+  on first run, so a fresh checkout passes without manual data setup.
+
 ## Environment variables
 
 | Variable | Default | Description |
