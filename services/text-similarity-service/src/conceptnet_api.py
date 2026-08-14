@@ -49,13 +49,25 @@ _last_request_ts = 0.0
 
 
 def _throttle() -> None:
-    """Enforce a minimum spacing between consecutive remote requests."""
+    """Enforce a minimum spacing between consecutive remote requests.
+
+    The lock is held only long enough to atomically claim the next permitted
+    send slot; the actual ``time.sleep`` happens *outside* the lock. This keeps
+    the rate limit while letting unrelated concurrent work proceed instead of
+    blocking behind a thread that is sleeping.
+    """
     global _last_request_ts
+    wait = 0.0
     with _throttle_lock:
         now = time.monotonic()
-        if (wait := REMOTE_REQUEST_DELAY - (now - _last_request_ts)) > 0:
-            time.sleep(wait)
-        _last_request_ts = now
+        next_allowed = _last_request_ts + REMOTE_REQUEST_DELAY
+        if next_allowed > now:
+            wait = next_allowed - now
+            _last_request_ts = next_allowed  # claim this slot atomically
+        else:
+            _last_request_ts = now
+    if wait > 0:
+        time.sleep(wait)
 
 
 def _to_conceptnet_uri(word: str, lang: str = DEFAULT_LANG) -> str:

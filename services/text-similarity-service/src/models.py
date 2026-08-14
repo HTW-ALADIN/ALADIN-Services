@@ -7,7 +7,7 @@ API where every compute endpoint takes ``algorithm`` + optional ``backend``
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # ─── Limits ────────────────────────────────────────────────────────────────────
 MAX_TEXT_LENGTH = 100_000
@@ -31,6 +31,17 @@ class RetrievalInput(BaseModel):
     id: str
     query: str = Field(..., max_length=MAX_TEXT_LENGTH)
     candidates: list[str] = Field(..., max_length=MAX_BATCH_SIZE)
+
+    @field_validator("candidates")
+    @classmethod
+    def _limit_candidates(cls, v: list[str]) -> list[str]:
+        for cand in v:
+            if len(cand) > MAX_TEXT_LENGTH:
+                raise ValueError(f"each candidate must be at most {MAX_TEXT_LENGTH} characters")
+        total = sum(len(cand) for cand in v)
+        if total > MAX_TEXT_LENGTH:
+            raise ValueError(f"total candidate length per input must be at most {MAX_TEXT_LENGTH} characters")
+        return v
 
 
 class LexicalInput(BaseModel):

@@ -1,6 +1,7 @@
 """Singleton caching for loaded models (SBERT, gensim, CrossEncoder)."""
 
 import os
+import threading
 from collections.abc import Callable
 from typing import Any
 
@@ -9,15 +10,22 @@ from typing import Any
 # Runtime model downloads above this threshold (in MB) require an explicit
 # opt-in BEFORE the first download — they must never be triggered silently.
 # Below the threshold (e.g. glove ~200 MB) downloads run automatically.
+# Sizes not in the known table are resolved via the gensim downloader metadata
+# so an arbitrary ``params.model_name`` (e.g. a multi-GB model) still gates on
+# its real size before any download is triggered.
 LARGE_DOWNLOAD_THRESHOLD_MB = 500
 
-# Known gensim-data download sizes (MB) for models above the threshold. Only
-# models listed here are gated; smaller models and the remote ConceptNet API
-# (0 MB) need no opt-in.
+# Known gensim-data download sizes (MB) for models above the threshold. The
+# known-size table is a fast path; models not listed here are resolved via the
+# gensim downloader metadata (see ``_gensim_info_size_mb``).
 _GENSIM_LARGE_MODELS_MB = {
     "fasttext-wiki-news-subwords-300": 2048,
     "conceptnet-numberbatch-17-06-300": 1229,
 }
+
+# Cache of resolved gensim download sizes (MB) by model name, so the metadata
+# lookup happens at most once per model.
+_GENSIM_INFO_SIZES_MB: dict[str, int] = {}
 
 # Env var that unlocks large runtime downloads server-wide (default: false).
 ALLOW_LARGE_MODEL_DOWNLOADS_ENV = "ALLOW_LARGE_MODEL_DOWNLOADS"
@@ -44,8 +52,13 @@ def require_large_download_ok(model_name: str, params: dict[str, Any] | None = N
     the gate exists purely to stop silent first-time downloads. Opt-in is either
     per-request (``params.confirm_large_download: true``) or server-wide
     (``ALLOW_LARGE_MODEL_DOWNLOADS=true``).
+
+    Models are gated if they exceed the threshold, whether listed in the
+    known-size table or resolved from the gensim downloader metadata. Names the
+    metadata cannot resolve are treated as 0 MB — that is not a bypass, since a
+    model gensim cannot locate cannot be downloaded at all.
     """
-    size_mb = _GENSIM_LARGE_MODELS_MB.get(model_name, 0)
+    size_mb = _resolve_download_size_mb(model_name)
     if size_mb <= LARGE_DOWNLOAD_THRESHOLD_MB:
         return
     if f"gensim:{model_name}" in _models:
@@ -60,13 +73,55 @@ def require_large_download_ok(model_name: str, params: dict[str, Any] | None = N
         raise LargeModelDownloadBlocked(model_name, size_mb)
 
 
+def _resolve_download_size_mb(model_name: str) -> int:
+    """Return the expected download size (MB) for a model.
+
+    Known gensim-data resources are cached in ``_GENSIM_LARGE_MODELS_MB`` (fast
+    path). Any other name (e.g. an explicit ``params.model_name`` such as
+    ``word2vec-google-news-300``) is resolved against the gensim downloader
+    metadata to get its real ``filesize``. Unlocatable names resolve to 0 MB —
+    that is not a bypass, because a model gensim cannot locate cannot be
+    downloaded at all and ``api.load`` fails on its own.
+    """
+    known = _GENSIM_LARGE_MODELS_MB.get(model_name)
+    if known is not None:
+        return known
+    return _gensim_info_size_mb(model_name)
+
+
+def _gensim_info_size_mb(model_name: str) -> int:
+    """Look up a model's download size (MB) via gensim's downloader metadata (cached)."""
+    cached = _GENSIM_INFO_SIZES_MB.get(model_name)
+    if cached is not None:
+        return cached
+    size_mb = 0
+    try:
+        import gensim.downloader as api
+
+        meta = api.info(name=model_name)
+        size_bytes = meta.get("filesize", 0)
+        size_mb = int(round(size_bytes / (1024 * 1024))) if isinstance(size_bytes, (int, float)) else 0
+    except Exception:  # noqa: BLE001  # unknown/unavailable metadata -> treat as unresolvable
+        size_mb = 0
+    _GENSIM_INFO_SIZES_MB[model_name] = size_mb
+    return size_mb
+
+
 _models: dict[str, Any] = {}
+_models_lock = threading.Lock()
 
 
 def _get(key: str, factory: Callable[[], Any]) -> Any:
-    if key not in _models:
-        _models[key] = factory()
-    return _models[key]
+    """Return the cached value for ``key``, loading it once via ``factory``.
+
+    A module-level lock guards the check-then-set so two concurrent requests
+    cannot both invoke ``factory()`` (each triggering a multi-GB model download)
+    under a multi-worker or threaded deployment.
+    """
+    with _models_lock:
+        if key not in _models:
+            _models[key] = factory()
+        return _models[key]
 
 
 def get_sbert_model(model_name: str = "all-MiniLM-L6-v2") -> Any:
@@ -109,4 +164,5 @@ ODENET_ID = "odenet:1.4"
 
 def clear_all() -> None:
     """Clear all cached models (useful for testing)."""
-    _models.clear()
+    with _models_lock:
+        _models.clear()

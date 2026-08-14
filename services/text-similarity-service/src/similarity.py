@@ -6,7 +6,6 @@ DKPro-sidecar measures (topic_model, structural_stylistic) are routed
 externally via dkpro_proxy and have no in-process implementation here.
 """
 
-import math
 import time
 from functools import partial
 from typing import Any
@@ -23,15 +22,34 @@ _SIMILARITY_KEYS = {
 
 
 def _normalize_similarity(raw: float, measure: str, backend: str) -> dict[str, Any]:
-    """Normalize raw output to {'raw', 'similarity', 'distance'} with similarity in [0,1]."""
+    """Normalize raw output to {'raw', 'similarity', 'distance'} with similarity in [0,1].
+
+    ``distance`` is always ``1 - similarity`` so the two fields are mutually
+    consistent. For measures whose raw value is already a similarity in [0,1]
+    the raw value is used as-is (clamped to stay within the documented range);
+    otherwise the raw value is a distance and is mapped into [0,1] monotonically.
+    """
+
+    def _clamp_similarity(sim: float) -> float:
+        if sim < 0.0:
+            return 0.0
+        if sim > 1.0:
+            return 1.0
+        return sim
+
     result: dict[str, Any] = {"raw": raw}
     key = (measure, backend)
     if key in _SIMILARITY_KEYS:
-        result["similarity"] = raw
-        result["distance"] = 1.0 - min(raw, 1.0) if measure == "wordnet_similarity" else 1.0 - raw
+        # wordnet WUP/LCH/path are similarities in [0,1], but the IC-based
+        # variants (res/jcn/lin) are unbounded — clamp so 'similarity' never
+        # violates the documented [0,1] range. distance stays consistent.
+        result["similarity"] = _clamp_similarity(raw)
+        result["distance"] = 1.0 - result["similarity"]
     elif measure == "wmd" and backend == "gensim":
+        # WMD is a distance in embedding space (can saturate well above 1).
+        # Map monotonically into (0,1] with distance as the raw value.
         result["distance"] = raw
-        result["similarity"] = math.exp(-raw)
+        result["similarity"] = 1.0 / (1.0 + raw) if raw >= 0 else 1.0
     else:
         result["distance"] = raw
         result["similarity"] = 1.0 / (1.0 + raw) if raw >= 0 else 0.0

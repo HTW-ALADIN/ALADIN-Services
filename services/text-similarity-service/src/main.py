@@ -58,7 +58,7 @@ async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONR
 
 
 @app.get("/health")
-async def health():
+def health():
     return {"status": "ok", "service": "text-similarity-service"}
 
 
@@ -66,7 +66,7 @@ async def health():
 
 
 @app.get("/v1/text/algorithms")
-async def list_algorithms() -> list[dict]:
+def list_algorithms() -> list[dict]:
     """Discovery: list all algorithm/backend combinations with metadata."""
     return CATALOG
 
@@ -128,7 +128,7 @@ def _run_batch(
 
 
 @app.post("/v1/text/distance")
-async def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
+def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
     """Compute similarity scores for a batch of text pairs (synchronous)."""
     algorithm = request.algorithm
     backend = _resolve_backend(DEFAULT_BACKENDS, algorithm, request.backend)
@@ -193,7 +193,7 @@ async def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
 
 
 @app.post("/v1/text/retrieval")
-async def text_retrieval(request: RetrievalRequest) -> TextComputeResponse:
+def text_retrieval(request: RetrievalRequest) -> TextComputeResponse:
     """Rank query candidates for a batch of retrieval queries (synchronous)."""
     algorithm = request.algorithm
     backend = _resolve_backend(DEFAULT_RETRIEVAL_BACKENDS, algorithm, request.backend)
@@ -216,7 +216,7 @@ async def text_retrieval(request: RetrievalRequest) -> TextComputeResponse:
 
 
 @app.post("/v1/text/lexical")
-async def text_lexical(request: LexicalRequest) -> TextComputeResponse:
+def text_lexical(request: LexicalRequest) -> TextComputeResponse:
     """Look up lexical relations for a batch of words (synchronous)."""
     algorithm = request.algorithm
     backend = _resolve_backend(DEFAULT_LEXICAL_BACKENDS, algorithm, request.backend)
