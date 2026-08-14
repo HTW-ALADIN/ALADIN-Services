@@ -112,18 +112,18 @@ jobs:
 
           # Smoke test: algorithms discovery
           echo "=== Text algorithms discovery ==="
-          curl -sf http://localhost:8000/v1/text/algorithms | python -c "import sys,json; d=json.load(sys.stdin); assert len(d)>0, 'No algorithms'; print(f'Found {len(d)} algorithm/backend entries')"
+          curl -sf http://localhost:8000/v1/similarity/text/algorithms | python -c "import sys,json; d=json.load(sys.stdin); assert len(d)>0, 'No algorithms'; print(f'Found {len(d)} algorithm/backend entries')"
 
           # Smoke test: distance compute (token-set Jaccard — base, no model)
           echo "=== Distance compute ==="
-          curl -sf -X POST http://localhost:8000/v1/text/distance \
+          curl -sf -X POST http://localhost:8000/v1/similarity/text/distance \
             -H 'Content-Type: application/json' \
             -d '{"algorithm":"jaccard","params":{},"inputs":[{"id":"p1","a":"the cat is here","b":"the cat is there"}]}' \
             | python -c "import sys,json; d=json.load(sys.stdin); assert d['algorithm']=='jaccard'; assert len(d['results'])==1; assert d['results'][0]['result']['similarity']==0.6; print('Jaccard: OK')"
 
           # Smoke test: retrieval compute (BM25 — base, no model)
           echo "=== Retrieval compute ==="
-          curl -sf -X POST http://localhost:8000/v1/text/retrieval \
+          curl -sf -X POST http://localhost:8000/v1/similarity/text/retrieval \
             -H 'Content-Type: application/json' \
             -d '{"algorithm":"bm25","params":{},"inputs":[{"id":"q1","query":"cat","candidates":["a cat","a dog","house"]}]}' \
             | python -c "import sys,json; d=json.load(sys.stdin); assert d['algorithm']=='bm25'; assert d['results'][0]['result']['count']>0; print('BM25: OK')"

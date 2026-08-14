@@ -21,6 +21,17 @@ class TestModelCache:
 class TestWordNetIC:
     """WordNet Information Content dependency documentation."""
 
+    @pytest.fixture(autouse=True)
+    def _require_wordnet(self):
+        """Skip when the NLTK wordnet corpus is not available (offline run)."""
+        pytest.importorskip("nltk")
+        try:
+            from nltk.corpus import wordnet as wn
+
+            _ = wn.synsets("dog")
+        except LookupError:
+            pytest.skip("NLTK wordnet data not downloaded")
+
     def test_ic_required_error(self):
         """res/jcn/lin variants should fail with a clear message if IC not provided."""
         from src.similarity import compute_similarity
