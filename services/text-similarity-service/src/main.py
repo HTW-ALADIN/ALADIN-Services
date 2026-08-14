@@ -65,7 +65,7 @@ def health():
 # ─── Discovery ────────────────────────────────────────────────────────────────
 
 
-@app.get("/v1/text/algorithms")
+@app.get("/v1/similarity/text/algorithms")
 def list_algorithms() -> list[dict]:
     """Discovery: list all algorithm/backend combinations with metadata."""
     return CATALOG
@@ -124,10 +124,10 @@ def _run_batch(
     return results, round(total_ms, 2)
 
 
-# ─── POST /v1/text/distance — text similarity ────────────────────────────────
+# ─── POST /v1/similarity/text/distance — text similarity ─────────────────────
 
 
-@app.post("/v1/text/distance")
+@app.post("/v1/similarity/text/distance")
 def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
     """Compute similarity scores for a batch of text pairs (synchronous)."""
     algorithm = request.algorithm
@@ -189,10 +189,10 @@ def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
     return TextComputeResponse(algorithm=algorithm, backend=backend, results=results, meta={"compute_time_ms": total_ms})
 
 
-# ─── POST /v1/text/retrieval — retrieval ─────────────────────────────────────
+# ─── POST /v1/similarity/text/retrieval — retrieval ──────────────────────────
 
 
-@app.post("/v1/text/retrieval")
+@app.post("/v1/similarity/text/retrieval")
 def text_retrieval(request: RetrievalRequest) -> TextComputeResponse:
     """Rank query candidates for a batch of retrieval queries (synchronous)."""
     algorithm = request.algorithm
@@ -212,10 +212,10 @@ def text_retrieval(request: RetrievalRequest) -> TextComputeResponse:
     return TextComputeResponse(algorithm=algorithm, backend=backend, results=results, meta={"compute_time_ms": total_ms})
 
 
-# ─── POST /v1/text/lexical — lexical relations ───────────────────────────────
+# ─── POST /v1/similarity/text/lexical — lexical relations ────────────────────
 
 
-@app.post("/v1/text/lexical")
+@app.post("/v1/similarity/text/lexical")
 def text_lexical(request: LexicalRequest) -> TextComputeResponse:
     """Look up lexical relations for a batch of words (synchronous)."""
     algorithm = request.algorithm

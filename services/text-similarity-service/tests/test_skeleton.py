@@ -15,12 +15,12 @@ def test_health():
 
 
 def test_algorithms_catalog():
-    """GET /v1/text/algorithms lists all 16 semantic algorithm families.
+    """GET /v1/similarity/text/algorithms lists all 16 semantic algorithm families.
 
     jaccard/dice are legacy aliases of token_set_overlap and therefore do not
     count as separate families.
     """
-    resp = client.get("/v1/text/algorithms")
+    resp = client.get("/v1/similarity/text/algorithms")
     assert resp.status_code == 200
     catalog = resp.json()
     algorithms = {e["algorithm"] for e in catalog}
@@ -75,9 +75,9 @@ def test_algorithms_catalog():
 
 
 def test_compute_tfidf():
-    """POST /v1/text/distance with tfidf_cosine returns a similarity result."""
+    """POST /v1/similarity/text/distance with tfidf_cosine returns a similarity result."""
     resp = client.post(
-        "/v1/text/distance",
+        "/v1/similarity/text/distance",
         json={
             "algorithm": "tfidf_cosine",
             "params": {},
@@ -94,7 +94,7 @@ def test_compute_tfidf():
 
 
 def test_compute_wordnet():
-    """POST /v1/text/distance with wordnet_similarity (path)."""
+    """POST /v1/similarity/text/distance with wordnet_similarity (path)."""
     try:
         from nltk.corpus import wordnet as wn
 
@@ -102,7 +102,7 @@ def test_compute_wordnet():
     except LookupError:
         pytest.skip("NLTK wordnet data not downloaded")
     resp = client.post(
-        "/v1/text/distance",
+        "/v1/similarity/text/distance",
         json={
             "algorithm": "wordnet_similarity",
             "params": {"variant": "path"},
@@ -118,7 +118,7 @@ def test_compute_wordnet():
 def test_compute_batch():
     """Batch inputs return one result per input."""
     resp = client.post(
-        "/v1/text/distance",
+        "/v1/similarity/text/distance",
         json={
             "algorithm": "tfidf_cosine",
             "params": {},
@@ -136,7 +136,7 @@ def test_compute_batch():
 def test_compute_unknown_algorithm():
     """Unknown algorithm returns 400 problem+json."""
     resp = client.post(
-        "/v1/text/distance",
+        "/v1/similarity/text/distance",
         json={"algorithm": "nonexistent", "params": {}, "inputs": [{"id": "p1", "a": "a", "b": "b"}]},
     )
     assert resp.status_code == 400
@@ -147,20 +147,20 @@ def test_compute_unknown_algorithm():
 def test_compute_unsupported_backend():
     """Unsupported backend for an algorithm returns 400."""
     resp = client.post(
-        "/v1/text/distance",
+        "/v1/similarity/text/distance",
         json={"algorithm": "wordnet_similarity", "backend": "nonexistent", "params": {}, "inputs": [{"id": "p1", "a": "a", "b": "b"}]},
     )
     assert resp.status_code == 400
 
 
 def test_compute_bm25():
-    """POST /v1/text/retrieval with bm25 (base, no model) returns ranked matches.
+    """POST /v1/similarity/text/retrieval with bm25 (base, no model) returns ranked matches.
 
     bm25 is the sole base-tier lexical retrieval algorithm — the former
     semantic_search TF-IDF backend was removed.
     """
     resp = client.post(
-        "/v1/text/retrieval",
+        "/v1/similarity/text/retrieval",
         json={
             "algorithm": "bm25",
             "params": {"top_k": 3},
@@ -175,7 +175,7 @@ def test_compute_bm25():
 
 
 def test_compute_synonym():
-    """POST /v1/text/lexical with synonym."""
+    """POST /v1/similarity/text/lexical with synonym."""
     try:
         from nltk.corpus import wordnet as wn
 
@@ -183,7 +183,7 @@ def test_compute_synonym():
     except LookupError:
         pytest.skip("NLTK wordnet data not downloaded")
     resp = client.post(
-        "/v1/text/lexical",
+        "/v1/similarity/text/lexical",
         json={"algorithm": "synonym", "params": {}, "inputs": [{"id": "w1", "word": "dog"}]},
     )
     assert resp.status_code == 200

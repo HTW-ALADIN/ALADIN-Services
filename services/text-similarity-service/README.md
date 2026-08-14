@@ -38,27 +38,27 @@ Three independent things matter for how expensive the service is to run:
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Health check |
-| `GET` | `/v1/text/algorithms` | Discovery — list all algorithm/backend combinations with metadata |
-| `POST` | `/v1/text/distance` | Compute text similarity (synchronous, batch) |
-| `POST` | `/v1/text/retrieval` | Rank query candidates (synchronous, batch) |
-| `POST` | `/v1/text/lexical` | Look up lexical relations (synchronous, batch) |
+| `GET` | `/v1/similarity/text/algorithms` | Discovery — list all algorithm/backend combinations with metadata |
+| `POST` | `/v1/similarity/text/distance` | Compute text similarity (synchronous, batch) |
+| `POST` | `/v1/similarity/text/retrieval` | Rank query candidates (synchronous, batch) |
+| `POST` | `/v1/similarity/text/lexical` | Look up lexical relations (synchronous, batch) |
 
 Every compute endpoint is synchronous and stateless: `algorithm` (+ optional
 `backend`), `params`, and a batch `inputs` list in, one result per input out.
 Omitted `backend` uses the algorithm's default (marked `default: true` in
-`/v1/text/algorithms`).
+`/v1/similarity/text/algorithms`).
 
 ## Algorithms
 
-- **`/v1/text/distance`** — two texts in, one normalized score out:
+- **`/v1/similarity/text/distance`** — two texts in, one normalized score out:
   `wordnet_similarity`, `embedding_cosine`, `sbert_cosine`, `wmd`,
   `cross_encoder`, `tfidf_cosine`, `token_set_overlap` (variants `jaccard`/`dice`),
   `bertscore`, `topic_model`, `structural_stylistic`.
   Inputs: `{"id", "a", "b"}`.
-- **`/v1/text/retrieval`** — query + candidates in, ranked matches out:
+- **`/v1/similarity/text/retrieval`** — query + candidates in, ranked matches out:
   `semantic_search` (`[model]`), `bm25` (base).
   Inputs: `{"id", "query", "candidates"}`.
-- **`/v1/text/lexical`** — one word in, related words out:
+- **`/v1/similarity/text/lexical`** — one word in, related words out:
   `synonym`, `antonym`, `hypernym`, `hyponym`.
   Inputs: `{"id", "word"}`.
 
@@ -69,7 +69,7 @@ Omitted `backend` uses the algorithm's default (marked `default: true` in
 ## Example
 
 ```sh
-curl -s -X POST http://localhost:8000/v1/text/distance \
+curl -s -X POST http://localhost:8000/v1/similarity/text/distance \
   -H "Content-Type: application/json" \
   -d '{
     "algorithm": "wordnet_similarity",
@@ -161,14 +161,14 @@ sizes live in `src/model_cache.py` (`LARGE_DOWNLOAD_THRESHOLD_MB`).
 
 ```sh
 # blocked
-curl -s -X POST http://localhost:8000/v1/text/distance \
+curl -s -X POST http://localhost:8000/v1/similarity/text/distance \
   -d '{"algorithm": "embedding_cosine", "params": {"variant": "fasttext"},
        "inputs": [{"id": "p1", "a": "cat", "b": "dog"}]}' | jq .
 # → 400: "requires an ~2048 MB runtime download ... set params.confirm_large_download=true
 #    or ALLOW_LARGE_MODEL_DOWNLOADS=true"
 
 # unblocked (per-request opt-in; or set ALLOW_LARGE_MODEL_DOWNLOADS=true once, server-side)
-curl -s -X POST http://localhost:8000/v1/text/distance \
+curl -s -X POST http://localhost:8000/v1/similarity/text/distance \
   -d '{"algorithm": "embedding_cosine",
        "params": {"variant": "fasttext", "confirm_large_download": true},
        "inputs": [{"id": "p1", "a": "cat", "b": "dog"}]}' | jq .
@@ -297,25 +297,25 @@ different scale. One algorithm, `token_set_overlap`, with `params.variant`
 (`jaccard` default, or `dice`); pure Python, base tier, deterministic
 (lowercase + whitespace tokenizer). Empty/empty scores `1.0`; one empty side
 scores `0.0`. The legacy names `jaccard`/`dice` remain as aliases
-(`alias_of: token_set_overlap` in `/v1/text/algorithms`) for existing
+(`alias_of: token_set_overlap` in `/v1/similarity/text/algorithms`) for existing
 consumers.
 
 ```sh
-curl -s -X POST http://localhost:8000/v1/text/distance \
+curl -s -X POST http://localhost:8000/v1/similarity/text/distance \
   -d '{"algorithm": "token_set_overlap", "params": {"variant": "dice"},
        "inputs": [{"id": "p1", "a": "the cat is here", "b": "the cat is there"}]}' | jq .
 ```
 
 ## BM25
 
-Pure-stdlib BM25 retrieval on `/v1/text/retrieval` — the sole base-tier
+Pure-stdlib BM25 retrieval on `/v1/similarity/text/retrieval` — the sole base-tier
 retrieval algorithm (the former TF-IDF fallback backend of `semantic_search`
 was removed; `semantic_search` is now `[model]`-only via
 sentence-transformers). Same `matches`/`count` response shape as
 `semantic_search`. Params: `k1` (1.5), `b` (0.75), `top_k` (10).
 
 ```sh
-curl -s -X POST http://localhost:8000/v1/text/retrieval \
+curl -s -X POST http://localhost:8000/v1/similarity/text/retrieval \
   -d '{"algorithm": "bm25", "params": {"top_k": 3},
        "inputs": [{"id": "q1", "query": "cat", "candidates": ["a cat", "a dog", "house"]}]}' | jq .
 ```

@@ -22,11 +22,11 @@
         }
       }
     },
-    "/v1/text/algorithms": {
+    "/v1/similarity/text/algorithms": {
       "get": {
         "summary": "List Algorithms",
         "description": "Discovery: list all algorithm/backend combinations with metadata.",
-        "operationId": "list_algorithms_v1_text_algorithms_get",
+        "operationId": "list_algorithms_v1_similarity_text_algorithms_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -38,7 +38,7 @@
                     "type": "object"
                   },
                   "type": "array",
-                  "title": "Response List Algorithms V1 Text Algorithms Get"
+                  "title": "Response List Algorithms V1 Similarity Text Algorithms Get"
                 }
               }
             }
@@ -46,11 +46,11 @@
         }
       }
     },
-    "/v1/text/distance": {
+    "/v1/similarity/text/distance": {
       "post": {
         "summary": "Text Distance",
         "description": "Compute similarity scores for a batch of text pairs (synchronous).",
-        "operationId": "text_distance_v1_text_distance_post",
+        "operationId": "text_distance_v1_similarity_text_distance_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -85,11 +85,11 @@
         }
       }
     },
-    "/v1/text/retrieval": {
+    "/v1/similarity/text/retrieval": {
       "post": {
         "summary": "Text Retrieval",
         "description": "Rank query candidates for a batch of retrieval queries (synchronous).",
-        "operationId": "text_retrieval_v1_text_retrieval_post",
+        "operationId": "text_retrieval_v1_similarity_text_retrieval_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -124,11 +124,11 @@
         }
       }
     },
-    "/v1/text/lexical": {
+    "/v1/similarity/text/lexical": {
       "post": {
         "summary": "Text Lexical",
         "description": "Look up lexical relations for a batch of words (synchronous).",
-        "operationId": "text_lexical_v1_text_lexical_post",
+        "operationId": "text_lexical_v1_similarity_text_lexical_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -197,7 +197,7 @@
           "word"
         ],
         "title": "LexicalInput",
-        "description": "One word for POST /v1/text/lexical."
+        "description": "One word for POST /v1/similarity/text/lexical."
       },
       "LexicalRequest": {
         "properties": {
@@ -236,7 +236,7 @@
           "inputs"
         ],
         "title": "LexicalRequest",
-        "description": "Request body for POST /v1/text/lexical."
+        "description": "Request body for POST /v1/similarity/text/lexical."
       },
       "RetrievalInput": {
         "properties": {
@@ -265,7 +265,7 @@
           "candidates"
         ],
         "title": "RetrievalInput",
-        "description": "One query + candidate list for POST /v1/text/retrieval."
+        "description": "One query + candidate list for POST /v1/similarity/text/retrieval."
       },
       "RetrievalRequest": {
         "properties": {
@@ -304,7 +304,7 @@
           "inputs"
         ],
         "title": "RetrievalRequest",
-        "description": "Request body for POST /v1/text/retrieval."
+        "description": "Request body for POST /v1/similarity/text/retrieval."
       },
       "SimilarityInput": {
         "properties": {
@@ -330,7 +330,7 @@
           "b"
         ],
         "title": "SimilarityInput",
-        "description": "One text pair for POST /v1/text/distance."
+        "description": "One text pair for POST /v1/similarity/text/distance."
       },
       "TextComputeResponse": {
         "properties": {
@@ -362,7 +362,7 @@
           "results"
         ],
         "title": "TextComputeResponse",
-        "description": "Response for every POST /v1/text/* endpoint."
+        "description": "Response for every POST /v1/similarity/text/* endpoint."
       },
       "TextDistanceRequest": {
         "properties": {
@@ -401,7 +401,7 @@
           "inputs"
         ],
         "title": "TextDistanceRequest",
-        "description": "Request body for POST /v1/text/distance."
+        "description": "Request body for POST /v1/similarity/text/distance."
       },
       "TextResult": {
         "properties": {

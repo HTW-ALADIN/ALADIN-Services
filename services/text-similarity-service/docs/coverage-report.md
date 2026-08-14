@@ -1,8 +1,8 @@
 # Coverage Report — Semantic Text Similarity, 16/16 Families
 
-Maps the current service catalog (`GET /v1/text/algorithms`) to the 16 algorithm
+Maps the current service catalog (`GET /v1/similarity/text/algorithms`) to the 16 algorithm
 families and their verification status via the compute endpoints
-(`POST /v1/text/distance`, `POST /v1/text/retrieval`, `POST /v1/text/lexical`).
+(`POST /v1/similarity/text/distance`, `POST /v1/similarity/text/retrieval`, `POST /v1/similarity/text/lexical`).
 
 | # | Family | Algorithm | Operation | Backend | Extra / Status |
 |---|---|---|---|---|---|
@@ -28,7 +28,7 @@ families and their verification status via the compute endpoints
 `jaccard` and `dice` are **not** separate families — they are legacy alias
 algorithm names for family 7 (`token_set_overlap`) with the variant pinned
 (`alias_of` / `fixed_variant` in the catalog). They remain listed in
-`/v1/text/algorithms` so existing consumers keep working unchanged.
+`/v1/similarity/text/algorithms` so existing consumers keep working unchanged.
 
 ## Legend
 

@@ -1,4 +1,4 @@
-"""Measure/algorithm catalog — single source of truth for GET /v1/text/algorithms.
+"""Measure/algorithm catalog — single source of truth for GET /v1/similarity/text/algorithms.
 
 One entry per (operation, algorithm, backend) combination, mirroring the
 edit-distance-service catalog shape. The first backend of each algorithm is

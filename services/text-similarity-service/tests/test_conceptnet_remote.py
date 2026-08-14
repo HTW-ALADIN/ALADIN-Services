@@ -93,7 +93,7 @@ class _FakeKeyedVectors:
 
 def _post_remote(params, inputs):
     return client.post(
-        "/v1/text/distance",
+        "/v1/similarity/text/distance",
         json={"algorithm": "embedding_cosine", "params": params, "inputs": inputs},
     )
 

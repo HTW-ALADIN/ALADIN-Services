@@ -39,7 +39,7 @@ class TestSidecarFailure:
         monkeypatch.setattr("src.dkpro_proxy.SIDECAR_BASE_URL", "http://127.0.0.1:59999")
 
         resp = client.post(
-            "/v1/text/distance",
+            "/v1/similarity/text/distance",
             json={
                 "algorithm": "topic_model",
                 "params": {"variant": "lsa"},
@@ -57,7 +57,7 @@ class TestSidecarFailure:
 
         for algorithm in ("tfidf_cosine", "wordnet_similarity"):
             resp = client.post(
-                "/v1/text/distance",
+                "/v1/similarity/text/distance",
                 json={
                     "algorithm": algorithm,
                     "backend": "dkpro",

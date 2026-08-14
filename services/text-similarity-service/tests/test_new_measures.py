@@ -66,7 +66,7 @@ class TestTokenSetOverlap:
 
     def test_api_canonical(self):
         resp = client.post(
-            "/v1/text/distance",
+            "/v1/similarity/text/distance",
             json={
                 "algorithm": "token_set_overlap",
                 "params": {"variant": "dice"},
@@ -106,7 +106,7 @@ class TestTokenSetAliases:
     def test_api_jaccard_alias(self):
         """Alias requests echo the requested algorithm name in the response."""
         resp = client.post(
-            "/v1/text/distance",
+            "/v1/similarity/text/distance",
             json={"algorithm": "jaccard", "params": {}, "inputs": [{"id": "p1", "a": "the cat is here", "b": "the cat is there"}]},
         )
         assert resp.status_code == 200
@@ -144,7 +144,7 @@ class TestBM25:
 
     def test_api_batch(self):
         resp = client.post(
-            "/v1/text/retrieval",
+            "/v1/similarity/text/retrieval",
             json={
                 "algorithm": "bm25",
                 "params": {},
@@ -339,7 +339,7 @@ class TestCostGate:
     def test_api_blocked_returns_400_problem_json(self):
         clear_all()
         resp = client.post(
-            "/v1/text/distance",
+            "/v1/similarity/text/distance",
             json={
                 "algorithm": "embedding_cosine",
                 "params": {"variant": "fasttext"},
@@ -362,7 +362,7 @@ class TestCostGate:
         monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
         clear_all()
         resp = client.post(
-            "/v1/text/distance",
+            "/v1/similarity/text/distance",
             json={
                 "algorithm": "embedding_cosine",
                 "params": {"variant": "fasttext", "confirm_large_download": True},
@@ -383,7 +383,7 @@ class TestOdenet:
         except ImportError:
             pass
         resp = client.post(
-            "/v1/text/lexical",
+            "/v1/similarity/text/lexical",
             json={"algorithm": "synonym", "backend": "odenet", "params": {}, "inputs": [{"id": "w1", "word": "Hund"}]},
         )
         assert resp.status_code == 501
@@ -465,7 +465,7 @@ class TestSbertModelName:
 
 class TestDiscoveryMetadata:
     def test_new_entries_have_semantic_metadata(self):
-        resp = client.get("/v1/text/algorithms")
+        resp = client.get("/v1/similarity/text/algorithms")
         catalog = resp.json()
         by_key = {(e["algorithm"], e["backend"]): e for e in catalog}
 

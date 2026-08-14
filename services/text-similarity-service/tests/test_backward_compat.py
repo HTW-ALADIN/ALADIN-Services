@@ -36,19 +36,19 @@ LEXICAL_PAYLOADS = [
 def test_base_payloads_still_valid():
     """Every core payload still returns 2xx."""
     for payload in DISTANCE_PAYLOADS:
-        resp = client.post("/v1/text/distance", json=payload)
+        resp = client.post("/v1/similarity/text/distance", json=payload)
         assert resp.status_code == 200, f"Core payload {payload} failed: HTTP {resp.status_code} — {resp.text}"
     for payload in RETRIEVAL_PAYLOADS:
-        resp = client.post("/v1/text/retrieval", json=payload)
+        resp = client.post("/v1/similarity/text/retrieval", json=payload)
         assert resp.status_code == 200, f"Core payload {payload} failed: HTTP {resp.status_code} — {resp.text}"
     for payload in LEXICAL_PAYLOADS:
-        resp = client.post("/v1/text/lexical", json=payload)
+        resp = client.post("/v1/similarity/text/lexical", json=payload)
         assert resp.status_code == 200, f"Core payload {payload} failed: HTTP {resp.status_code} — {resp.text}"
 
 
 def test_semantic_measures_still_listed():
     """All canonical semantic algorithm families must still be present in the catalog."""
-    resp = client.get("/v1/text/algorithms")
+    resp = client.get("/v1/similarity/text/algorithms")
     catalog = resp.json()
     algorithms = {e["algorithm"] for e in catalog}
     semantic_algorithms = {

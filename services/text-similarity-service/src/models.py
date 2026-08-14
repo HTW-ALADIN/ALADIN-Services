@@ -18,7 +18,7 @@ MAX_BATCH_SIZE = 500
 
 
 class SimilarityInput(BaseModel):
-    """One text pair for POST /v1/text/distance."""
+    """One text pair for POST /v1/similarity/text/distance."""
 
     id: str
     a: str = Field(..., max_length=MAX_TEXT_LENGTH)
@@ -26,7 +26,7 @@ class SimilarityInput(BaseModel):
 
 
 class RetrievalInput(BaseModel):
-    """One query + candidate list for POST /v1/text/retrieval."""
+    """One query + candidate list for POST /v1/similarity/text/retrieval."""
 
     id: str
     query: str = Field(..., max_length=MAX_TEXT_LENGTH)
@@ -45,7 +45,7 @@ class RetrievalInput(BaseModel):
 
 
 class LexicalInput(BaseModel):
-    """One word for POST /v1/text/lexical."""
+    """One word for POST /v1/similarity/text/lexical."""
 
     id: str
     word: str = Field(..., max_length=MAX_TEXT_LENGTH)
@@ -55,7 +55,7 @@ class LexicalInput(BaseModel):
 
 
 class TextDistanceRequest(BaseModel):
-    """Request body for POST /v1/text/distance."""
+    """Request body for POST /v1/similarity/text/distance."""
 
     algorithm: str
     backend: str | None = None  # None = auto-select the default backend
@@ -64,7 +64,7 @@ class TextDistanceRequest(BaseModel):
 
 
 class RetrievalRequest(BaseModel):
-    """Request body for POST /v1/text/retrieval."""
+    """Request body for POST /v1/similarity/text/retrieval."""
 
     algorithm: str
     backend: str | None = None  # None = auto-select the default backend
@@ -73,7 +73,7 @@ class RetrievalRequest(BaseModel):
 
 
 class LexicalRequest(BaseModel):
-    """Request body for POST /v1/text/lexical."""
+    """Request body for POST /v1/similarity/text/lexical."""
 
     algorithm: str
     backend: str | None = None  # None = auto-select the default backend
@@ -92,7 +92,7 @@ class TextResult(BaseModel):
 
 
 class TextComputeResponse(BaseModel):
-    """Response for every POST /v1/text/* endpoint."""
+    """Response for every POST /v1/similarity/text/* endpoint."""
 
     algorithm: str
     backend: str

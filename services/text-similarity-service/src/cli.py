@@ -143,7 +143,7 @@ def health(ctx: click.Context) -> None:
 @click.pass_context
 def list_algorithms(ctx: click.Context) -> None:
     """List all algorithm/backend combinations."""
-    data = _request("GET", "/v1/text/algorithms", ctx.obj["base"])
+    data = _request("GET", "/v1/similarity/text/algorithms", ctx.obj["base"])
     _output(data)
 
 
@@ -204,7 +204,7 @@ def distance(
         inputs = [{"id": "p1", "a": "car", "b": "automobile"}]
     payload["inputs"] = inputs
 
-    data = _request("POST", "/v1/text/distance", ctx.obj["base"], json=payload)
+    data = _request("POST", "/v1/similarity/text/distance", ctx.obj["base"], json=payload)
     _output(data)
 
 
@@ -264,7 +264,7 @@ def retrieval(
         inputs = [{"id": "q1", "query": "car", "candidates": ["automobile", "house", "vehicle"]}]
     payload["inputs"] = inputs
 
-    data = _request("POST", "/v1/text/retrieval", ctx.obj["base"], json=payload)
+    data = _request("POST", "/v1/similarity/text/retrieval", ctx.obj["base"], json=payload)
     _output(data)
 
 
@@ -319,7 +319,7 @@ def lexical(
         inputs = [{"id": "w1", "word": "dog"}]
     payload["inputs"] = inputs
 
-    data = _request("POST", "/v1/text/lexical", ctx.obj["base"], json=payload)
+    data = _request("POST", "/v1/similarity/text/lexical", ctx.obj["base"], json=payload)
     _output(data)
 
 
