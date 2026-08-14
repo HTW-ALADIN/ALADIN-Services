@@ -2,18 +2,18 @@
 
 > ⚠️ **OPTIONAL component.** This Java sidecar adds exactly 2 algorithm families
 > (`topic_model`, `structural_stylistic`) to the
-> [text-similarity-service](../), taking coverage from 91% → 100%. It is **not
+> [text-similarity-service](../), taking coverage from 14/16 → 16/16. It is **not
 > required** for normal operation: the Python service works fully without it.
 
 **Cost/benefit summary:**
 
 | | |
 |---|---|
-| ✅ **Benefit** | Families 22–23 (topic-model LSA/ESA, structural/stylistic) — the only 2 families with no Python alternative |
+| ✅ **Benefit** | Families 15–16 (topic-model LSA/ESA, structural/stylistic) — the only 2 families with no Python alternative |
 | ❌ **Cost** | DKPro is Java + Apache UIMA, **not on Maven Central** (must build from source), ~8 years stale upstream, runs as a separate JVM process |
-| ❌ **No new coverage** | The 5 backend variants it offers on `token_set`, `lcs`, `phonetic`, `tfidf_cosine`, `wordnet_similarity` are alternatives to already-covered tags |
+| ❌ **No new coverage** | The 2 backend extensions still routed (`tfidf_cosine`, `wordnet_similarity`) are alternatives to already-covered families; `token_set`/`lcs`/`phonetic` belong to removed char-distance families and are no longer routed |
 
-Skip it entirely if 91% coverage is sufficient — nothing else in the service
+Skip it entirely if 14/16 coverage is sufficient — nothing else in the service
 depends on it.
 
 ## Purpose
@@ -25,10 +25,9 @@ Python service.
 
 > **Status:** skeleton scaffolded (Phase 5). The two DKPro families
 > (topic_model, structural_stylistic) are implemented as placeholders (return 0.5).
-> The 5 optional backend extensions (Spec C §6.2) are also registered:
-> **token_set, lcs, phonetic, tfidf_cosine, wordnet_similarity** — all return
-> placeholder values until DKPro Similarity is built from source and added to
-> the classpath.
+> The 2 optional backend extensions still routed (`tfidf_cosine`,
+> `wordnet_similarity`) are also registered — all return placeholder values
+> until DKPro Similarity is built from source and added to the classpath.
 
 ## DKPro Dependency
 

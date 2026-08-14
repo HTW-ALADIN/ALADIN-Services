@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Text Similarity Service",
-    "description": "Unified REST API for semantic text similarity \u2014 13 algorithm families over 6 backends.",
+    "description": "Unified REST API for semantic text similarity \u2014 16 algorithm families over multiple backends.",
     "version": "0.1.0"
   },
   "paths": {

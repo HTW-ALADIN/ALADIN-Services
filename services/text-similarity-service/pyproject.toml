@@ -1,7 +1,7 @@
 [project]
 name = "text-similarity-service"
 version = "0.1.0"
-description = "Unified REST API for semantic text similarity — 13 algorithm families over 6 backends"
+description = "Unified REST API for semantic text similarity — 16 algorithm families over multiple backends"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [
@@ -31,6 +31,14 @@ model = [
     # BERTScore is flagged inactive upstream (no release in 12+ months).
     # Pin to the exact latest version and treat as vendored.
     "bert-score==0.3.13",
+]
+# German lexical relations via Odenet (Open German WordNet). ``wn`` is a small
+# pure-Python library (no PyTorch); the Odenet data itself is downloaded on
+# first use via ``python -m wn download odenet:1.4``. Kept separate from
+# ``model`` so enabling German lexical lookups never pulls in the 2.5 GB
+# PyTorch stack.
+de = [
+    "wn>=1.1.0",
 ]
 dev = [
     "pytest>=8.0.0",
@@ -64,6 +72,9 @@ select = ["E", "F", "I", "UP", "B"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["src"]
+# Model-download tests (BERTScore etc.) are skipped by default so the base
+# suite stays fast and offline. Run them explicitly with `-m model_download`.
+addopts = "-m 'not model_download'"
 markers = [
     "model_download: tests that download models from HuggingFace (skipped by default)",
 ]

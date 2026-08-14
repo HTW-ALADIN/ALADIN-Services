@@ -2,21 +2,29 @@
 
 **Semantic text similarity service** — measures how *similar the meaning* of
 words, sentences and documents is, and looks up lexical relations
-(synonym/antonym/hypernym). 13 algorithm families over 6 backends
-(NLTK, sentence-transformers, gensim, scikit-learn, BERTScore,
-DKPro Similarity).
+(synonym/antonym/hypernym/hyponym). 16 algorithm families over multiple
+backends (NLTK, Odenet, sentence-transformers, gensim, scikit-learn, BERTScore,
+DKPro Similarity, plus pure-Python measures).
 
 **Character/string-level edit distances (Levenshtein, Jaro-Winkler, …) are out
 of scope** — they live in the
 [edit-distance-service](../edit-distance-service). This service focuses
-exclusively on semantics.
+exclusively on semantics:
+
+```text
+text-distance-service   = Character/String-level distances
+text-similarity-service = Semantic/Lexical/Statistical similarity
+```
 
 **Lightweight by default.** The base install ships only `nltk` (~1.8 MB wheel +
-WordNet corpus) and `scikit-learn` (~35-45 MB) — so the WordNet and TF-IDF
-families work out of the box. Everything that needs a large model download
-(PyTorch-based SBERT/BERTScore, gensim word vectors) is an **opt-in extra**
-(`pip install -e ".[model]"`); see
-[Model-based measures](#model-based-measures-optional).
+WordNet corpus) and `scikit-learn` (~35-45 MB) — so the WordNet, TF-IDF,
+token-set overlap (Jaccard/Dice variants) and BM25 families work out of the box. Everything that
+needs a large model download (PyTorch-based SBERT/BERTScore, gensim word
+vectors) is an **opt-in extra** (`pip install -e ".[model]"`); German lexical
+lookups (Odenet) are a separate small **opt-in extra**
+(`pip install -e ".[de]"`). See
+[Model-based measures](#model-based-measures-optional) and
+[Odenet (German lexical relations)](#odenet-german-lexical-relations).
 
 ## API Endpoints
 
@@ -38,12 +46,42 @@ auto-selected.
 
 - **`/v1/text/distance`** (similarity) — two texts in, one normalized semantic
   score out (`wordnet_similarity`, `embedding_cosine`, `sbert_cosine`, `wmd`,
-  `cross_encoder`, `tfidf_cosine`, `bertscore`, `topic_model`,
+  `cross_encoder`, `tfidf_cosine`, `token_set_overlap` (variants `jaccard` /
+  `dice`; legacy aliases `jaccard`, `dice`), `bertscore`, `topic_model`,
   `structural_stylistic`). Inputs: `{"id", "a", "b"}`.
 - **`/v1/text/retrieval`** (retrieval) — one query + candidates in, a ranked
-  match list out (`semantic_search`). Inputs: `{"id", "query", "candidates"}`.
+  match list out (`semantic_search` — `[model]` only; `bm25` — base). Inputs:
+  `{"id", "query", "candidates"}`.
 - **`/v1/text/lexical`** (lexical_relations) — one word in, a set of related
-  words out (`synonym`, `antonym`, `hypernym`). Inputs: `{"id", "word"}`.
+  words out (`synonym`, `antonym`, `hypernym`, `hyponym`). Inputs:
+  `{"id", "word"}`.
+
+  > **`hypernym` vs `hyponym`:** both query the same WordNet/Odenet relation —
+  > the IS-A hierarchy — in opposite traversal directions. `hypernym` walks
+  > from a word to its more general terms (e.g. `dog` → `canine`, `animal`),
+  > `hyponym` to its more specific terms (e.g. `dog` → `poodle`, `terrier`).
+  > They are deliberately kept as separate algorithm names (established
+  > NLP-community naming, self-documenting API) — no code combines or aliases
+  > them.
+
+## Semantic categories
+
+`GET /v1/text/algorithms` describes each (operation, algorithm, backend)
+combination with semantic metadata — not just library names. Every entry
+carries `category`, `requires_model` and `requires_gpu` (always `false` — the
+whole service is CPU-capable), plus `language`, `extra` (which pip extra
+enables the backend) and `variants` where relevant:
+
+| Category | Algorithms |
+|---|---|
+| `lexical` | `wordnet_similarity`, `synonym`, `antonym`, `hypernym`, `hyponym` |
+| `statistical` | `tfidf_cosine`, `token_set_overlap` (variants `jaccard`/`dice`) |
+| `word_embedding` | `embedding_cosine`, `wmd` |
+| `sentence_embedding` | `sbert_cosine`, `cross_encoder` |
+| `retrieval` | `semantic_search` (`[model]` only), `bm25` (base) |
+| `evaluation` | `bertscore` |
+| `topic` | `topic_model` (DKPro) |
+| `structural` | `structural_stylistic` (DKPro) |
 
 ## Example
 
@@ -108,40 +146,47 @@ sake of a few neural/embedding families.
 
 | Scope | Installed | Families enabled |
 |---|---|---|
-| **Base** (always) | `nltk`, `scikit-learn` (+ FastAPI stack) | WordNet similarity, TF-IDF, lexical relations, `semantic_search` (TF-IDF variant) — **6/13** |
-| **`[model]` extra** | `sentence-transformers`, `bert-score`, `gensim` (+ PyTorch) | `embedding_cosine`, `sbert_cosine`, `wmd`, `cross_encoder`, `bertscore` — **+5/13** |
-| **DKPro sidecar** | separate Java service | `topic_model`, `structural_stylistic` (routed) |
+| **Base** (always) | `nltk`, `scikit-learn` (+ FastAPI stack) | WordNet similarity, TF-IDF, lexical relations (incl. `hyponym`), token-set overlap (`jaccard`/`dice` variants), `bm25` — **8/16** |
+| **`[model]` extra** | `sentence-transformers`, `bert-score`, `gensim` (+ PyTorch) | `embedding_cosine` (glove/fasttext/conceptnet_numberbatch), `sbert_cosine`, `wmd`, `cross_encoder`, `bertscore`, `semantic_search` — **+6/16** |
+| **`[de]` extra** | `wn` (small, pure Python, no PyTorch) | German lexical relations via Odenet (`synonym`, `antonym`, `hypernym`, `hyponym`, backend `odenet`) |
+| **DKPro sidecar** | separate Java service | `topic_model`, `structural_stylistic` (routed) — **2/16** |
 
 ### Coverage table
 
-| # | Family | Backend | Needs `[model]`? |
+| # | Family | Backend | Extra / Data |
 |---|---|---|---|
-| 1 | WordNet path/IC similarity (`wordnet_similarity`) | nltk (default) | — (WordNet corpus) |
-| 2 | Synonym lookup | nltk | — (WordNet corpus) |
-| 3 | Antonym lookup | nltk | — (WordNet corpus) |
-| 4 | Hypernym / Hyponym lookup | nltk | — (WordNet corpus) |
-| 5 | TF-IDF vector-space cosine (`tfidf_cosine`) | scikit-learn | — |
-| 6 | Semantic search (`semantic_search`) | sentence-transformers (default), gensim | ✅ only the sentence-transformers backend; the gensim variant uses TF-IDF and runs on base |
-| 7 | Static word/doc embedding (`embedding_cosine`) | gensim | ✅ `[model]` (+ GloVe download) |
-| 8 | Transformer sentence embedding (`sbert_cosine`) | sentence-transformers | ✅ `[model]` (PyTorch) |
-| 9 | Word Mover's Distance (`wmd`) | gensim | ✅ `[model]` (+ GloVe download) |
-| 10 | Contextual eval metric (`bertscore`) | bert-score | ✅ `[model]` (PyTorch) |
-| 11 | Cross-encoder reranking (`cross_encoder`) | sentence-transformers | ✅ `[model]` (PyTorch) |
-| 12–13 | Topic-model / Structural-stylistic | dkpro (Java sidecar) | separate optional sidecar |
+| 1 | WordNet path/IC similarity (`wordnet_similarity`) | nltk (default) | base (WordNet corpus) |
+| 2 | Synonym lookup | nltk (default), **odenet** (German) | base / `[de]` |
+| 3 | Antonym lookup | nltk (default), **odenet** (German) | base / `[de]` |
+| 4 | Hypernym lookup | nltk (default), **odenet** (German) | base / `[de]` |
+| 5 | Hyponym lookup | nltk (default), **odenet** (German) | base / `[de]` |
+| 6 | TF-IDF vector-space cosine (`tfidf_cosine`) | scikit-learn | base |
+| 7 | Token-set overlap (`token_set_overlap`) — variants `jaccard` / `dice` (legacy aliases `jaccard`, `dice`) | builtin (pure Python) | base |
+| 8 | BM25 retrieval (`bm25`) | builtin (pure Python) | base |
+| 9 | Semantic search (`semantic_search`) | sentence-transformers | `[model]` (PyTorch) |
+| 10 | Static word/doc embedding (`embedding_cosine`) — variants `glove` / `fasttext` / `conceptnet_numberbatch` | gensim | `[model]` (+ model download) |
+| 11 | Transformer sentence embedding (`sbert_cosine`) | sentence-transformers | `[model]` (PyTorch) |
+| 12 | Word Mover's Distance (`wmd`) | gensim | `[model]` (+ GloVe download) |
+| 13 | Contextual eval metric (`bertscore`) | bert-score | `[model]` (PyTorch) |
+| 14 | Cross-encoder reranking (`cross_encoder`) | sentence-transformers | `[model]` (PyTorch) |
+| 15 | Topic-model (`topic_model`) | dkpro (Java sidecar) | separate optional sidecar |
+| 16 | Structural/stylistic (`structural_stylistic`) | dkpro (Java sidecar) | separate optional sidecar |
 
-### Enabling the model stack
+### Enabling optional stacks
 
 ```sh
 pip install -e ".[model]"   # sentence-transformers + gensim + bert-score (+ PyTorch)
+pip install -e ".[de]"      # German lexical relations via Odenet (wn, no PyTorch)
+python -m wn download odenet:1.4   # once, for the [de] Odenet data (auto-downloaded on first use otherwise)
 ```
 
-- Imports are **lazy** — the base service never loads PyTorch/gensim unless a
+- Imports are **lazy** — the base service never loads PyTorch/gensim/wn unless a
   model-based algorithm is actually called.
-- The models themselves (HuggingFace SBERT/BERTScore checkpoints, gensim GloVe)
-  are **downloaded on first use and cached in memory** (`src/model_cache.py`),
-  not bundled into the image.
-- Without the extra, model-based endpoints return a clean
-  `501 problem+json` naming the missing module and the install command; all
+- The models / data themselves (HuggingFace SBERT/BERTScore checkpoints, gensim
+  GloVe/FastText/Numberbatch vectors, Odenet) are **downloaded on first use and
+  cached** (`src/model_cache.py`), not bundled into the image.
+- Without an extra, its endpoints return a clean `501 problem+json` naming the
+  missing module and the correct install command (`.[model]` vs `.[de]`); all
   other measures keep working unchanged.
 
 ### Docker
@@ -156,6 +201,131 @@ docker build --build-arg INSTALL_MODEL=true -t text-similarity-service .
 
 A BuildKit pip cache (`--mount=type=cache`) reuses downloads across builds, so
 rebuilding with the model stack is only expensive once.
+
+## Token-set overlap: Jaccard / Dice (base)
+
+Lightweight, deterministic, CPU-only, no model and no NLP dependency — the
+tokenizer is a simple lowercase + whitespace split. One algorithm family
+(`token_set_overlap`) with a `params.variant` selector, mirroring the
+`embedding_cosine` variant pattern:
+
+- `variant: "jaccard"` (default) — `|A ∩ B| / |A ∪ B|`
+- `variant: "dice"` — `2|A ∩ B| / (|A| + |B|)`
+
+The two normalisations are **monotone transformations of each other**
+(`dice = 2·jaccard / (1 + jaccard)`), so they produce the same ranking for every
+input pair — only the scale differs. Both run on the base install and are
+listed under `category: statistical`. Empty/empty inputs score `1.0`, an empty
+side scores `0.0`.
+
+The legacy algorithm names `jaccard` and `dice` remain available as **aliases**
+that map to the same handler with the variant pinned (see `/v1/text/algorithms`,
+entries marked `alias_of: token_set_overlap`), so existing API consumers keep
+working unchanged:
+
+```sh
+curl -s -X POST http://localhost:8000/v1/text/distance \
+  -H "Content-Type: application/json" \
+  -d '{"algorithm": "token_set_overlap", "params": {"variant": "dice"}, "inputs": [{"id": "p1", "a": "the cat is here", "b": "the cat is there"}]}' | jq .
+
+# equivalent legacy aliases (fixed variant):
+#   {"algorithm": "jaccard", ...}  ==  token_set_overlap, variant=jaccard
+#   {"algorithm": "dice", ...}     ==  token_set_overlap, variant=dice
+```
+
+## BM25 (base)
+
+Classic BM25 lexical retrieval for `POST /v1/text/retrieval` — pure stdlib
+(~20 lines, no new dependency), CPU-only, deterministic. BM25 is the **sole
+base-tier retrieval algorithm**: the former TF-IDF fallback backend of
+`semantic_search` was removed, so `semantic_search` is now `[model]`-only
+(sentence-transformers). Returns the same `matches`/`count` shape as
+`semantic_search`. Parameters: `k1` (default 1.5), `b` (default 0.75),
+`top_k` (default 10).
+
+```sh
+curl -s -X POST http://localhost:8000/v1/text/retrieval \
+  -H "Content-Type: application/json" \
+  -d '{"algorithm": "bm25", "params": {"top_k": 3}, "inputs": [{"id": "q1", "query": "cat", "candidates": ["a cat", "a dog", "house"]}]}' | jq .
+```
+
+## Configurable static embedding variants (fasttext / conceptnet_numberbatch)
+
+`embedding_cosine` is no longer tied to a single GloVe model. It is
+parameterised exactly like the existing `params.model_name` mechanism — the
+`variant` is just a convenience alias for a published gensim-data resource:
+
+```json
+{
+  "algorithm": "embedding_cosine",
+  "params": {"variant": "fasttext"}
+}
+```
+
+| `variant` | gensim-data model | Notes |
+|---|---|---|
+| `glove` (default) | `glove-wiki-gigaword-50` | same as before |
+| `fasttext` | `fasttext-wiki-news-subwords-300` | subword info — good for unknown/rare words, morphology, German |
+| `conceptnet_numberbatch` | `conceptnet-numberbatch-17-06-300` | ConceptNet Numberbatch, loaded as `KeyedVectors` in word2vec format (no custom framework) |
+
+- A direct `params.model_name` always wins over `variant`, so any gensim-data
+  model is selectable without a new algorithm family.
+- Everything goes through the existing `get_gensim_model` cache: lazy load,
+  one download per model, reused across requests.
+- Models are downloaded at runtime and **never** committed or baked into the
+  image.
+
+## Configurable sentence-transformers model (`model_name`)
+
+`sbert_cosine`, `semantic_search` and `cross_encoder` already read
+`params.model_name`; the existing defaults are unchanged (`all-MiniLM-L6-v2`
+for SBERT/semantic search,
+`cross-encoder/stsb-roberta-base` for the cross-encoder). There is no
+per-model algorithm family:
+
+```json
+{
+  "algorithm": "sbert_cosine",
+  "params": {"model_name": "paraphrase-multilingual-MiniLM-L12-v2"}
+}
+```
+
+Large models are opt-in through `model_name` and run on CPU; the service is
+never optimised for (or specialised to) 7B-class LLM backbones. `bertscore`
+is parameterised via `params.model_type` / `params.lang`.
+
+## Odenet (German lexical relations)
+
+German lexical relations are provided by the **Open German WordNet (Odenet)** —
+a freely licensed German wordnet, used instead of GermaNet (whose license is
+restrictive for commercial use). Odenet is exposed as an additional `odenet`
+backend on `synonym` / `antonym` / `hypernym` / `hyponym`, selectable like any
+other backend:
+
+```json
+{
+  "algorithm": "synonym",
+  "backend": "odenet",
+  "params": {},
+  "inputs": [{"id": "w1", "word": "Hund"}]
+}
+```
+
+- Backend: the established [`wn`](https://github.com/goodmami/wn) Python
+  library (`pip install -e ".[de]"`), mirroring the NLTK/WordNet path in
+  `src/lexical.py`.
+- Odenet data (`odenet:1.4`) is downloaded on first use via `wn` and cached;
+  it is not committed and not in the image.
+- Results include a `resource: "odenet:1.4"` field so the source of a relation
+  is always traceable; the top-level `backend` field already distinguishes
+  `nltk` vs `odenet` (results from different resources are never mixed
+  silently).
+- Relation coverage depends on the Odenet data: synonym/hypernym/hyponym are
+  well populated; antonym is present but sparse (Odenet stores it at synset
+  level — the service reads both synset- and sense-level antonyms). A word
+  without a relation simply returns `count: 0`, never an error.
+- Without the `de` extra, an Odenet request returns a clean `501 problem+json`
+  naming `pip install -e ".[de]"`; without the data it auto-downloads.
 
 ## DKPro Sidecar (optional)
 
@@ -198,12 +368,15 @@ in memory (`src/model_cache.py`). Sizes and requirements:
 |------|------|-----------|--------|
 | NLTK WordNet corpus | ~12 MB download / ~35 MB unpacked | `wordnet_similarity`, `synonym`, `antonym`, `hypernym`, `hyponym` | — (small runtime download, base install) |
 | NLTK Information Content corpus | small | `wordnet_similarity` variants `res`/`jcn`/`lin` | — |
-| HuggingFace models (SBERT `all-MiniLM-L6-v2`, cross-encoder, BERTScore) | 100–400 MB each | `sbert_cosine`, `cross_encoder`, `bertscore`, SBERT backend of `semantic_search` | ✅ `[model]` |
-| gensim GloVe vectors (`glove-wiki-gigaword-50`) | ~200 MB | `embedding_cosine`, `wmd` | ✅ `[model]` |
+| Odenet (`odenet:1.4`) | small (~10-30 MB) | German `synonym`/`antonym`/`hypernym`/`hyponym` via `backend: odenet` | ✅ `[de]` (`wn` library) |
+| HuggingFace models (SBERT `all-MiniLM-L6-v2`, cross-encoder, BERTScore) | 100–400 MB each | `sbert_cosine`, `cross_encoder`, `bertscore`, `semantic_search` | ✅ `[model]` |
+| gensim GloVe vectors (`glove-wiki-gigaword-50`) | ~200 MB | `embedding_cosine` (glove), `wmd` | ✅ `[model]` |
+| gensim FastText vectors (`fasttext-wiki-news-subwords-300`) | ~2 GB | `embedding_cosine` variant `fasttext` | ✅ `[model]` |
+| gensim ConceptNet Numberbatch (`conceptnet-numberbatch-17-06-300`) | ~1.2 GB | `embedding_cosine` variant `conceptnet_numberbatch` | ✅ `[model]` |
 
-Run `nltk.download('wordnet')` once for the lexical measures. The HuggingFace
-and gensim models are fetched automatically on first use when the `[model]`
-extra is installed.
+Run `nltk.download('wordnet')` once for the lexical measures. The HuggingFace,
+gensim and Odenet resources are fetched automatically on first use when the
+corresponding extra (`[model]` / `[de]`) is installed.
 
 ## License
 

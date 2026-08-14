@@ -28,11 +28,14 @@ from .similarity import DEFAULT_BACKENDS, SIMILARITY_DISPATCH, compute_similarit
 app = FastAPI(
     title="Text Similarity Service",
     version="0.1.0",
-    description="Unified REST API for semantic text similarity — 13 algorithm families over 6 backends.",
+    description="Unified REST API for semantic text similarity — 16 algorithm families over multiple backends.",
 )
 
 
 # ─── Error Handler ────────────────────────────────────────────────────────────
+
+# Missing optional module -> which pip extra enables it (used for the 501 body).
+_MODULE_EXTRA = {"wn": "de"}
 
 
 @app.exception_handler(HTTPException)
@@ -99,11 +102,12 @@ def _run_batch(
             raise HTTPException(status_code=400, detail=str(e)) from None
         except ModuleNotFoundError as e:
             module_name = e.name or "unknown"
+            extra = _MODULE_EXTRA.get(module_name, "model")
             raise HTTPException(
                 status_code=501,
                 detail=(
-                    f"Algorithm '{algorithm}' requires the optional 'model' extra "
-                    f"(missing module '{module_name}'). Install it with: pip install -e '.[model]'"
+                    f"Algorithm '{algorithm}' requires the optional '{extra}' extra "
+                    f"(missing module '{module_name}'). Install it with: pip install -e '.[{extra}]'"
                 ),
             ) from None
         except Exception as e:  # noqa: BLE001

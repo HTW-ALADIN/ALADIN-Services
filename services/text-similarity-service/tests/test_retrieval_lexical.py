@@ -6,20 +6,15 @@ from src.retrieval import compute_retrieval
 
 
 class TestSemanticSearch:
-    def test_gensim_tfidf(self):
-        """Test gensim-based semantic search using TF-IDF."""
-        result = compute_retrieval(
-            "semantic_search",
-            "gensim",
-            {
-                "query": "cat",
-                "candidates": ["dog", "car", "house", "kitten", "mouse"],
-            },
-            {"top_k": 3},
-        )
-        assert result["count"] > 0
-        assert len(result["matches"]) <= 3
-        assert result["compute_time_ms"] > 0
+    def test_gensim_tfidf_backend_removed(self):
+        """The TF-IDF (gensim) backend was removed — semantic_search is SBERT-only ([model])."""
+        with pytest.raises(ValueError, match="Unsupported combination"):
+            compute_retrieval(
+                "semantic_search",
+                "gensim",
+                {"query": "cat", "candidates": ["dog", "car", "house", "kitten", "mouse"]},
+                {"top_k": 3},
+            )
 
 
 class TestLexicalRelations:

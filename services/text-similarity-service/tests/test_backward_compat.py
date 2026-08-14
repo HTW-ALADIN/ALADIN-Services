@@ -14,12 +14,12 @@ DISTANCE_PAYLOADS = [
 ]
 
 RETRIEVAL_PAYLOADS = [
-    # retrieval: semantic_search (gensim/TF-IDF)
+    # retrieval: bm25 (base, non-model lexical ranking — the successor of the
+    # removed semantic_search TF-IDF backend)
     {
-        "algorithm": "semantic_search",
-        "backend": "gensim",
-        "params": {},
-        "inputs": [{"id": "q1", "query": "cat", "candidates": ["dog", "car", "house"]}],
+        "algorithm": "bm25",
+        "params": {"top_k": 3},
+        "inputs": [{"id": "q1", "query": "cat", "candidates": ["a cat", "a dog", "house"]}],
     },
 ]
 
@@ -47,7 +47,7 @@ def test_base_payloads_still_valid():
 
 
 def test_semantic_measures_still_listed():
-    """All 13 semantic algorithm families must still be present in the catalog."""
+    """All canonical semantic algorithm families must still be present in the catalog."""
     resp = client.get("/v1/text/algorithms")
     catalog = resp.json()
     algorithms = {e["algorithm"] for e in catalog}
@@ -62,9 +62,12 @@ def test_semantic_measures_still_listed():
         "topic_model",
         "structural_stylistic",
         "semantic_search",
+        "token_set_overlap",
+        "bm25",
         "synonym",
         "antonym",
         "hypernym",
+        "hyponym",
     }
     missing = semantic_algorithms - algorithms
     assert not missing, f"Semantic algorithms missing from catalog: {missing}"

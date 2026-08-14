@@ -10,6 +10,11 @@ FROM python:3.12-slim AS builder
 # Build with the full model stack using:
 #   docker build --build-arg INSTALL_MODEL=true -t text-similarity-service .
 ARG INSTALL_MODEL=false
+# German lexical relations (Odenet via the `wn` library, `[de]` extra) are
+# also OPT-IN and tiny (no PyTorch). Enable with:
+#   docker build --build-arg INSTALL_DE=true -t text-similarity-service .
+# The Odenet data itself is downloaded at runtime (never baked into the image).
+ARG INSTALL_DE=false
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -30,7 +35,8 @@ COPY src/ src/
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -e . && \
-    if [ "$INSTALL_MODEL" = "true" ]; then pip install --no-cache-dir -e ".[model]"; fi
+    if [ "$INSTALL_MODEL" = "true" ]; then pip install --no-cache-dir -e ".[model]"; fi && \
+    if [ "$INSTALL_DE" = "true" ]; then pip install --no-cache-dir -e ".[de]"; fi
 
 # Stage 2: Runtime
 FROM python:3.12-slim

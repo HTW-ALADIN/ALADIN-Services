@@ -1,8 +1,16 @@
-"""Lexical relations (synonym/antonym/hypernym/hyponym) via NLTK WordNet."""
+"""Lexical relations (synonym/antonym/hypernym/hyponym) via WordNet backends.
+
+English relations use NLTK WordNet (base install). German relations use the
+Open German WordNet (Odenet) via the optional ``wn`` library (extra ``de``) —
+a free-licensed alternative to GermaNet.
+"""
 
 import time
 from functools import partial
 from typing import Any
+
+# Published Odenet lexicon id in the ``wn`` index (Free German WordNet).
+ODENET_ID = "odenet:1.4"
 
 
 def _wordnet_relations(input_data: dict[str, Any], params: dict[str, Any], kind: str) -> dict[str, Any]:
@@ -26,6 +34,34 @@ def _wordnet_relations(input_data: dict[str, Any], params: dict[str, Any], kind:
     return {"word": word, "relations": sorted(names), "count": len(names)}
 
 
+def _odenet_relations(input_data: dict[str, Any], params: dict[str, Any], kind: str) -> dict[str, Any]:
+    """German lexical relations via Odenet (Open German WordNet, ``wn`` library)."""
+    from .model_cache import get_odenet
+
+    de = get_odenet()
+    word = input_data.get("word", "")
+    names: set[str] = set()
+    for synset in de.synsets(word):
+        if kind == "synonym":
+            for lemma in synset.lemmas():
+                name = lemma.replace("_", " ")
+                if name.lower() != word.lower():
+                    names.add(name)
+        elif kind == "antonym":
+            # Odenet stores antonyms at the synset level (and sometimes sense
+            # level); include both so real data surfaces.
+            for related in synset.get_related("antonym"):
+                names.update(lemma.replace("_", " ") for lemma in related.lemmas())
+            for sense in synset.senses():
+                for ant in sense.get_related("antonym"):
+                    names.add(ant.word().lemma().replace("_", " "))
+        else:
+            rel = "hypernym" if kind == "hypernym" else "hyponym"
+            for related in synset.get_related(rel):
+                names.update(lemma.replace("_", " ") for lemma in related.lemmas())
+    return {"word": word, "relations": sorted(names), "count": len(names), "resource": ODENET_ID}
+
+
 # ─── Dispatcher ───────────────────────────────────────────────────────────────
 
 LEXICAL_DISPATCH: dict[tuple[str, str], Any] = {
@@ -33,6 +69,10 @@ LEXICAL_DISPATCH: dict[tuple[str, str], Any] = {
     ("antonym", "nltk"): partial(_wordnet_relations, kind="antonym"),
     ("hypernym", "nltk"): partial(_wordnet_relations, kind="hypernym"),
     ("hyponym", "nltk"): partial(_wordnet_relations, kind="hyponym"),
+    ("synonym", "odenet"): partial(_odenet_relations, kind="synonym"),
+    ("antonym", "odenet"): partial(_odenet_relations, kind="antonym"),
+    ("hypernym", "odenet"): partial(_odenet_relations, kind="hypernym"),
+    ("hyponym", "odenet"): partial(_odenet_relations, kind="hyponym"),
 }
 
 DEFAULT_LEXICAL_BACKENDS: dict[str, str] = {

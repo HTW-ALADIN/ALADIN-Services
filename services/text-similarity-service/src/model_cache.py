@@ -30,6 +30,26 @@ def get_cross_encoder_model(model_name: str = "cross-encoder/stsb-roberta-base")
     return _get(f"cross_encoder:{model_name}", lambda: CrossEncoder(model_name))
 
 
+def get_odenet() -> Any:
+    """Lazily load (and cache) the Open German WordNet via the ``wn`` library.
+
+    Requires the optional ``de`` extra (``pip install -e '.[de]'``). The Odenet
+    data itself is downloaded on first use and cached in the wn database (not
+    bundled into the image).
+    """
+    import wn
+
+    def factory() -> Any:
+        if ODENET_ID not in {lex.id for lex in wn.lexicons()}:
+            wn.download(ODENET_ID)
+        return wn.Wordnet(ODENET_ID)
+
+    return _get("odenet", factory)
+
+
+ODENET_ID = "odenet:1.4"
+
+
 def clear_all() -> None:
     """Clear all cached models (useful for testing)."""
     _models.clear()

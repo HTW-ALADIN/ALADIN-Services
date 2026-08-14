@@ -3,6 +3,18 @@
 One entry per (operation, algorithm, backend) combination, mirroring the
 edit-distance-service catalog shape. The first backend of each algorithm is
 marked ``default: true`` (the auto-selected backend when the request omits it).
+
+Every entry carries semantic metadata so clients can tell *what kind* of
+measure they get without knowing the backing library:
+
+- ``category``: lexical | statistical | word_embedding | sentence_embedding |
+  knowledge_graph | retrieval | evaluation | topic | structural
+- ``requires_model``: needs the ``[model]`` extra (PyTorch / large downloads)
+- ``requires_gpu``: always false — the whole service is CPU-capable
+- ``language``: language the backend serves (e.g. ``de`` for Odenet)
+- ``extra``: pip extra needed to enable the backend (``model``, ``de``,
+  ``dkpro``) — base backends omit it
+- ``variants``: selectable via ``params.variant`` / ``params.model_name``
 """
 
 from typing import Any
@@ -14,9 +26,20 @@ _DEFAULT_RESULT_TYPES = {
 }
 
 
-def _backends(*entries: tuple[str, str]) -> list[dict[str, Any]]:
-    """Build the API's backend list; the first entry is marked default."""
-    return [{"name": name, "description": desc, "default": i == 0} for i, (name, desc) in enumerate(entries)]
+def _backends(*entries: tuple[str, str] | tuple[str, str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build the API's backend list; the first entry is marked default.
+
+    Each entry is ``(name, description)`` or ``(name, description, extra_meta)``
+    where extra_meta carries backend-specific fields (language, extra, ...).
+    """
+    result: list[dict[str, Any]] = []
+    for i, entry in enumerate(entries):
+        name, desc, *meta = entry
+        d: dict[str, Any] = {"name": name, "description": desc, "default": i == 0}
+        if meta:
+            d.update(meta[0])
+        result.append(d)
+    return result
 
 
 def _entry(
@@ -31,11 +54,16 @@ def _entry(
     granularity: str = "char",
     stateful: bool = False,
     result_type: str | None = None,
+    category: str = "",
+    requires_model: bool = False,
+    requires_gpu: bool = False,
+    variants: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Expand one algorithm into one catalog entry per backend."""
     rt = result_type or _DEFAULT_RESULT_TYPES[operation]
-    return [
-        {
+    entries: list[dict[str, Any]] = []
+    for b in backends:
+        entry: dict[str, Any] = {
             "operation": operation,
             "algorithm": algorithm,
             "backend": b["name"],
@@ -48,9 +76,17 @@ def _entry(
             "symmetric": symmetric,
             "granularity": granularity,
             "stateful": stateful,
+            "category": category,
+            "requires_model": b.get("requires_model", requires_model),
+            "requires_gpu": b.get("requires_gpu", requires_gpu),
         }
-        for b in backends
-    ]
+        for key in ("language", "extra", "variants", "alias_of", "fixed_variant"):
+            if key in b:
+                entry[key] = b[key]
+        if variants is not None:
+            entry["variants"] = entry.get("variants", variants)
+        entries.append(entry)
+    return entries
 
 
 CATALOG: list[dict[str, Any]] = [
@@ -58,132 +94,214 @@ CATALOG: list[dict[str, Any]] = [
     *_entry(
         "similarity",
         "embedding_cosine",
-        _backends(("gensim", "gensim KeyedVectors.similarity/n_similarity")),
+        _backends(("gensim", "gensim KeyedVectors.similarity/n_similarity", {"extra": "model"})),
         "Static word/document embedding cosine similarity",
         score_range="[-1,1]",
         granularity="word",
         stateful=True,
+        category="word_embedding",
+        requires_model=True,
+        variants=["glove", "fasttext", "conceptnet_numberbatch"],
     ),
     *_entry(
         "similarity",
         "sbert_cosine",
-        _backends(("sentence_transformers", "SBERT model.encode -> util.cos_sim")),
+        _backends(("sentence_transformers", "SBERT model.encode -> util.cos_sim", {"extra": "model"})),
         "Transformer sentence embedding cosine similarity",
         score_range="[-1,1]",
         granularity="sentence",
         stateful=True,
+        category="sentence_embedding",
+        requires_model=True,
     ),
     *_entry(
         "similarity",
         "wmd",
-        _backends(("gensim", "gensim KeyedVectors.wmdistance")),
+        _backends(("gensim", "gensim KeyedVectors.wmdistance", {"extra": "model"})),
         "Word Mover's Distance",
         score_direction="lower_is_similar",
         score_range="[0,inf)",
         granularity="document",
         stateful=True,
+        category="word_embedding",
+        requires_model=True,
     ),
     *_entry(
         "similarity",
         "cross_encoder",
-        _backends(("sentence_transformers", "SBERT CrossEncoder.predict")),
+        _backends(("sentence_transformers", "SBERT CrossEncoder.predict", {"extra": "model"})),
         "Cross-encoder pairwise reranking",
         symmetric=False,
         granularity="sentence",
         stateful=True,
+        category="sentence_embedding",
+        requires_model=True,
     ),
     *_entry(
         "similarity",
         "wordnet_similarity",
         _backends(
             ("nltk", "NLTK synset path/wup/lch/res/jcn/lin similarity"),
-            ("dkpro", "DKPro WordNetComparator (Java sidecar)"),
+            ("dkpro", "DKPro WordNetComparator (Java sidecar)", {"extra": "dkpro"}),
         ),
         "WordNet path/IC similarity — Path/WUP/LCH/Resnik/JCN/Lin",
         score_range="[0,inf)",
         granularity="word",
         stateful=True,
+        category="lexical",
     ),
     *_entry(
         "similarity",
         "tfidf_cosine",
         _backends(
             ("sklearn", "sklearn TfidfVectorizer + cosine_similarity"),
-            ("dkpro", "DKPro CosineSimilarity (Java sidecar)"),
+            ("dkpro", "DKPro CosineSimilarity (Java sidecar)", {"extra": "dkpro"}),
         ),
         "TF-IDF vector-space cosine similarity",
         granularity="document",
         stateful=True,
+        category="statistical",
+    ),
+    *_entry(
+        "similarity",
+        "token_set_overlap",
+        _backends(("builtin", "Pure-Python token-set overlap — Jaccard or Dice coefficient (params.variant)")),
+        "Token-set overlap — Jaccard / Dice coefficient",
+        granularity="token",
+        category="statistical",
+        variants=["jaccard", "dice"],
+    ),
+    # Legacy aliases of token_set_overlap (fixed variant) so existing consumers
+    # of the old "jaccard" / "dice" algorithm names keep working.
+    *_entry(
+        "similarity",
+        "jaccard",
+        _backends(("builtin", "Jaccard (legacy alias)", {"alias_of": "token_set_overlap", "fixed_variant": "jaccard"})),
+        "Token-set Jaccard (legacy alias)",
+        granularity="token",
+        category="statistical",
+    ),
+    *_entry(
+        "similarity",
+        "dice",
+        _backends(("builtin", "Dice coefficient (legacy alias)", {"alias_of": "token_set_overlap", "fixed_variant": "dice"})),
+        "Token-set Dice coefficient (legacy alias)",
+        granularity="token",
+        category="statistical",
     ),
     *_entry(
         "similarity",
         "bertscore",
-        _backends(("bertscore", "bert_score.score")),
+        _backends(("bertscore", "bert_score.score", {"extra": "model"})),
         "Contextual-embedding evaluation metric — P/R/F1",
         symmetric=False,
         granularity="sentence",
         stateful=True,
         result_type="bertscore",
+        category="evaluation",
+        requires_model=True,
     ),
     *_entry(
         "similarity",
         "topic_model",
-        _backends(("dkpro", "DKPro LSA/ESA (Java sidecar)")),
+        _backends(("dkpro", "DKPro LSA/ESA (Java sidecar)", {"extra": "dkpro"})),
         "Topic-model-based similarity — LSA/ESA",
         granularity="document",
         stateful=True,
+        category="topic",
     ),
     *_entry(
         "similarity",
         "structural_stylistic",
-        _backends(("dkpro", "DKPro n-gram containment/TTR/greedy string tiling (Java sidecar)")),
+        _backends(("dkpro", "DKPro n-gram containment/TTR/greedy string tiling (Java sidecar)", {"extra": "dkpro"})),
         "Structural/stylistic text similarity — n-gram containment/TTR/greedy string tiling",
         granularity="document",
         stateful=True,
+        category="structural",
     ),
     # ── retrieval ──────────────────────────────────────────────────────────
+    # semantic_search is sentence-transformers only ([model]-only) — the former
+    # TF-IDF (gensim) fallback backend was removed; BM25 is the sole base-tier
+    # non-model retrieval algorithm.
     *_entry(
         "retrieval",
         "semantic_search",
         _backends(
-            ("sentence_transformers", "SBERT util.semantic_search/paraphrase_mining"),
-            ("gensim", "gensim similarities.MatrixSimilarity/WmdSimilarity"),
+            ("sentence_transformers", "SBERT util.semantic_search/paraphrase_mining", {"requires_model": True, "extra": "model"}),
         ),
         "Semantic search / nearest-neighbor retrieval over embeddings",
         score_range="[-1,1]",
         symmetric=False,
         granularity="sentence",
         stateful=True,
+        category="retrieval",
+        requires_model=True,
+    ),
+    *_entry(
+        "retrieval",
+        "bm25",
+        _backends(("builtin", "Classic BM25 (Robertson/Sparck Jones), pure stdlib")),
+        "BM25 lexical retrieval",
+        symmetric=False,
+        granularity="token",
+        stateful=True,
+        category="retrieval",
     ),
     # ── lexical_relations ──────────────────────────────────────────────────
     *_entry(
         "lexical_relations",
         "synonym",
-        _backends(("nltk", "NLTK WordNet synset.lemma_names")),
+        _backends(
+            ("nltk", "NLTK WordNet synset.lemma_names"),
+            ("odenet", "Open German WordNet synonym (German, via wn)", {"language": "de", "extra": "de"}),
+        ),
         "Synonym lookup via WordNet",
         score_direction="",
         score_range="",
         symmetric=False,
         granularity="word",
+        category="lexical",
     ),
     *_entry(
         "lexical_relations",
         "antonym",
-        _backends(("nltk", "NLTK WordNet lemma.antonyms")),
+        _backends(
+            ("nltk", "NLTK WordNet lemma.antonyms"),
+            ("odenet", "Open German WordNet antonym (German, via wn)", {"language": "de", "extra": "de"}),
+        ),
         "Antonym lookup via WordNet",
         score_direction="",
         score_range="",
         symmetric=False,
         granularity="word",
+        category="lexical",
     ),
     *_entry(
         "lexical_relations",
         "hypernym",
-        _backends(("nltk", "NLTK WordNet synset.hypernyms/hyponyms")),
+        _backends(
+            ("nltk", "NLTK WordNet synset.hypernyms/hyponyms"),
+            ("odenet", "Open German WordNet hypernym (German, via wn)", {"language": "de", "extra": "de"}),
+        ),
         "Hypernym/Hyponym lookup via WordNet (relation field selects direction)",
         score_direction="",
         score_range="",
         symmetric=False,
         granularity="word",
+        category="lexical",
+    ),
+    *_entry(
+        "lexical_relations",
+        "hyponym",
+        _backends(
+            ("nltk", "NLTK WordNet synset.hyponyms"),
+            ("odenet", "Open German WordNet hyponym (German, via wn)", {"language": "de", "extra": "de"}),
+        ),
+        "Hyponym lookup via WordNet",
+        score_direction="",
+        score_range="",
+        symmetric=False,
+        granularity="word",
+        category="lexical",
     ),
 ]

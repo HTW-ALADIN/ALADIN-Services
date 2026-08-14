@@ -15,12 +15,19 @@ def test_health():
 
 
 def test_algorithms_catalog():
-    """GET /v1/text/algorithms lists all 13 semantic algorithm families."""
+    """GET /v1/text/algorithms lists all 16 semantic algorithm families.
+
+    jaccard/dice are legacy aliases of token_set_overlap and therefore do not
+    count as separate families.
+    """
     resp = client.get("/v1/text/algorithms")
     assert resp.status_code == 200
     catalog = resp.json()
     algorithms = {e["algorithm"] for e in catalog}
-    assert len(algorithms) == 13
+    # 16 canonical families (17 before the jaccard+dice -> token_set_overlap
+    # consolidation); aliases are marked with alias_of and excluded here.
+    canonical = {e["algorithm"] for e in catalog if "alias_of" not in e}
+    assert len(canonical) == 16
     # Verify all entries have required fields
     for entry in catalog:
         assert "operation" in entry
@@ -29,6 +36,10 @@ def test_algorithms_catalog():
         assert "families" in entry
         assert "result_type" in entry
         assert "description" in entry
+        # semantic metadata for discovery
+        assert "category" in entry
+        assert "requires_model" in entry
+        assert "requires_gpu" in entry
     # Verify semantic algorithms exist
     assert "wordnet_similarity" in algorithms
     assert "embedding_cosine" in algorithms
@@ -43,6 +54,11 @@ def test_algorithms_catalog():
     assert "synonym" in algorithms
     assert "antonym" in algorithms
     assert "hypernym" in algorithms
+    assert "hyponym" in algorithms
+    assert "token_set_overlap" in algorithms
+    assert "jaccard" in algorithms  # legacy alias of token_set_overlap
+    assert "dice" in algorithms  # legacy alias of token_set_overlap
+    assert "bm25" in algorithms
     # Removed char-based families must not be listed anymore
     removed = {
         "levenshtein",
@@ -137,20 +153,24 @@ def test_compute_unsupported_backend():
     assert resp.status_code == 400
 
 
-def test_compute_semantic_search():
-    """POST /v1/text/retrieval with semantic_search (gensim/TF-IDF)."""
+def test_compute_bm25():
+    """POST /v1/text/retrieval with bm25 (base, no model) returns ranked matches.
+
+    bm25 is the sole base-tier lexical retrieval algorithm — the former
+    semantic_search TF-IDF backend was removed.
+    """
     resp = client.post(
         "/v1/text/retrieval",
         json={
-            "algorithm": "semantic_search",
-            "backend": "gensim",
+            "algorithm": "bm25",
             "params": {"top_k": 3},
-            "inputs": [{"id": "q1", "query": "cat", "candidates": ["dog", "car", "house", "kitten", "mouse"]}],
+            "inputs": [{"id": "q1", "query": "cat", "candidates": ["a cat", "a dog", "house", "kitten"]}],
         },
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["algorithm"] == "semantic_search"
+    assert body["algorithm"] == "bm25"
+    assert body["backend"] == "builtin"  # auto-selected default backend
     assert body["results"][0]["result"]["count"] > 0
 
 

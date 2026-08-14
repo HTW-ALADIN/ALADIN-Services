@@ -8,6 +8,7 @@ externally via dkpro_proxy and have no in-process implementation here.
 
 import math
 import time
+from functools import partial
 from typing import Any
 
 # (measure, backend) pairs whose raw output is already a similarity in [0,1].
@@ -17,6 +18,7 @@ _SIMILARITY_KEYS = {
     ("sbert_cosine", "sentence_transformers"),
     ("cross_encoder", "sentence_transformers"),
     ("wordnet_similarity", "nltk"),
+    ("token_set_overlap", "builtin"),
 }
 
 
@@ -38,13 +40,26 @@ def _normalize_similarity(raw: float, measure: str, backend: str) -> dict[str, A
 
 # ─── Embedding cosine (gensim) ────────────────────────────────────────────────
 
+# Known static-embedding variants -> gensim-data model name. Any model can be
+# selected directly via params.model_name; the variant is a convenience alias
+# for the published gensim-data resource (ConceptNet Numberbatch is distributed
+# by gensim-data as a KeyedVectors in word2vec format). Verified against
+# gensim.downloader.info()['models'] — the published id is
+# conceptnet-numberbatch-17-06-300 (there is no -301 in gensim-data).
+_EMBEDDING_VARIANTS = {
+    "glove": "glove-wiki-gigaword-50",
+    "fasttext": "fasttext-wiki-news-subwords-300",
+    "conceptnet_numberbatch": "conceptnet-numberbatch-17-06-300",
+}
+
 
 def _embedding_cosine_gensim(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
     from .model_cache import get_gensim_model
 
     a = input_data.get("text_a", "")
     b = input_data.get("text_b", "")
-    model_name = params.get("model_name", "glove-wiki-gigaword-50")
+    variant = params.get("variant", "glove")
+    model_name = params.get("model_name") or _EMBEDDING_VARIANTS.get(variant, "glove-wiki-gigaword-50")
     kv = get_gensim_model(model_name)
 
     # Try word-level first, fall back to n_similarity for multi-word
@@ -186,6 +201,37 @@ def _tfidf_cosine_sklearn(input_data: dict[str, Any], params: dict[str, Any]) ->
     return _normalize_similarity(sim, "tfidf_cosine", "sklearn")
 
 
+# ─── Token-set overlap (jaccard / dice variants, CPU-only, no model) ─────────
+
+# Canonical family: ``token_set_overlap`` with ``params.variant`` selecting the
+# normalisation (analogous to the ``embedding_cosine`` variant pattern). The two
+# normalisations are monotone transformations of each other (dice = 2j/(1+j)) and
+# produce the same ranking — only the scale differs. ``jaccard`` and ``dice`` are
+# legacy aliases that pin the variant via functools.partial (same pattern as
+# ``lexical.py``), so existing API consumers keep working unchanged.
+
+
+def _tokenize(text: str) -> set[str]:
+    """Minimal deterministic tokenizer: lowercase + whitespace split."""
+    return set(text.lower().split())
+
+
+def _token_set_overlap(input_data: dict[str, Any], params: dict[str, Any], variant: str | None = None) -> dict[str, Any]:
+    """Token-set overlap — params.variant "jaccard" (default) or "dice"; aliases pin it."""
+    variant = variant or params.get("variant", "jaccard")
+    a = _tokenize(input_data.get("text_a", ""))
+    b = _tokenize(input_data.get("text_b", ""))
+    if not a and not b:
+        raw = 1.0  # both empty -> identical
+    elif not a or not b:
+        raw = 0.0
+    elif variant == "dice":
+        raw = 2 * len(a & b) / (len(a) + len(b))
+    else:
+        raw = len(a & b) / len(a | b)
+    return _normalize_similarity(raw, "token_set_overlap", "builtin")
+
+
 # ─── BERTScore ────────────────────────────────────────────────────────────────
 
 
@@ -212,6 +258,9 @@ SIMILARITY_DISPATCH: dict[tuple[str, str], Any] = {
     ("cross_encoder", "sentence_transformers"): _cross_encoder,
     ("wordnet_similarity", "nltk"): _wordnet_similarity_nltk,
     ("tfidf_cosine", "sklearn"): _tfidf_cosine_sklearn,
+    ("token_set_overlap", "builtin"): _token_set_overlap,
+    ("jaccard", "builtin"): partial(_token_set_overlap, variant="jaccard"),
+    ("dice", "builtin"): partial(_token_set_overlap, variant="dice"),
     ("bertscore", "bertscore"): _bertscore,
 }
 
@@ -222,6 +271,9 @@ DEFAULT_BACKENDS: dict[str, str] = {
     "cross_encoder": "sentence_transformers",
     "wordnet_similarity": "nltk",
     "tfidf_cosine": "sklearn",
+    "token_set_overlap": "builtin",
+    "jaccard": "builtin",
+    "dice": "builtin",
     "bertscore": "bertscore",
     # DKPro-sidecar measures: known measures, computed externally via dkpro_proxy.
     "topic_model": "dkpro",
