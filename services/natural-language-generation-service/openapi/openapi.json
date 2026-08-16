@@ -1,0 +1,1268 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Natural Language Generation Service",
+		"version": "0.1.0",
+		"description": "Deterministic rule-based NLG with jsRealB surface realisation and trusted RosaeNLG template generation.",
+		"license": { "name": "MIT" }
+	},
+	"components": {
+		"schemas": {
+			"ConstituentNode": {
+				"anyOf": [
+					{
+						"additionalProperties": false,
+						"type": "object",
+						"required": ["phrase", "elements"],
+						"properties": {
+							"phrase": {
+								"anyOf": [
+									{ "type": "string", "enum": ["S"] },
+									{ "type": "string", "enum": ["NP"] },
+									{ "type": "string", "enum": ["AP"] },
+									{ "type": "string", "enum": ["VP"] },
+									{ "type": "string", "enum": ["AdvP"] },
+									{ "type": "string", "enum": ["PP"] },
+									{ "type": "string", "enum": ["CP"] },
+									{ "type": "string", "enum": ["SP"] }
+								]
+							},
+							"elements": {
+								"maxItems": 256,
+								"type": "array",
+								"items": { "$ref": "#/components/schemas/ConstituentNode" }
+							},
+							"props": {
+								"additionalProperties": false,
+								"description": "Allowlisted jsRealB options. Arbitrary method names, JavaScript expressions, HTML tags, and Markdown directives are rejected.",
+								"type": "object",
+								"properties": {
+									"n": {
+										"anyOf": [
+											{ "type": "string", "enum": ["s"] },
+											{ "type": "string", "enum": ["p"] }
+										]
+									},
+									"g": {
+										"anyOf": [
+											{ "type": "string", "enum": ["m"] },
+											{ "type": "string", "enum": ["f"] },
+											{ "type": "string", "enum": ["n"] }
+										]
+									},
+									"pe": {
+										"anyOf": [
+											{ "type": "number", "enum": [1] },
+											{ "type": "number", "enum": [2] },
+											{ "type": "number", "enum": [3] }
+										]
+									},
+									"t": {
+										"anyOf": [
+											{ "type": "string", "enum": ["p"] },
+											{ "type": "string", "enum": ["b"] },
+											{ "type": "string", "enum": ["b-to"] },
+											{ "type": "string", "enum": ["bp-to"] },
+											{ "type": "string", "enum": ["i"] },
+											{ "type": "string", "enum": ["ps"] },
+											{ "type": "string", "enum": ["f"] },
+											{ "type": "string", "enum": ["ip"] },
+											{ "type": "string", "enum": ["c"] },
+											{ "type": "string", "enum": ["pr"] },
+											{ "type": "string", "enum": ["s"] },
+											{ "type": "string", "enum": ["si"] },
+											{ "type": "string", "enum": ["pp"] },
+											{ "type": "string", "enum": ["pc"] },
+											{ "type": "string", "enum": ["pq"] },
+											{ "type": "string", "enum": ["cp"] },
+											{ "type": "string", "enum": ["fa"] },
+											{ "type": "string", "enum": ["pa"] },
+											{ "type": "string", "enum": ["spa"] },
+											{ "type": "string", "enum": ["spq"] },
+											{ "type": "string", "enum": ["bp"] }
+										]
+									},
+									"aux": {
+										"anyOf": [
+											{ "type": "string", "enum": ["av"] },
+											{ "type": "string", "enum": ["êt"] }
+										]
+									},
+									"typ": {
+										"additionalProperties": false,
+										"type": "object",
+										"properties": {
+											"neg": {
+												"anyOf": [
+													{ "type": "boolean" },
+													{ "minLength": 1, "maxLength": 32, "type": "string" }
+												]
+											},
+											"pas": { "type": "boolean" },
+											"prog": { "type": "boolean" },
+											"exc": { "type": "boolean" },
+											"perf": { "type": "boolean" },
+											"contr": { "type": "boolean" },
+											"refl": { "type": "boolean" },
+											"maje": { "type": "boolean" },
+											"mod": {
+												"anyOf": [
+													{ "type": "boolean", "enum": [false] },
+													{ "type": "string", "enum": ["poss"] },
+													{ "type": "string", "enum": ["perm"] },
+													{ "type": "string", "enum": ["nece"] },
+													{ "type": "string", "enum": ["obli"] },
+													{ "type": "string", "enum": ["will"] }
+												]
+											},
+											"int": {
+												"anyOf": [
+													{ "type": "boolean", "enum": [false] },
+													{ "type": "string", "enum": ["yon"] },
+													{ "type": "string", "enum": ["wos"] },
+													{ "type": "string", "enum": ["wod"] },
+													{ "type": "string", "enum": ["woi"] },
+													{ "type": "string", "enum": ["was"] },
+													{ "type": "string", "enum": ["wad"] },
+													{ "type": "string", "enum": ["wai"] },
+													{ "type": "string", "enum": ["whe"] },
+													{ "type": "string", "enum": ["why"] },
+													{ "type": "string", "enum": ["whn"] },
+													{ "type": "string", "enum": ["how"] },
+													{ "type": "string", "enum": ["muc"] },
+													{ "type": "string", "enum": ["tag"] }
+												]
+											}
+										}
+									},
+									"pos": {
+										"anyOf": [
+											{ "type": "string", "enum": ["pre"] },
+											{ "type": "string", "enum": ["post"] }
+										]
+									},
+									"pro": { "type": "boolean", "enum": [true] },
+									"c": {
+										"anyOf": [
+											{ "type": "string", "enum": ["nom"] },
+											{ "type": "string", "enum": ["acc"] },
+											{ "type": "string", "enum": ["dat"] },
+											{ "type": "string", "enum": ["gen"] },
+											{ "type": "string", "enum": ["refl"] }
+										]
+									},
+									"ow": {
+										"anyOf": [
+											{ "type": "string", "enum": ["s"] },
+											{ "type": "string", "enum": ["p"] }
+										]
+									},
+									"cap": {
+										"anyOf": [
+											{ "type": "boolean" },
+											{ "type": "string", "enum": ["tit"] }
+										]
+									},
+									"lier": { "type": "boolean", "enum": [true] },
+									"maje": { "type": "boolean" },
+									"nat": { "type": "boolean" },
+									"dOpt": {
+										"additionalProperties": false,
+										"type": "object",
+										"properties": {
+											"year": { "type": "boolean" },
+											"month": { "type": "boolean" },
+											"date": { "type": "boolean" },
+											"day": { "type": "boolean" },
+											"hour": { "type": "boolean" },
+											"minute": { "type": "boolean" },
+											"second": { "type": "boolean" },
+											"det": { "type": "boolean" },
+											"nat": { "type": "boolean" },
+											"ord": { "type": "boolean" },
+											"rom": { "type": "boolean" },
+											"raw": { "type": "boolean" },
+											"mprecision": {
+												"minimum": 0,
+												"maximum": 20,
+												"type": "number"
+											}
+										}
+									},
+									"a": { "maxLength": 64, "type": "string" },
+									"b": { "maxLength": 64, "type": "string" },
+									"en": { "maxLength": 64, "type": "string" },
+									"ba": { "maxLength": 64, "type": "string" }
+								}
+							}
+						}
+					},
+					{
+						"additionalProperties": false,
+						"type": "object",
+						"required": ["terminal", "lemma"],
+						"properties": {
+							"terminal": {
+								"anyOf": [
+									{ "type": "string", "enum": ["N"] },
+									{ "type": "string", "enum": ["A"] },
+									{ "type": "string", "enum": ["Pro"] },
+									{ "type": "string", "enum": ["D"] },
+									{ "type": "string", "enum": ["V"] },
+									{ "type": "string", "enum": ["Adv"] },
+									{ "type": "string", "enum": ["C"] },
+									{ "type": "string", "enum": ["P"] },
+									{ "type": "string", "enum": ["DT"] },
+									{ "type": "string", "enum": ["NO"] },
+									{ "type": "string", "enum": ["Q"] }
+								]
+							},
+							"lemma": {
+								"anyOf": [
+									{ "minLength": 1, "maxLength": 4096, "type": "string" },
+									{ "type": "number" }
+								]
+							},
+							"props": {
+								"additionalProperties": false,
+								"description": "Allowlisted jsRealB options. Arbitrary method names, JavaScript expressions, HTML tags, and Markdown directives are rejected.",
+								"type": "object",
+								"properties": {
+									"n": {
+										"anyOf": [
+											{ "type": "string", "enum": ["s"] },
+											{ "type": "string", "enum": ["p"] }
+										]
+									},
+									"g": {
+										"anyOf": [
+											{ "type": "string", "enum": ["m"] },
+											{ "type": "string", "enum": ["f"] },
+											{ "type": "string", "enum": ["n"] }
+										]
+									},
+									"pe": {
+										"anyOf": [
+											{ "type": "number", "enum": [1] },
+											{ "type": "number", "enum": [2] },
+											{ "type": "number", "enum": [3] }
+										]
+									},
+									"t": {
+										"anyOf": [
+											{ "type": "string", "enum": ["p"] },
+											{ "type": "string", "enum": ["b"] },
+											{ "type": "string", "enum": ["b-to"] },
+											{ "type": "string", "enum": ["bp-to"] },
+											{ "type": "string", "enum": ["i"] },
+											{ "type": "string", "enum": ["ps"] },
+											{ "type": "string", "enum": ["f"] },
+											{ "type": "string", "enum": ["ip"] },
+											{ "type": "string", "enum": ["c"] },
+											{ "type": "string", "enum": ["pr"] },
+											{ "type": "string", "enum": ["s"] },
+											{ "type": "string", "enum": ["si"] },
+											{ "type": "string", "enum": ["pp"] },
+											{ "type": "string", "enum": ["pc"] },
+											{ "type": "string", "enum": ["pq"] },
+											{ "type": "string", "enum": ["cp"] },
+											{ "type": "string", "enum": ["fa"] },
+											{ "type": "string", "enum": ["pa"] },
+											{ "type": "string", "enum": ["spa"] },
+											{ "type": "string", "enum": ["spq"] },
+											{ "type": "string", "enum": ["bp"] }
+										]
+									},
+									"aux": {
+										"anyOf": [
+											{ "type": "string", "enum": ["av"] },
+											{ "type": "string", "enum": ["êt"] }
+										]
+									},
+									"typ": {
+										"additionalProperties": false,
+										"type": "object",
+										"properties": {
+											"neg": {
+												"anyOf": [
+													{ "type": "boolean" },
+													{ "minLength": 1, "maxLength": 32, "type": "string" }
+												]
+											},
+											"pas": { "type": "boolean" },
+											"prog": { "type": "boolean" },
+											"exc": { "type": "boolean" },
+											"perf": { "type": "boolean" },
+											"contr": { "type": "boolean" },
+											"refl": { "type": "boolean" },
+											"maje": { "type": "boolean" },
+											"mod": {
+												"anyOf": [
+													{ "type": "boolean", "enum": [false] },
+													{ "type": "string", "enum": ["poss"] },
+													{ "type": "string", "enum": ["perm"] },
+													{ "type": "string", "enum": ["nece"] },
+													{ "type": "string", "enum": ["obli"] },
+													{ "type": "string", "enum": ["will"] }
+												]
+											},
+											"int": {
+												"anyOf": [
+													{ "type": "boolean", "enum": [false] },
+													{ "type": "string", "enum": ["yon"] },
+													{ "type": "string", "enum": ["wos"] },
+													{ "type": "string", "enum": ["wod"] },
+													{ "type": "string", "enum": ["woi"] },
+													{ "type": "string", "enum": ["was"] },
+													{ "type": "string", "enum": ["wad"] },
+													{ "type": "string", "enum": ["wai"] },
+													{ "type": "string", "enum": ["whe"] },
+													{ "type": "string", "enum": ["why"] },
+													{ "type": "string", "enum": ["whn"] },
+													{ "type": "string", "enum": ["how"] },
+													{ "type": "string", "enum": ["muc"] },
+													{ "type": "string", "enum": ["tag"] }
+												]
+											}
+										}
+									},
+									"pos": {
+										"anyOf": [
+											{ "type": "string", "enum": ["pre"] },
+											{ "type": "string", "enum": ["post"] }
+										]
+									},
+									"pro": { "type": "boolean", "enum": [true] },
+									"c": {
+										"anyOf": [
+											{ "type": "string", "enum": ["nom"] },
+											{ "type": "string", "enum": ["acc"] },
+											{ "type": "string", "enum": ["dat"] },
+											{ "type": "string", "enum": ["gen"] },
+											{ "type": "string", "enum": ["refl"] }
+										]
+									},
+									"ow": {
+										"anyOf": [
+											{ "type": "string", "enum": ["s"] },
+											{ "type": "string", "enum": ["p"] }
+										]
+									},
+									"cap": {
+										"anyOf": [
+											{ "type": "boolean" },
+											{ "type": "string", "enum": ["tit"] }
+										]
+									},
+									"lier": { "type": "boolean", "enum": [true] },
+									"maje": { "type": "boolean" },
+									"nat": { "type": "boolean" },
+									"dOpt": {
+										"additionalProperties": false,
+										"type": "object",
+										"properties": {
+											"year": { "type": "boolean" },
+											"month": { "type": "boolean" },
+											"date": { "type": "boolean" },
+											"day": { "type": "boolean" },
+											"hour": { "type": "boolean" },
+											"minute": { "type": "boolean" },
+											"second": { "type": "boolean" },
+											"det": { "type": "boolean" },
+											"nat": { "type": "boolean" },
+											"ord": { "type": "boolean" },
+											"rom": { "type": "boolean" },
+											"raw": { "type": "boolean" },
+											"mprecision": {
+												"minimum": 0,
+												"maximum": 20,
+												"type": "number"
+											}
+										}
+									},
+									"a": { "maxLength": 64, "type": "string" },
+									"b": { "maxLength": 64, "type": "string" },
+									"en": { "maxLength": 64, "type": "string" },
+									"ba": { "maxLength": 64, "type": "string" }
+								}
+							}
+						}
+					}
+				]
+			},
+			"DependentNode": {
+				"additionalProperties": false,
+				"type": "object",
+				"required": ["dependent", "terminal", "dependents"],
+				"properties": {
+					"dependent": {
+						"anyOf": [
+							{ "type": "string", "enum": ["root"] },
+							{ "type": "string", "enum": ["det"] },
+							{ "type": "string", "enum": ["subj"] },
+							{ "type": "string", "enum": ["comp"] },
+							{ "type": "string", "enum": ["mod"] },
+							{ "type": "string", "enum": ["coord"] }
+						]
+					},
+					"terminal": {
+						"additionalProperties": false,
+						"type": "object",
+						"required": ["terminal", "lemma"],
+						"properties": {
+							"terminal": {
+								"anyOf": [
+									{ "type": "string", "enum": ["N"] },
+									{ "type": "string", "enum": ["A"] },
+									{ "type": "string", "enum": ["Pro"] },
+									{ "type": "string", "enum": ["D"] },
+									{ "type": "string", "enum": ["V"] },
+									{ "type": "string", "enum": ["Adv"] },
+									{ "type": "string", "enum": ["C"] },
+									{ "type": "string", "enum": ["P"] },
+									{ "type": "string", "enum": ["DT"] },
+									{ "type": "string", "enum": ["NO"] },
+									{ "type": "string", "enum": ["Q"] }
+								]
+							},
+							"lemma": {
+								"anyOf": [
+									{ "minLength": 1, "maxLength": 4096, "type": "string" },
+									{ "type": "number" }
+								]
+							},
+							"props": {
+								"additionalProperties": false,
+								"description": "Allowlisted jsRealB options. Arbitrary method names, JavaScript expressions, HTML tags, and Markdown directives are rejected.",
+								"type": "object",
+								"properties": {
+									"n": {
+										"anyOf": [
+											{ "type": "string", "enum": ["s"] },
+											{ "type": "string", "enum": ["p"] }
+										]
+									},
+									"g": {
+										"anyOf": [
+											{ "type": "string", "enum": ["m"] },
+											{ "type": "string", "enum": ["f"] },
+											{ "type": "string", "enum": ["n"] }
+										]
+									},
+									"pe": {
+										"anyOf": [
+											{ "type": "number", "enum": [1] },
+											{ "type": "number", "enum": [2] },
+											{ "type": "number", "enum": [3] }
+										]
+									},
+									"t": {
+										"anyOf": [
+											{ "type": "string", "enum": ["p"] },
+											{ "type": "string", "enum": ["b"] },
+											{ "type": "string", "enum": ["b-to"] },
+											{ "type": "string", "enum": ["bp-to"] },
+											{ "type": "string", "enum": ["i"] },
+											{ "type": "string", "enum": ["ps"] },
+											{ "type": "string", "enum": ["f"] },
+											{ "type": "string", "enum": ["ip"] },
+											{ "type": "string", "enum": ["c"] },
+											{ "type": "string", "enum": ["pr"] },
+											{ "type": "string", "enum": ["s"] },
+											{ "type": "string", "enum": ["si"] },
+											{ "type": "string", "enum": ["pp"] },
+											{ "type": "string", "enum": ["pc"] },
+											{ "type": "string", "enum": ["pq"] },
+											{ "type": "string", "enum": ["cp"] },
+											{ "type": "string", "enum": ["fa"] },
+											{ "type": "string", "enum": ["pa"] },
+											{ "type": "string", "enum": ["spa"] },
+											{ "type": "string", "enum": ["spq"] },
+											{ "type": "string", "enum": ["bp"] }
+										]
+									},
+									"aux": {
+										"anyOf": [
+											{ "type": "string", "enum": ["av"] },
+											{ "type": "string", "enum": ["êt"] }
+										]
+									},
+									"typ": {
+										"additionalProperties": false,
+										"type": "object",
+										"properties": {
+											"neg": {
+												"anyOf": [
+													{ "type": "boolean" },
+													{ "minLength": 1, "maxLength": 32, "type": "string" }
+												]
+											},
+											"pas": { "type": "boolean" },
+											"prog": { "type": "boolean" },
+											"exc": { "type": "boolean" },
+											"perf": { "type": "boolean" },
+											"contr": { "type": "boolean" },
+											"refl": { "type": "boolean" },
+											"maje": { "type": "boolean" },
+											"mod": {
+												"anyOf": [
+													{ "type": "boolean", "enum": [false] },
+													{ "type": "string", "enum": ["poss"] },
+													{ "type": "string", "enum": ["perm"] },
+													{ "type": "string", "enum": ["nece"] },
+													{ "type": "string", "enum": ["obli"] },
+													{ "type": "string", "enum": ["will"] }
+												]
+											},
+											"int": {
+												"anyOf": [
+													{ "type": "boolean", "enum": [false] },
+													{ "type": "string", "enum": ["yon"] },
+													{ "type": "string", "enum": ["wos"] },
+													{ "type": "string", "enum": ["wod"] },
+													{ "type": "string", "enum": ["woi"] },
+													{ "type": "string", "enum": ["was"] },
+													{ "type": "string", "enum": ["wad"] },
+													{ "type": "string", "enum": ["wai"] },
+													{ "type": "string", "enum": ["whe"] },
+													{ "type": "string", "enum": ["why"] },
+													{ "type": "string", "enum": ["whn"] },
+													{ "type": "string", "enum": ["how"] },
+													{ "type": "string", "enum": ["muc"] },
+													{ "type": "string", "enum": ["tag"] }
+												]
+											}
+										}
+									},
+									"pos": {
+										"anyOf": [
+											{ "type": "string", "enum": ["pre"] },
+											{ "type": "string", "enum": ["post"] }
+										]
+									},
+									"pro": { "type": "boolean", "enum": [true] },
+									"c": {
+										"anyOf": [
+											{ "type": "string", "enum": ["nom"] },
+											{ "type": "string", "enum": ["acc"] },
+											{ "type": "string", "enum": ["dat"] },
+											{ "type": "string", "enum": ["gen"] },
+											{ "type": "string", "enum": ["refl"] }
+										]
+									},
+									"ow": {
+										"anyOf": [
+											{ "type": "string", "enum": ["s"] },
+											{ "type": "string", "enum": ["p"] }
+										]
+									},
+									"cap": {
+										"anyOf": [
+											{ "type": "boolean" },
+											{ "type": "string", "enum": ["tit"] }
+										]
+									},
+									"lier": { "type": "boolean", "enum": [true] },
+									"maje": { "type": "boolean" },
+									"nat": { "type": "boolean" },
+									"dOpt": {
+										"additionalProperties": false,
+										"type": "object",
+										"properties": {
+											"year": { "type": "boolean" },
+											"month": { "type": "boolean" },
+											"date": { "type": "boolean" },
+											"day": { "type": "boolean" },
+											"hour": { "type": "boolean" },
+											"minute": { "type": "boolean" },
+											"second": { "type": "boolean" },
+											"det": { "type": "boolean" },
+											"nat": { "type": "boolean" },
+											"ord": { "type": "boolean" },
+											"rom": { "type": "boolean" },
+											"raw": { "type": "boolean" },
+											"mprecision": {
+												"minimum": 0,
+												"maximum": 20,
+												"type": "number"
+											}
+										}
+									},
+									"a": { "maxLength": 64, "type": "string" },
+									"b": { "maxLength": 64, "type": "string" },
+									"en": { "maxLength": 64, "type": "string" },
+									"ba": { "maxLength": 64, "type": "string" }
+								}
+							}
+						}
+					},
+					"dependents": {
+						"maxItems": 256,
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/DependentNode" }
+					},
+					"props": {
+						"additionalProperties": false,
+						"description": "Allowlisted jsRealB options. Arbitrary method names, JavaScript expressions, HTML tags, and Markdown directives are rejected.",
+						"type": "object",
+						"properties": {
+							"n": {
+								"anyOf": [
+									{ "type": "string", "enum": ["s"] },
+									{ "type": "string", "enum": ["p"] }
+								]
+							},
+							"g": {
+								"anyOf": [
+									{ "type": "string", "enum": ["m"] },
+									{ "type": "string", "enum": ["f"] },
+									{ "type": "string", "enum": ["n"] }
+								]
+							},
+							"pe": {
+								"anyOf": [
+									{ "type": "number", "enum": [1] },
+									{ "type": "number", "enum": [2] },
+									{ "type": "number", "enum": [3] }
+								]
+							},
+							"t": {
+								"anyOf": [
+									{ "type": "string", "enum": ["p"] },
+									{ "type": "string", "enum": ["b"] },
+									{ "type": "string", "enum": ["b-to"] },
+									{ "type": "string", "enum": ["bp-to"] },
+									{ "type": "string", "enum": ["i"] },
+									{ "type": "string", "enum": ["ps"] },
+									{ "type": "string", "enum": ["f"] },
+									{ "type": "string", "enum": ["ip"] },
+									{ "type": "string", "enum": ["c"] },
+									{ "type": "string", "enum": ["pr"] },
+									{ "type": "string", "enum": ["s"] },
+									{ "type": "string", "enum": ["si"] },
+									{ "type": "string", "enum": ["pp"] },
+									{ "type": "string", "enum": ["pc"] },
+									{ "type": "string", "enum": ["pq"] },
+									{ "type": "string", "enum": ["cp"] },
+									{ "type": "string", "enum": ["fa"] },
+									{ "type": "string", "enum": ["pa"] },
+									{ "type": "string", "enum": ["spa"] },
+									{ "type": "string", "enum": ["spq"] },
+									{ "type": "string", "enum": ["bp"] }
+								]
+							},
+							"aux": {
+								"anyOf": [
+									{ "type": "string", "enum": ["av"] },
+									{ "type": "string", "enum": ["êt"] }
+								]
+							},
+							"typ": {
+								"additionalProperties": false,
+								"type": "object",
+								"properties": {
+									"neg": {
+										"anyOf": [
+											{ "type": "boolean" },
+											{ "minLength": 1, "maxLength": 32, "type": "string" }
+										]
+									},
+									"pas": { "type": "boolean" },
+									"prog": { "type": "boolean" },
+									"exc": { "type": "boolean" },
+									"perf": { "type": "boolean" },
+									"contr": { "type": "boolean" },
+									"refl": { "type": "boolean" },
+									"maje": { "type": "boolean" },
+									"mod": {
+										"anyOf": [
+											{ "type": "boolean", "enum": [false] },
+											{ "type": "string", "enum": ["poss"] },
+											{ "type": "string", "enum": ["perm"] },
+											{ "type": "string", "enum": ["nece"] },
+											{ "type": "string", "enum": ["obli"] },
+											{ "type": "string", "enum": ["will"] }
+										]
+									},
+									"int": {
+										"anyOf": [
+											{ "type": "boolean", "enum": [false] },
+											{ "type": "string", "enum": ["yon"] },
+											{ "type": "string", "enum": ["wos"] },
+											{ "type": "string", "enum": ["wod"] },
+											{ "type": "string", "enum": ["woi"] },
+											{ "type": "string", "enum": ["was"] },
+											{ "type": "string", "enum": ["wad"] },
+											{ "type": "string", "enum": ["wai"] },
+											{ "type": "string", "enum": ["whe"] },
+											{ "type": "string", "enum": ["why"] },
+											{ "type": "string", "enum": ["whn"] },
+											{ "type": "string", "enum": ["how"] },
+											{ "type": "string", "enum": ["muc"] },
+											{ "type": "string", "enum": ["tag"] }
+										]
+									}
+								}
+							},
+							"pos": {
+								"anyOf": [
+									{ "type": "string", "enum": ["pre"] },
+									{ "type": "string", "enum": ["post"] }
+								]
+							},
+							"pro": { "type": "boolean", "enum": [true] },
+							"c": {
+								"anyOf": [
+									{ "type": "string", "enum": ["nom"] },
+									{ "type": "string", "enum": ["acc"] },
+									{ "type": "string", "enum": ["dat"] },
+									{ "type": "string", "enum": ["gen"] },
+									{ "type": "string", "enum": ["refl"] }
+								]
+							},
+							"ow": {
+								"anyOf": [
+									{ "type": "string", "enum": ["s"] },
+									{ "type": "string", "enum": ["p"] }
+								]
+							},
+							"cap": {
+								"anyOf": [
+									{ "type": "boolean" },
+									{ "type": "string", "enum": ["tit"] }
+								]
+							},
+							"lier": { "type": "boolean", "enum": [true] },
+							"maje": { "type": "boolean" },
+							"nat": { "type": "boolean" },
+							"dOpt": {
+								"additionalProperties": false,
+								"type": "object",
+								"properties": {
+									"year": { "type": "boolean" },
+									"month": { "type": "boolean" },
+									"date": { "type": "boolean" },
+									"day": { "type": "boolean" },
+									"hour": { "type": "boolean" },
+									"minute": { "type": "boolean" },
+									"second": { "type": "boolean" },
+									"det": { "type": "boolean" },
+									"nat": { "type": "boolean" },
+									"ord": { "type": "boolean" },
+									"rom": { "type": "boolean" },
+									"raw": { "type": "boolean" },
+									"mprecision": {
+										"minimum": 0,
+										"maximum": 20,
+										"type": "number"
+									}
+								}
+							},
+							"a": { "maxLength": 64, "type": "string" },
+							"b": { "maxLength": 64, "type": "string" },
+							"en": { "maxLength": 64, "type": "string" },
+							"ba": { "maxLength": 64, "type": "string" }
+						}
+					}
+				}
+			},
+			"JsonValue": {
+				"anyOf": [
+					{ "maxLength": 16384, "type": "string" },
+					{ "type": "number" },
+					{ "type": "boolean" },
+					{ "type": "null" },
+					{
+						"maxItems": 256,
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/JsonValue" }
+					},
+					{
+						"maxProperties": 256,
+						"type": "object",
+						"additionalProperties": { "$ref": "#/components/schemas/JsonValue" }
+					}
+				]
+			},
+			"SurfaceRealizationRequest": {
+				"additionalProperties": false,
+				"description": "JSON-only structured realisation request. JavaScript source expressions are never accepted.",
+				"type": "object",
+				"required": ["mode", "backend", "language", "input"],
+				"properties": {
+					"mode": { "type": "string", "enum": ["surface_realization"] },
+					"backend": { "type": "string", "enum": ["jsrealb"] },
+					"language": {
+						"anyOf": [
+							{ "type": "string", "enum": ["en"] },
+							{ "type": "string", "enum": ["fr"] }
+						]
+					},
+					"input": {
+						"anyOf": [
+							{
+								"additionalProperties": false,
+								"type": "object",
+								"required": ["representation", "structure"],
+								"properties": {
+									"representation": {
+										"type": "string",
+										"enum": ["constituent"]
+									},
+									"structure": {
+										"$ref": "#/components/schemas/ConstituentNode"
+									}
+								}
+							},
+							{
+								"additionalProperties": false,
+								"type": "object",
+								"required": ["representation", "structure"],
+								"properties": {
+									"representation": {
+										"type": "string",
+										"enum": ["dependency"]
+									},
+									"structure": { "$ref": "#/components/schemas/DependentNode" }
+								}
+							}
+						]
+					}
+				}
+			},
+			"TemplateGenerationRequest": {
+				"additionalProperties": false,
+				"description": "Template/data-to-text request executed by the legacy RosaeNLG backend. Template source is executable and must be trusted.",
+				"type": "object",
+				"required": ["mode", "backend", "language", "input"],
+				"properties": {
+					"mode": { "type": "string", "enum": ["template_generation"] },
+					"backend": { "type": "string", "enum": ["rosaenlg"] },
+					"language": {
+						"anyOf": [
+							{ "type": "string", "enum": ["en_US"] },
+							{ "type": "string", "enum": ["fr_FR"] },
+							{ "type": "string", "enum": ["de_DE"] },
+							{ "type": "string", "enum": ["it_IT"] },
+							{ "type": "string", "enum": ["es_ES"] }
+						]
+					},
+					"input": {
+						"additionalProperties": false,
+						"description": "Trusted RosaeNLG/Pug template source, JSON data locals, and an optional deterministic random seed.",
+						"type": "object",
+						"required": ["template", "data"],
+						"properties": {
+							"template": {
+								"minLength": 1,
+								"maxLength": 65536,
+								"type": "string"
+							},
+							"data": {
+								"maxProperties": 256,
+								"type": "object",
+								"additionalProperties": {
+									"$ref": "#/components/schemas/JsonValue"
+								}
+							},
+							"seed": {
+								"minimum": 0,
+								"maximum": 4294967295,
+								"default": 0,
+								"type": "integer"
+							}
+						}
+					}
+				}
+			},
+			"SurfaceRealizationResponse": {
+				"additionalProperties": false,
+				"type": "object",
+				"required": ["text", "mode", "backend", "language", "metadata"],
+				"properties": {
+					"text": { "type": "string" },
+					"mode": { "type": "string", "enum": ["surface_realization"] },
+					"backend": { "type": "string", "enum": ["jsrealb"] },
+					"language": {
+						"anyOf": [
+							{ "type": "string", "enum": ["en"] },
+							{ "type": "string", "enum": ["fr"] }
+						]
+					},
+					"metadata": {
+						"additionalProperties": false,
+						"type": "object",
+						"required": ["engineVersion", "representation", "nodeCount"],
+						"properties": {
+							"engineVersion": { "type": "string" },
+							"representation": {
+								"anyOf": [
+									{ "type": "string", "enum": ["constituent"] },
+									{ "type": "string", "enum": ["dependency"] }
+								]
+							},
+							"nodeCount": { "minimum": 1, "type": "integer" }
+						}
+					}
+				}
+			},
+			"TemplateGenerationResponse": {
+				"additionalProperties": false,
+				"type": "object",
+				"required": ["text", "mode", "backend", "language", "metadata"],
+				"properties": {
+					"text": { "type": "string" },
+					"mode": { "type": "string", "enum": ["template_generation"] },
+					"backend": { "type": "string", "enum": ["rosaenlg"] },
+					"language": {
+						"anyOf": [
+							{ "type": "string", "enum": ["en_US"] },
+							{ "type": "string", "enum": ["fr_FR"] },
+							{ "type": "string", "enum": ["de_DE"] },
+							{ "type": "string", "enum": ["it_IT"] },
+							{ "type": "string", "enum": ["es_ES"] }
+						]
+					},
+					"metadata": {
+						"additionalProperties": false,
+						"type": "object",
+						"required": ["engineVersion", "seed"],
+						"properties": {
+							"engineVersion": { "type": "string" },
+							"seed": { "minimum": 0, "maximum": 4294967295, "type": "integer" }
+						}
+					}
+				}
+			}
+		}
+	},
+	"paths": {
+		"/healthz": {
+			"get": {
+				"operationId": "getHealth",
+				"summary": "Liveness probe",
+				"tags": ["Operations"],
+				"responses": {
+					"200": {
+						"description": "Default Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": false,
+									"type": "object",
+									"required": ["status"],
+									"properties": {
+										"status": { "type": "string", "enum": ["ok"] }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/capabilities": {
+			"get": {
+				"operationId": "getCapabilities",
+				"summary": "Describe available NLG modes, representations, and limits",
+				"tags": ["Discovery"],
+				"responses": {
+					"200": {
+						"description": "Default Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"additionalProperties": false,
+									"type": "object",
+									"required": [
+										"engines",
+										"modes",
+										"coverage",
+										"phraseKinds",
+										"terminalKinds",
+										"dependencyKinds",
+										"limits"
+									],
+									"properties": {
+										"engines": {
+											"type": "array",
+											"items": {
+												"additionalProperties": false,
+												"type": "object",
+												"required": ["name", "version", "maintenance"],
+												"properties": {
+													"name": { "type": "string" },
+													"version": { "type": "string" },
+													"maintenance": {
+														"anyOf": [
+															{ "type": "string", "enum": ["active"] },
+															{ "type": "string", "enum": ["archived"] }
+														]
+													}
+												}
+											}
+										},
+										"modes": {
+											"additionalProperties": false,
+											"type": "object",
+											"required": [
+												"surface_realization",
+												"template_generation"
+											],
+											"properties": {
+												"surface_realization": {
+													"additionalProperties": false,
+													"type": "object",
+													"required": [
+														"backends",
+														"languages",
+														"representations",
+														"features"
+													],
+													"properties": {
+														"backends": {
+															"type": "array",
+															"items": { "type": "string", "enum": ["jsrealb"] }
+														},
+														"languages": {
+															"type": "array",
+															"items": { "type": "string" }
+														},
+														"representations": {
+															"type": "array",
+															"items": { "type": "string" }
+														},
+														"features": {
+															"type": "array",
+															"items": { "type": "string" }
+														}
+													}
+												},
+												"template_generation": {
+													"additionalProperties": false,
+													"type": "object",
+													"required": [
+														"backends",
+														"languages",
+														"features",
+														"trustedTemplateRequired"
+													],
+													"properties": {
+														"backends": {
+															"type": "array",
+															"items": {
+																"type": "string",
+																"enum": ["rosaenlg"]
+															}
+														},
+														"languages": {
+															"type": "array",
+															"items": { "type": "string" }
+														},
+														"features": {
+															"type": "array",
+															"items": { "type": "string" }
+														},
+														"trustedTemplateRequired": {
+															"type": "boolean",
+															"enum": [true]
+														}
+													}
+												}
+											}
+										},
+										"coverage": {
+											"additionalProperties": false,
+											"type": "object",
+											"required": [
+												"directCapabilityFamilies",
+												"totalCapabilityFamilies",
+												"percentage"
+											],
+											"properties": {
+												"directCapabilityFamilies": {
+													"type": "number",
+													"enum": [15]
+												},
+												"totalCapabilityFamilies": {
+													"type": "number",
+													"enum": [15]
+												},
+												"percentage": { "type": "number", "enum": [100] }
+											}
+										},
+										"phraseKinds": {
+											"type": "array",
+											"items": { "type": "string" }
+										},
+										"terminalKinds": {
+											"type": "array",
+											"items": { "type": "string" }
+										},
+										"dependencyKinds": {
+											"type": "array",
+											"items": { "type": "string" }
+										},
+										"limits": {
+											"type": "object",
+											"required": [
+												"maxBodyBytes",
+												"maxNodes",
+												"maxDepth",
+												"maxOutputBytes",
+												"templateTimeoutMs"
+											],
+											"properties": {
+												"maxBodyBytes": { "type": "integer" },
+												"maxNodes": { "type": "integer" },
+												"maxDepth": { "type": "integer" },
+												"maxOutputBytes": { "type": "integer" },
+												"templateTimeoutMs": { "type": "integer" }
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/generate": {
+			"post": {
+				"operationId": "generateText",
+				"summary": "Generate text from a structure or trusted NLG template",
+				"tags": ["Generation"],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"anyOf": [
+									{ "$ref": "#/components/schemas/SurfaceRealizationRequest" },
+									{ "$ref": "#/components/schemas/TemplateGenerationRequest" }
+								],
+								"discriminator": {
+									"propertyName": "mode",
+									"mapping": {
+										"surface_realization": "#/components/schemas/SurfaceRealizationRequest",
+										"template_generation": "#/components/schemas/TemplateGenerationRequest"
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Default Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"anyOf": [
+										{
+											"$ref": "#/components/schemas/SurfaceRealizationResponse"
+										},
+										{
+											"$ref": "#/components/schemas/TemplateGenerationResponse"
+										}
+									],
+									"discriminator": { "propertyName": "mode" }
+								}
+							},
+							"text/plain": { "schema": { "type": "string" } }
+						}
+					},
+					"400": {
+						"description": "Default Response",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"additionalProperties": false,
+									"type": "object",
+									"required": ["type", "title", "status", "detail", "code"],
+									"properties": {
+										"type": { "type": "string" },
+										"title": { "type": "string" },
+										"status": { "type": "integer" },
+										"detail": { "type": "string" },
+										"code": { "type": "string" },
+										"instance": { "type": "string" }
+									}
+								}
+							}
+						}
+					},
+					"413": {
+						"description": "Default Response",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"additionalProperties": false,
+									"type": "object",
+									"required": ["type", "title", "status", "detail", "code"],
+									"properties": {
+										"type": { "type": "string" },
+										"title": { "type": "string" },
+										"status": { "type": "integer" },
+										"detail": { "type": "string" },
+										"code": { "type": "string" },
+										"instance": { "type": "string" }
+									}
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Default Response",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"additionalProperties": false,
+									"type": "object",
+									"required": ["type", "title", "status", "detail", "code"],
+									"properties": {
+										"type": { "type": "string" },
+										"title": { "type": "string" },
+										"status": { "type": "integer" },
+										"detail": { "type": "string" },
+										"code": { "type": "string" },
+										"instance": { "type": "string" }
+									}
+								}
+							}
+						}
+					},
+					"500": {
+						"description": "Default Response",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"additionalProperties": false,
+									"type": "object",
+									"required": ["type", "title", "status", "detail", "code"],
+									"properties": {
+										"type": { "type": "string" },
+										"title": { "type": "string" },
+										"status": { "type": "integer" },
+										"detail": { "type": "string" },
+										"code": { "type": "string" },
+										"instance": { "type": "string" }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"tags": [
+		{
+			"name": "Generation",
+			"description": "Deterministic surface realisation and trusted template generation."
+		},
+		{ "name": "Discovery", "description": "Engine capabilities and limits." },
+		{ "name": "Operations", "description": "Operational probes." }
+	]
+}

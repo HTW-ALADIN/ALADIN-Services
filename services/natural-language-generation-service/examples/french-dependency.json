@@ -1,0 +1,25 @@
+{
+	"mode": "surface_realization",
+	"backend": "jsrealb",
+	"language": "fr",
+	"input": {
+		"representation": "dependency",
+		"structure": {
+			"dependent": "root",
+			"terminal": { "terminal": "V", "lemma": "aimer" },
+			"dependents": [
+				{
+					"dependent": "subj",
+					"terminal": { "terminal": "N", "lemma": "chat" },
+					"dependents": [
+						{
+							"dependent": "det",
+							"terminal": { "terminal": "D", "lemma": "le" },
+							"dependents": []
+						}
+					]
+				}
+			]
+		}
+	}
+}
