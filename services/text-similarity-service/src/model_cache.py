@@ -115,6 +115,10 @@ def require_large_download_ok(model_name: str, params: dict[str, Any] | None = N
     per-request (``params.confirm_large_download: true``) or server-wide
     (``ALLOW_LARGE_MODEL_DOWNLOADS=true``).
 
+    A model whose data is ALREADY PRESENT in the gensim data dir (pre-cached on
+    disk, e.g. baked into a container image) also passes: there is nothing to
+    download, so the cost gate is not engaged.
+
     Models are gated if they exceed the threshold, whether listed in the
     known-size table or resolved from the gensim downloader metadata. Names the
     metadata cannot resolve are treated as 0 MB — that is not a bypass, since a
@@ -124,7 +128,9 @@ def require_large_download_ok(model_name: str, params: dict[str, Any] | None = N
     if size_mb <= LARGE_DOWNLOAD_THRESHOLD_MB:
         return
     if f"gensim:{model_name}" in _models:
-        return  # already downloaded/cached — nothing would be downloaded
+        return  # already downloaded/cached in RAM — nothing would be downloaded
+    if _gensim_model_on_disk(model_name):
+        return  # model data already present in the gensim data dir — no download
     params = params or {}
     opt_in = params.get("confirm_large_download") is True or os.environ.get(ALLOW_LARGE_MODEL_DOWNLOADS_ENV, "").lower() in (
         "1",
@@ -133,6 +139,21 @@ def require_large_download_ok(model_name: str, params: dict[str, Any] | None = N
     )
     if not opt_in:
         raise LargeModelDownloadBlocked(model_name, size_mb)
+
+
+def _gensim_model_on_disk(model_name: str) -> bool:
+    """Whether the gensim model data already exists in the gensim data dir.
+
+    ``gensim.downloader.api.load`` skips its download when ``<data_dir>/<name>``
+    exists. Mirror that check so a model that was pre-cached into the data dir
+    (e.g. baked into a container image at build time) is NOT flagged as a
+    "large download" by the cost gate — the data is already there, nothing would
+    be downloaded.
+    """
+    import gensim.downloader as api
+
+    folder_dir = os.path.join(api.BASE_DIR, model_name)
+    return os.path.isdir(folder_dir) and any(os.scandir(folder_dir))
 
 
 def _resolve_download_size_mb(model_name: str) -> int:

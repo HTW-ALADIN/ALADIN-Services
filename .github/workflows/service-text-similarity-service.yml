@@ -237,9 +237,11 @@ jobs:
           - image: text-similarity-cpu
             profile: cpu
             install_model: "false"
+            precache_conceptnet: "false"
           - image: text-similarity-pytorch
             profile: pytorch
             install_model: "true"
+            precache_conceptnet: "true"
     steps:
       - uses: actions/checkout@v4
       - name: Log in to GitHub Container Registry
@@ -266,6 +268,7 @@ jobs:
           build-args: |
             SIMILARITY_PROFILE=${{ matrix.profile }}
             INSTALL_MODEL=${{ matrix.install_model }}
+            PRECACHE_CONCEPTNET=${{ matrix.precache_conceptnet }}
           # Reuse layers across CI runs: without this, the ~2.5 GB PyTorch layer
           # is re-downloaded on every push to master. `type=gha` uses the GitHub
           # Actions cache backend scoped to this project/branch.

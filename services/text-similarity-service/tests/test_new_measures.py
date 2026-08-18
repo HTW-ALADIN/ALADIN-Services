@@ -261,6 +261,7 @@ class TestEmbeddingVariants:
             raise AssertionError("model should not be downloaded without opt-in")
 
         monkeypatch.setattr("src.model_cache._resolve_download_size_mb", lambda name: 1600, raising=False)
+        monkeypatch.setattr("src.model_cache._gensim_model_on_disk", lambda name: False, raising=False)
         monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
         clear_all()
         with pytest.raises(LargeModelDownloadBlocked):
@@ -315,7 +316,10 @@ class TestCostGate:
 
     FASTTEXT = "fasttext-wiki-news-subwords-300"
 
-    def test_fasttext_blocked_without_opt_in(self):
+    def test_fasttext_blocked_without_opt_in(self, monkeypatch):
+        # Force "not on disk" so the test passes deterministically even on a
+        # dev machine that already downloaded fasttext into the gensim data dir.
+        monkeypatch.setattr("src.model_cache._gensim_model_on_disk", lambda name: False)
         clear_all()
         with pytest.raises(LargeModelDownloadBlocked):
             compute_similarity("embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"variant": "fasttext"})
@@ -363,7 +367,10 @@ class TestCostGate:
         finally:
             clear_all()
 
-    def test_conceptnet_local_blocked_without_opt_in(self):
+    def test_conceptnet_local_blocked_without_opt_in(self, monkeypatch):
+        # Force "not on disk" for determinism (the model may already be cached
+        # in the gensim data dir on this machine).
+        monkeypatch.setattr("src.model_cache._gensim_model_on_disk", lambda name: False)
         clear_all()
         with pytest.raises(LargeModelDownloadBlocked):
             compute_similarity(
@@ -372,6 +379,31 @@ class TestCostGate:
                 {"text_a": "car", "text_b": "auto"},
                 {"variant": "conceptnet_numberbatch", "backend": "local"},
             )
+
+    def test_precached_on_disk_model_needs_no_opt_in(self, monkeypatch):
+        """A large model whose data is ALREADY on disk passes the gate without opt-in.
+
+        Matches a build-time pre-cache (e.g. the ConceptNet Numberbatch baked
+        into the pytorch image): nothing would be downloaded, so the cost gate
+        must not block.
+        """
+        captured: list[str] = []
+
+        def fake_get(name):
+            captured.append(name)
+            return FakeKeyedVectors()
+
+        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
+        monkeypatch.setattr("src.model_cache._gensim_model_on_disk", lambda name: True)
+        clear_all()
+        result = compute_similarity(
+            "embedding_cosine",
+            "gensim",
+            {"text_a": "car", "text_b": "auto"},
+            {"variant": "conceptnet_numberbatch", "backend": "local"},
+        )
+        assert captured == ["conceptnet-numberbatch-17-06-300"]
+        assert result["similarity"] == 0.4
 
     def test_glove_default_needs_no_opt_in(self, monkeypatch):
         """The default variant (glove, ~200 MB) is automatic — no gate."""

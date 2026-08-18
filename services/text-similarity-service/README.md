@@ -17,6 +17,8 @@ Before using this service, understand **three independent decisions**. Everythin
 | `text-similarity-cpu` (default, ~730 MB) | Base algorithms — no PyTorch |
 | `text-similarity-pytorch` | Base **+** SBERT/BERTScore/cross-encoder/semantic_search |
 
+The `text-similarity-pytorch` image additionally **pre-caches the gensim ConceptNet Numberbatch model (~1.2 GB)** at build time — `embedding_cosine` / `conceptnet_numberbatch` (the local default backend) is served immediately on the first request, fully offline. The slim `text-similarity-cpu` image omits it and downloads the model on first use (gated by `confirm_large_download`). Pre-caching is controlled by the `PRECACHE_CONCEPTNET` build arg:
+
 **2. Is the optional Java DKPro sidecar running?** If yes, you also get `topic_model`, `structural_stylistic`, and `dkpro` backends for two base algorithms. If no, those requests fail with `502/503`.
 
 **3. Do you allow the external ConceptNet API?** Only one algorithm variant (`embedding_cosine` / `conceptnet_numberbatch` / `backend: remote`) calls a third-party API — and only when you ask for it explicitly. The default for that variant is a local ~1.2 GB model download (gated). Everything else is fully self-contained. See [External API](#external-api).
@@ -135,11 +137,17 @@ Synchronous & stateless: `{"algorithm", "params", "inputs":[...]}` → result pe
 make prep                    # base deps (cpu profile)
 pip install -e ".[model]"    # + PyTorch / HuggingFace
 pip install -e ".[de]"       # + German lexical (Odenet)
-make docker-build-cpu        # text-similarity-cpu
-make docker-build-pytorch    # text-similarity-pytorch
+make docker-build-cpu        # text-similarity-cpu (no model, no pre-cache)
+make docker-build-pytorch    # text-similarity-pytorch (pre-caches ConceptNet Numberbatch)
 make test                    # run tests
 make start                   # uvicorn on :8000
 ```
+
+The pytorch image is built by `make docker-build-pytorch` with `PRECACHE_CONCEPTNET=true`,
+which downloads `conceptnet-numberbatch-17-06-300` (~1.2 GB) into the image so the first
+`conceptnet_numberbatch` request needs no runtime download. Disable it with
+`docker build --build-arg SIMILARITY_PROFILE=pytorch --build-arg INSTALL_MODEL=true \
+--build-arg PRECACHE_CONCEPTNET=false .` if you do not want the model baked in.
 
 ## License
 

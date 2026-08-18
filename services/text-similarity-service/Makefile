@@ -38,6 +38,7 @@ docker-build-pytorch:
 	docker build -f Dockerfile \
 		--build-arg SIMILARITY_PROFILE=pytorch \
 		--build-arg INSTALL_MODEL=true \
+		--build-arg PRECACHE_CONCEPTNET=true \
 		-t $(REGISTRY)/text-similarity-pytorch .
 
 docker-build: docker-build-cpu docker-build-pytorch
