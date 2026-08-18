@@ -176,6 +176,9 @@ def _cross_encoder(input_data: dict[str, Any], params: dict[str, Any]) -> dict[s
 
 
 def _wordnet_similarity_nltk(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    from .model_cache import ensure_wordnet
+
+    ensure_wordnet()
     from nltk.corpus import wordnet as wn
 
     a = input_data.get("text_a", "")

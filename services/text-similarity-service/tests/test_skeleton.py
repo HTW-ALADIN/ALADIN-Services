@@ -14,13 +14,15 @@ def test_health():
     assert resp.json()["service"] == "text-similarity-service"
 
 
-def test_algorithms_catalog():
+@pytest.mark.parametrize("profile_client", ["pytorch"], indirect=True)
+def test_algorithms_catalog(profile_client):
     """GET /v1/similarity/text/algorithms lists all 16 semantic algorithm families.
 
     jaccard/dice are legacy aliases of token_set_overlap and therefore do not
-    count as separate families.
+    count as separate families. Runs under the pytorch profile (the default cpu
+    profile omits the PyTorch-based algorithms asserted below).
     """
-    resp = client.get("/v1/similarity/text/algorithms")
+    resp = profile_client().get("/v1/similarity/text/algorithms")
     assert resp.status_code == 200
     catalog = resp.json()
     algorithms = {e["algorithm"] for e in catalog}

@@ -17,9 +17,11 @@ text-similarity-service = semantic/lexical/statistical similarity
 
 Three independent things matter for how expensive the service is to run:
 
-1. **Install tier** — only the PyTorch stack (`sentence-transformers`,
-   `bert-score`) is an opt-in pip extra. Everything else (`nltk`,
-   `scikit-learn`, `gensim`) is base. See [Installation tiers](#installation-tiers).
+1. **Build variant** — one repo builds **two images** that differ only in the
+   PyTorch stack: `text-similarity-cpu` (base, no PyTorch) and
+   `text-similarity-pytorch` (full). Tag separates them; each has its own
+   OpenAPI spec. See [Build variants](#build-variants).
+
 2. **Resource gate** — large *runtime* model downloads (> 500 MB) can't be
    triggered by accident; they need an explicit opt-in. "Cost" here means
    **disk/RAM/CPU resource usage on the server that hosts this service** —
@@ -42,6 +44,35 @@ Three independent things matter for how expensive the service is to run:
 | `POST` | `/v1/similarity/text/distance` | Compute text similarity (synchronous, batch) |
 | `POST` | `/v1/similarity/text/retrieval` | Rank query candidates (synchronous, batch) |
 | `POST` | `/v1/similarity/text/lexical` | Look up lexical relations (synchronous, batch) |
+
+## Build variants (1 repo → 2 images)
+
+One Dockerfile builds two images that differ **only** in the PyTorch stack
+(`sentence-transformers`, `bert-score`). The **cpu image is the default build**;
+you pick the variant by tag:
+
+| Image tag | Profile | Includes | OpenAPI spec |
+|---|---|---|---|
+| `text-similarity-cpu` (default) | `cpu` | everything **except** the PyTorch algorithms | `text-similarity-service-cpu.openapi.json` |
+| `text-similarity-pytorch` | `pytorch` | every algorithm, incl. `sbert_cosine`, `cross_encoder`, `bertscore`, `semantic_search` | `text-similarity-service-pytorch.openapi.json` |
+
+The variant is selected at build time via `SIMILARITY_PROFILE` (baked in as an
+ENV): `cpu` (default) or `pytorch`. In the `cpu` image the PyTorch algorithms
+are absent from discovery (`/v1/similarity/text/algorithms`) and a request for
+one is rejected up-front with `400`, pointing at the `pytorch` image — rather
+than a lazy "install the optional extra", since that extra is deliberately not
+shipped in this variant.
+
+```sh
+make docker-build-cpu      # text-similarity-cpu   (base, no PyTorch)
+make docker-build-pytorch  # text-similarity-pytorch (full stack)
+
+make generate-openapi      # writes both OpenAPI specs
+```
+
+Everything else — `[de]` (Odenet), the DKPro sidecar, the large-download
+resource gate — is orthogonal: available in **both** variants. Only the
+PyTorch-based algorithms split the two images.
 
 Every compute endpoint is synchronous and stateless: `algorithm` (+ optional
 `backend`), `params`, and a batch `inputs` list in, one result per input out.
@@ -107,9 +138,12 @@ PyTorch (~2.5 GB) — not by how much *data* it downloads at runtime (see
 
 Imports are lazy — nothing loads until the matching algorithm is called.
 Without `[model]`, its endpoints return `501 problem+json` naming the install
-command; same for `[de]`. `embedding_cosine`/`wmd` need no extra (`gensim` is
-base) — their large downloads go through the resource gate instead (`400`, not
-`501`).
+command; same for `[de]`. **In the `text-similarity-cpu` image the profile
+switch is stricter than a 501**: the PyTorch algorithms are not advertised and
+a request for one returns `400` pointing at the `pytorch` image (see
+[Build variants](#build-variants-1-repo-%E2%86%92-2-images)).
+`embedding_cosine`/`wmd` need no extra (`gensim` is base) — their large
+downloads go through the resource gate instead (`400`, not `501`).
 
 ```sh
 pip install -e ".[model]"   # SBERT / BERTScore / semantic_search
@@ -117,12 +151,14 @@ pip install -e ".[de]"      # German lexical relations (Odenet)
 python -m wn download odenet:1.4   # optional — auto-downloads on first use otherwise
 ```
 
-Default image: `docker build -f Dockerfile -t text-similarity-service .` →
-~800 MB (base deps incl. `gensim`, no PyTorch). Full stack:
-`docker build --build-arg INSTALL_MODEL=true -t text-similarity-service .`
-A BuildKit pip cache (`--mount=type=cache`) makes rebuilds with the model
-stack cheap after the first time. Runtime model/data downloads are **never**
-baked into the image, in either build.
+Base image: `make docker-build-cpu` → `text-similarity-cpu` ≈ 730 MB (base deps
+incl. `gensim` + POT, no PyTorch). Full stack: `make docker-build-pytorch` →
+`text-similarity-pytorch`. A BuildKit pip cache (`--mount=type=cache`) makes
+rebuilds with the model stack cheap after the first time. Runtime model/data
+downloads are **never** baked into the image, in either build: both images run
+as the unprivileged `nobody` user with a writable `.cache`-style dir
+(`/var/text-similarity-cache`) so HuggingFace, gensim, NLTK and Odenet data
+download on first use.
 
 ## Resource gate for large downloads
 
@@ -365,11 +401,22 @@ Test-suite notes (also enforced in CI):
 - The WordNet-backed measures need the small NLTK corpora
   (`wordnet`, `wordnet_ic`). `tests/conftest.py` downloads them automatically
   on first run, so a fresh checkout passes without manual data setup.
+- Both profiles are covered. The fast base tests run under the default `cpu`
+  profile; catalog/profile-guard assertions for `pytorch` use the `profile_client`
+  fixture (`tests/conftest.py`), which reloads the app under a given
+  `SIMILARITY_PROFILE` and restores `cpu` afterward.
+- The **`text-similarity-pytorch` build** is end-to-end tested by
+  `tests/test_async.py::TestPytorchProfileCompute` (real SBERT/cross-encoder
+  requests through the `pytorch` profile). They need the `model` extra and a
+  model download, so they carry the `model_download` marker — run them with
+  `pip install -e ".[model]"` then `pytest -m "model_download and not network"`.
+  CI's `pytorch-test` job runs exactly these.
 
 ## Environment variables
 
 | Variable | Default | Description |
 |---|---|---|
+| `SIMILARITY_PROFILE` | `cpu` | Build/run variant: `cpu` (default, PyTorch algorithms excluded) or `pytorch` (all algorithms). Baked into each image (see [Build variants](#build-variants-1-repo-%E2%86%92-2-images)) |
 | `TEXT_SIMILARITY_DKPRO_URL` | `http://localhost:8100` | DKPro Java sidecar URL |
 | `CONCEPTNET_API_URL` | `https://api.conceptnet.io` | ConceptNet relatedness API base URL |
 | `CONCEPTNET_MAX_REMOTE_INPUTS` | `60` | Max inputs per request for `backend: remote` |
@@ -377,9 +424,11 @@ Test-suite notes (also enforced in CI):
 | `ALLOW_LARGE_MODEL_DOWNLOADS` | `false` | Server-wide opt-in for downloads > 500 MB — disk/RAM usage, not money (see [Resource gate](#resource-gate-for-large-downloads)) |
 
 Data is never bundled into the image — everything downloads on first use and
-is cached in `src/model_cache.py`. Run `nltk.download('wordnet')` once for the
-lexical measures; HuggingFace/Odenet/gensim resources fetch automatically
-(large ones only after the cost-gate opt-in).
+is cached in `src/model_cache.py`. WordNet (NLTK), HuggingFace, Odenet and
+gensim resources fetch automatically on first use; large ones (> 500 MB) only
+after the cost-gate opt-in. In the images, the cache lives under the writable
+`/var/text-similarity-cache` (set via `HOME`/`HF_HOME`/`GENSIM_DATA_DIR`/`NLTK_DATA`),
+so the unprivileged `nobody` user can persist downloads across restarts.
 
 ## License
 

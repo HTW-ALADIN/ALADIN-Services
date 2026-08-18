@@ -14,6 +14,9 @@ ODENET_ID = "odenet:1.4"
 
 
 def _wordnet_relations(input_data: dict[str, Any], params: dict[str, Any], kind: str) -> dict[str, Any]:
+    from .model_cache import ensure_wordnet
+
+    ensure_wordnet()
     from nltk.corpus import wordnet as wn
 
     word = input_data.get("word", "")

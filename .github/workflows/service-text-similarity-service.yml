@@ -142,6 +142,38 @@ jobs:
           fail_ci_if_error: false
         if: always()
 
+  # ── PyTorch profile (text-similarity-pytorch build) ─────────────────────────
+  # Heavy on purpose: installs the `model` extra (PyTorch ~2.5 GB) and runs the
+  # pytorch-profile end-to-end compute tests (real SBERT models, ~90-440 MB
+  # downloads). This validates that the pytorch image's algorithms actually work
+  # end-to-end, not just that they're advertised. Kept separate from `test` so
+  # the fast base path stays quick; only these `model_download` tests run here.
+  pytorch-test:
+    name: PyTorch Build Tests
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-model-${{ hashFiles('services/text-similarity-service/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Install dependencies (with model extra)
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev,model]"
+      - name: Run PyTorch profile compute tests
+        # Only the pytorch-profile model tests (marked model_download). Network
+        # tests stay deselected. An explicit -m replaces addopts, so both are stated.
+        run: pytest -v --tb=short -m "model_download and not network" tests/test_async.py::TestPytorchProfileCompute
+
   generate-openapi:
     name: Generate OpenAPI Spec
     runs-on: ubuntu-latest
@@ -165,20 +197,34 @@ jobs:
           pip install -e ".[dev]"
       - name: Generate OpenAPI spec
         run: make generate-openapi
-      - name: Upload OpenAPI spec
+      - name: Upload OpenAPI specs
         uses: actions/upload-artifact@v4
         with:
           name: openapi-spec-text-similarity-service
-          path: services/text-similarity-service/text-similarity-service.openapi.json
+          path: |
+            services/text-similarity-service/text-similarity-service-cpu.openapi.json
+            services/text-similarity-service/text-similarity-service-pytorch.openapi.json
 
   build:
-    name: Build & Push Docker Image
+    name: Build & Push Docker Images
     runs-on: ubuntu-latest
     needs: generate-openapi
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # One repo builds two images; they differ only in the PyTorch
+        # algorithms they ship. Tags: text-similarity-cpu, text-similarity-pytorch.
+        include:
+          - image: text-similarity-cpu
+            profile: cpu
+            install_model: "false"
+          - image: text-similarity-pytorch
+            profile: pytorch
+            install_model: "true"
     steps:
       - uses: actions/checkout@v4
       - name: Log in to GitHub Container Registry
@@ -191,7 +237,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/text-similarity-service
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
             type=sha,prefix=sha-
             type=raw,value=latest
@@ -200,10 +246,9 @@ jobs:
         with:
           context: services/text-similarity-service
           file: services/text-similarity-service/Dockerfile
-          # Default image stays small (no PyTorch). Build the full model stack
-          # with INSTALL_MODEL=true when model-based measures are required.
           build-args: |
-            INSTALL_MODEL=false
+            SIMILARITY_PROFILE=${{ matrix.profile }}
+            INSTALL_MODEL=${{ matrix.install_model }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

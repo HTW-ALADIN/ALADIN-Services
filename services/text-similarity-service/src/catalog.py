@@ -16,9 +16,36 @@ measure they get without knowing the backing library:
 - ``extra``: pip extra needed to enable the backend (``model``, ``de``,
   ``dkpro``) — base backends omit it
 - ``variants``: selectable via ``params.variant`` / ``params.model_name``
+
+Build/run profiles — the same repo builds two images that differ only in the
+PyTorch-based (``requires_model``) algorithms:
+
+- ``cpu`` (default) — the base catalog, PyTorch algorithms excluded. This is the
+  default (``text-similarity-cpu`` image): it stays small. A request for a
+  model algorithm is rejected up-front with 400 pointing at the ``pytorch``
+  image rather than a lazy 501.
+- ``pytorch`` — full catalog, every algorithm. The ``[model]`` algorithms are
+  present and return 501 when the extra isn't installed.
+
+Set via ``SIMILARITY_PROFILE`` (default ``cpu``). The catalog below is the
+full, single source of truth; ``get_catalog()`` applies the profile filter.
 """
 
+import os
 from typing import Any
+
+PROFILES = ("pytorch", "cpu")
+PROFILE = os.environ.get("SIMILARITY_PROFILE", "cpu")
+if PROFILE not in PROFILES:
+    PROFILE = "cpu"
+
+
+def is_enabled(entry: dict[str, Any]) -> bool:
+    """Whether a catalog entry is available in the active profile."""
+    if PROFILE == "pytorch":
+        return True
+    return not entry.get("requires_model")
+
 
 _DEFAULT_RESULT_TYPES = {
     "similarity": "scalar_similarity",
@@ -307,3 +334,10 @@ CATALOG: list[dict[str, Any]] = [
         category="lexical",
     ),
 ]
+
+
+def get_catalog() -> list[dict[str, Any]]:
+    """The catalog for the active profile (see ``catalog`` / ``is_enabled``)."""
+    if PROFILE == "pytorch":
+        return CATALOG
+    return [e for e in CATALOG if is_enabled(e)]

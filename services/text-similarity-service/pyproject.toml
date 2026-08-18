@@ -13,6 +13,9 @@ dependencies = [
     # Static word embeddings (embedding_cosine/wmd). Pure NumPy/Python — NO
     # PyTorch dependency, so it belongs in the base tier like nltk/sklearn.
     "gensim>=4.4.0",
+    # gensim's wmdistance (Word Mover's Distance, used by the `wmd` measure)
+    # imports `ot` (Python Optimal Transport / POT). Small, no PyTorch — base.
+    "pot>=0.9.0",
     "httpx>=0.27.0",
     # CLI (mirrors the REST endpoints)
     "click>=8.1.0",

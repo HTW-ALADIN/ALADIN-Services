@@ -87,3 +87,39 @@ def _ensure_available(resource: str) -> bool:
 def _nltk_wordnet_data():
     for resource in _NLTK_RESOURCES:
         _ensure_available(resource)
+
+
+@pytest.fixture
+def profile_client(request):
+    """A TestClient factory for a specific SIMILARITY_PROFILE.
+
+    The profile is baked into module state at import time, so switching it
+    requires reloading the catalog + app modules. Call ``profile_client("pytorch")``
+    to get a client for that profile, then the default ``cpu`` profile is
+    restored after the test.
+
+    When the path ``profile_client`` is parametrized, the parametrized value is
+    used as the default before ``profile_client("x")`` overrides it.
+    """
+    import importlib
+    import os
+
+    import src.catalog as catalog
+    import src.main as main
+    from fastapi.testclient import TestClient
+
+    _DEFAULT = "cpu"
+    _param = getattr(request, "param", None)
+
+    def _make(profile: str = _param or _DEFAULT) -> TestClient:
+        os.environ["SIMILARITY_PROFILE"] = profile
+        importlib.reload(catalog)
+        importlib.reload(main)
+        return TestClient(main.app)
+
+    yield _make
+
+    # Restore module state to the default so later tests see a clean cpu app.
+    os.environ["SIMILARITY_PROFILE"] = _DEFAULT
+    importlib.reload(catalog)
+    importlib.reload(main)

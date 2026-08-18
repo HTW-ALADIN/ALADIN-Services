@@ -159,6 +159,43 @@ def get_odenet() -> Any:
     return _get("odenet", factory)
 
 
+def ensure_wordnet() -> None:
+    """Ensure the small NLTK WordNet corpora are available; download on first use.
+
+    WordNet-backed measures (wordnet_similarity, synonym/antonym/hypernym/
+    hyponym) read these ~12 MB corpora. Like HuggingFace/gensim resources they
+    are downloaded on demand, never bundled into the image. Well under the
+    large-download gate, so no opt-in is needed.
+    """
+    import nltk
+
+    for resource in ("wordnet", "wordnet_ic"):
+        try:
+            nltk.data.find(f"corpora/{resource}")
+        except LookupError:
+            nltk.download(resource, quiet=True, raise_on_error=True)
+        # NLTK >= 3.10 downloads corpora as a packed .zip; force-extract it if
+        # the plain directory still isn't resolvable (see tests/conftest.py).
+        try:
+            nltk.data.find(f"corpora/{resource}")
+        except LookupError:
+            _extract_nltk_zip(resource)
+
+
+def _extract_nltk_zip(resource: str) -> None:
+    """Extract ``corpora/<resource>.zip`` into its parent so NLTK can resolve the dir."""
+    import zipfile
+    from pathlib import Path
+
+    import nltk
+
+    for corpora_dir in [Path(p) / "corpora" for p in nltk.data.path if (Path(p) / "corpora").is_dir()]:
+        zip_path = corpora_dir / f"{resource}.zip"
+        if zip_path.is_file():
+            with zipfile.ZipFile(zip_path) as zf:
+                zf.extractall(corpora_dir)
+
+
 ODENET_ID = "odenet:1.4"
 
 

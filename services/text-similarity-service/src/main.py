@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from .catalog import CATALOG
+from .catalog import CATALOG, PROFILE, get_catalog
 from .conceptnet_api import MAX_REMOTE_INPUTS, ConceptNetError
 from .dkpro_proxy import compute_via_sidecar, is_dkpro_request
 from .lexical import DEFAULT_LEXICAL_BACKENDS, compute_lexical
@@ -28,10 +28,37 @@ from .retrieval import DEFAULT_RETRIEVAL_BACKENDS, compute_retrieval
 from .similarity import DEFAULT_BACKENDS, SIMILARITY_DISPATCH, compute_similarity
 
 app = FastAPI(
-    title="Text Similarity Service",
+    title=f"Text Similarity Service ({PROFILE})",
     version="0.1.0",
-    description="Unified REST API for semantic text similarity — 16 algorithm families over multiple backends.",
+    description=(
+        "Unified REST API for semantic text similarity — 16 algorithm families over multiple backends. "
+        f"Build variant: {PROFILE}." + ("" if PROFILE == "pytorch" else " (PyTorch-based algorithms excluded)")
+    ),
 )
+
+
+# ─── Profile guard ────────────────────────────────────────────────────────────
+
+
+def _require_enabled(algorithm: str) -> None:
+    """Reject a whole algorithm that is excluded by the active profile.
+
+    In the ``cpu`` profile (text-similarity-cpu image) the PyTorch-only
+    algorithms (requires_model) are not offered. Rather than a lazy 501
+    "install the extra" — that image deliberately ships without PyTorch — we
+    fail fast and point the caller at the pytorch image.
+    """
+    if PROFILE == "pytorch":
+        return
+    entries = [e for e in CATALOG if e["algorithm"] == algorithm]
+    if entries and all(e.get("requires_model") for e in entries):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Algorithm '{algorithm}' requires the PyTorch stack and is not available "
+                f"in this build (text-similarity-cpu). Deploy the text-similarity-pytorch image to use it."
+            ),
+        )
 
 
 # ─── Error Handler ────────────────────────────────────────────────────────────
@@ -68,7 +95,7 @@ def health():
 @app.get("/v1/similarity/text/algorithms")
 def list_algorithms() -> list[dict]:
     """Discovery: list all algorithm/backend combinations with metadata."""
-    return CATALOG
+    return get_catalog()
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -136,6 +163,8 @@ def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
     if algorithm not in DEFAULT_BACKENDS:
         raise HTTPException(status_code=400, detail=f"Unknown algorithm '{algorithm}'")
 
+    _require_enabled(algorithm)
+
     if (algorithm, backend) not in SIMILARITY_DISPATCH and not is_dkpro_request(algorithm, backend):
         supported = [b for (m, b) in SIMILARITY_DISPATCH if m == algorithm]
         raise HTTPException(
@@ -201,6 +230,8 @@ def text_retrieval(request: RetrievalRequest) -> TextComputeResponse:
     if algorithm not in DEFAULT_RETRIEVAL_BACKENDS:
         raise HTTPException(status_code=400, detail=f"Unknown algorithm '{algorithm}'")
 
+    _require_enabled(algorithm)
+
     results, total_ms = _run_batch(
         algorithm,
         backend,
@@ -223,6 +254,8 @@ def text_lexical(request: LexicalRequest) -> TextComputeResponse:
 
     if algorithm not in DEFAULT_LEXICAL_BACKENDS:
         raise HTTPException(status_code=400, detail=f"Unknown algorithm '{algorithm}'")
+
+    _require_enabled(algorithm)
 
     results, total_ms = _run_batch(
         algorithm,

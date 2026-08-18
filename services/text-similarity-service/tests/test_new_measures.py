@@ -469,8 +469,11 @@ class TestSbertModelName:
 
 
 class TestDiscoveryMetadata:
-    def test_new_entries_have_semantic_metadata(self):
-        resp = client.get("/v1/similarity/text/algorithms")
+    # Discovery lists the full catalog, so these run under the pytorch profile
+    # (the cpu/default profile omits the PyTorch algorithms they assert on).
+    @pytest.mark.parametrize("profile_client", ["pytorch"], indirect=True)
+    def test_new_entries_have_semantic_metadata(self, profile_client):
+        resp = profile_client().get("/v1/similarity/text/algorithms")
         catalog = resp.json()
         by_key = {(e["algorithm"], e["backend"]): e for e in catalog}
 
