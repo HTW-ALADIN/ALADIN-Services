@@ -6,17 +6,21 @@ the default backend is auto-selected), ``params`` and a batch ``inputs`` list,
 and returns the results synchronously.
 """
 
+import logging
+import os
+import time
 from collections.abc import Callable
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from .catalog import CATALOG, PROFILE, get_catalog
 from .conceptnet_api import MAX_REMOTE_INPUTS, ConceptNetError
 from .dkpro_proxy import compute_via_sidecar, is_dkpro_request
 from .lexical import DEFAULT_LEXICAL_BACKENDS, compute_lexical
-from .model_cache import LargeModelDownloadBlocked
+from .model_cache import LargeModelDownloadBlocked, cache_summary
 from .models import (
     LexicalRequest,
     RetrievalRequest,
@@ -26,6 +30,24 @@ from .models import (
 )
 from .retrieval import DEFAULT_RETRIEVAL_BACKENDS, compute_retrieval
 from .similarity import DEFAULT_BACKENDS, SIMILARITY_DISPATCH, compute_similarity
+
+logger = logging.getLogger(__name__)
+
+# Ensure the service's own log lines (errors in model computation, sidecar
+# failures, ...) are actually emitted even when started standalone or by a
+# bare ``uvicorn src.main:app``. ``force=False`` leaves Uvicorn's own logging
+# configuration untouched when one already exists.
+if not logging.root.handlers:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+# Quiet the per-request chatter of the HTTP client and web framework so a
+# 500-input ConceptNet batch (one request per input) doesn't drown the logs in
+# "HTTP Request ..." lines. The service's own loggers stay at INFO.
+for _noisy in ("httpx", "httpcore", "uvicorn.access"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
+
+_START_TS = time.monotonic()
+
 
 app = FastAPI(
     title=f"Text Similarity Service ({PROFILE})",
@@ -81,12 +103,76 @@ async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONR
     )
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Return request-validation errors in the same RFC 9457 problem+json shape.
+
+    Without this, Pydantic 422s fall through to FastAPI's default handler and
+    produce a structurally different body than the deliberate 400/500 errors.
+    """
+    return JSONResponse(
+        status_code=422,
+        content={
+            "type": "about:blank",
+            "title": "Request validation failed",
+            "status": 422,
+            "detail": exc.errors(),
+        },
+    )
+
+
 # ─── Health ───────────────────────────────────────────────────────────────────
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "text-similarity-service"}
+    """Liveness: the process is up and serving."""
+    return {"status": "ok", "service": "text-similarity-service", "profile": PROFILE}
+
+
+@app.get("/health/ready")
+def readiness():
+    """Readiness: accepts requests now.
+
+    The service is synchronous and stateless; it reports ready as long as the
+    process is up (the app is imported), which is the effective readiness signal
+    for compute. Cached-model/Memory and sidecar availability are intentionally
+    NOT part of readiness, so the orchestrator never scales it away for a
+    transiently warm cache. Use ``GET /metrics`` for a live cache/uptime view.
+    """
+    return {"status": "ready", "service": "text-similarity-service", "profile": PROFILE}
+
+
+@app.get("/metrics")
+def metrics():
+    """Lightweight, dependency-free observability snapshot (JSON).
+
+    For a full metrics pipeline, scrape this with Prometheus/Datadog via an
+    exporter or a gateway; this endpoint is intentionally dependency-free.
+    """
+    import resource
+
+    try:
+        rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    except (ImportError, AttributeError):  # pragma: no cover - exotic interpreters
+        rss_kb = None
+    return {
+        "uptime_s": round(time.monotonic() - _START_TS, 2),
+        "pid": os.getpid(),
+        "profile": PROFILE,
+        "catalog_entries": len(get_catalog()),
+        "model_cache": _safe_cache_summary(),
+        "peak_rss_kb": rss_kb,
+    }
+
+
+def _safe_cache_summary() -> dict:
+    """Best-effort model-cache introspection so /metrics never raises."""
+    try:
+        return cache_summary()
+    except Exception:  # noqa: BLE001
+        logger.exception("cache_summary() failed")
+        return {"keys": [], "count": -1}
 
 
 # ─── Discovery ────────────────────────────────────────────────────────────────
@@ -144,8 +230,12 @@ def _run_batch(
                     f"(missing module '{module_name}'). Install it with: pip install -e '.[{extra}]'"
                 ),
             ) from None
-        except Exception as e:  # noqa: BLE001
-            raise HTTPException(status_code=500, detail=f"Computation error: {e!s}") from None
+        except Exception:  # noqa: BLE001
+            # Log the full traceback server-side (no logging existed before);
+            # the client gets a generic message so internal details/stack paths
+            # never leak into the response body.
+            logger.exception("Unhandled error computing %s/%s for input %s", algorithm, backend, getattr(item, "id", "<unknown>"))
+            raise HTTPException(status_code=500, detail="Internal computation error") from None
         total_ms += res.get("compute_time_ms", 0)
         results.append(TextResult(id=item.id, result=res))
     return results, round(total_ms, 2)
@@ -204,8 +294,11 @@ def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
         try:
             return compute_via_sidecar(alg, params.get("variant"), input_data, params)
         except Exception as e:  # noqa: BLE001
+            # Log the failure (with traceback) but keep the client-facing body
+            # generic so internal details never leak out.
+            logger.exception("DKPro sidecar request failed for %s/%s (input %s)", alg, bck, input_data.get("id", "<unknown>"))
             status = 503 if "connect" in str(e).lower() or "unreachable" in str(e).lower() else 502
-            raise HTTPException(status_code=status, detail=f"DKPro sidecar request failed: {e!s}") from None
+            raise HTTPException(status_code=status, detail="DKPro sidecar request failed") from None
 
     results, total_ms = _run_batch(
         algorithm,

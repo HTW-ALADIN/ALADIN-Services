@@ -9,7 +9,42 @@
     "/health": {
       "get": {
         "summary": "Health",
+        "description": "Liveness: the process is up and serving.",
         "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "summary": "Readiness",
+        "description": "Readiness: accepts requests now.\n\nThe service is synchronous and stateless; it reports ready as long as the\nprocess is up (the app is imported), which is the effective readiness signal\nfor compute. Cached-model/Memory and sidecar availability are intentionally\nNOT part of readiness, so the orchestrator never scales it away for a\ntransiently warm cache. Use ``GET /metrics`` for a live cache/uptime view.",
+        "operationId": "readiness_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Metrics",
+        "description": "Lightweight, dependency-free observability snapshot (JSON).\n\nFor a full metrics pipeline, scrape this with Prometheus/Datadog via an\nexporter or a gateway; this endpoint is intentionally dependency-free.",
+        "operationId": "metrics_metrics_get",
         "responses": {
           "200": {
             "description": "Successful Response",

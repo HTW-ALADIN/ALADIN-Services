@@ -31,6 +31,68 @@ _GENSIM_INFO_SIZES_MB: dict[str, int] = {}
 ALLOW_LARGE_MODEL_DOWNLOADS_ENV = "ALLOW_LARGE_MODEL_DOWNLOADS"
 
 
+# ─── HuggingFace model allowlist (optional [model] extra) ────────────────────
+#
+# The [model] measures (sbert_cosine, semantic_search, cross_encoder, bertscore)
+# load pre-trained weights from HuggingFace Hub at runtime. Their ``model_name`` /
+# ``model_type`` params are free-form by default, which would let a caller ask
+# the host to download an arbitrary multi-GB (or third-party) checkpoint
+# server-side with no opt-in. To close that hole we only accept a short, curated
+# list of well-known models. Names are matched WITHOUT the common HuggingFace
+# org prefixes ("sentence-transformers/", "cross-encoder/", ...), so both
+# "all-MiniLM-L6-v2" and "sentence-transformers/all-MiniLM-L6-v2" are accepted.
+_ALLOWED_BASE_MODELS: dict[str, set[str]] = {
+    "sbert_cosine": {
+        "all-MiniLM-L6-v2",  # default; ~22.7M params / ~90 MB
+        "all-mpnet-base-v2",  # heavier (~109M params) SBERT
+        "paraphrase-multilingual-MiniLM-L12-v2",  # multilingual
+    },
+    "semantic_search": {
+        "all-MiniLM-L6-v2",
+        "all-mpnet-base-v2",
+        "paraphrase-multilingual-MiniLM-L12-v2",
+    },
+    "cross_encoder": {
+        "stsb-roberta-base",  # default cross-encoder
+    },
+    "bertscore": {
+        "roberta-large",  # bert_score's default model_type for lang='en'
+    },
+}
+
+# Measures that may NOT be freely overridden via params (no modeled name lookup
+# exists): kept explicit so a typo in the mapping above fails loudly.
+_KNOWN_HF_MEASURES = frozenset(_ALLOWED_BASE_MODELS.keys())
+
+
+def _normalize_hf_name(model_name: str) -> str:
+    """Return the org-prefix-stripped base name (last path segment)."""
+    return model_name.split("/", 1)[-1].strip()
+
+
+def require_allowed_model(measure: str, model_name: str | None) -> None:
+    """Validate an HF ``model_name``/``model_type`` against the allowlist.
+
+    ``model_name=None`` means the measure uses its built-in default (e.g.
+    BERTScore deriving ``roberta-large`` for ``lang='en'``), which is already on
+    the list. Raises ``ValueError`` (surfaced as HTTP 400) for anything else so
+    no unvetted checkpoint can be pulled down server-side.
+    """
+    allowed = _ALLOWED_BASE_MODELS.get(measure)
+    if allowed is None:
+        raise ValueError(f"'{measure}' is not an HF model-backed measure; cannot allow-list it.")
+    if model_name is None:
+        return  # built-in default is curated by construction
+    base = _normalize_hf_name(model_name)
+    if base not in allowed:
+        raise ValueError(f"model_name/model_type '{model_name}' is not on the allow-list for '{measure}'. Allowed: {sorted(allowed)}")
+
+
+def allowlisted_model_names(measure: str) -> list[str]:
+    """Expose the allowed base names for a measure (docs/debugging)."""
+    return sorted(_ALLOWED_BASE_MODELS.get(measure, set()))
+
+
 class LargeModelDownloadBlocked(Exception):
     """Raised when a >500 MB model download was requested without an opt-in."""
 
@@ -90,35 +152,65 @@ def _resolve_download_size_mb(model_name: str) -> int:
 
 
 def _gensim_info_size_mb(model_name: str) -> int:
-    """Look up a model's download size (MB) via gensim's downloader metadata (cached)."""
-    cached = _GENSIM_INFO_SIZES_MB.get(model_name)
-    if cached is not None:
-        return cached
-    size_mb = 0
-    try:
-        import gensim.downloader as api
+    """Look up a model's download size (MB) via gensim's downloader metadata (cached).
 
+    Three outcomes, so a transient failure can never let a large model slip
+    past the cost gate:
+
+    - **Known** name -> its real ``file_size`` (Bytes; the metadata field is
+      ``file_size``, not ``filesize``).
+    - **Unknown** name -> gensim raises ``ValueError("Incorrect model/corpus
+      name")``; treated as ``0``. That is not a bypass, because a model gensim
+      cannot locate cannot be downloaded at all (``api.load`` fails on its own).
+    - **Metadata lookup fails** for any *other* reason (network error, malformed
+      index, ...) -> return a value above the threshold. That is deliberately
+      conservative: the gate must block something it cannot size, never pass it.
+      Such failures are also NOT cached, so a later successful lookup is not
+      masked by a transient error.
+    """
+    import gensim.downloader as api
+
+    try:
         meta = api.info(name=model_name)
-        size_bytes = meta.get("filesize", 0)
-        size_mb = int(round(size_bytes / (1024 * 1024))) if isinstance(size_bytes, (int, float)) else 0
-    except Exception:  # noqa: BLE001  # unknown/unavailable metadata -> treat as unresolvable
+    except ValueError:
+        # Deterministic "unknown model name" signal -> nothing to gate.
+        _GENSIM_INFO_SIZES_MB[model_name] = 0
+        return 0
+    except Exception:  # noqa: BLE001  # transient lookup failure -> conservative block
+        return LARGE_DOWNLOAD_THRESHOLD_MB + 1
+
+    if isinstance(meta, dict):
+        size_bytes = meta.get("file_size")
+        if isinstance(size_bytes, (int, float)) and size_bytes > 0:
+            size_mb = int(round(size_bytes / (1024 * 1024)))
+        else:
+            size_mb = 0  # known but unsized -> leave ungated (not quantifiable)
+    else:
         size_mb = 0
     _GENSIM_INFO_SIZES_MB[model_name] = size_mb
     return size_mb
 
 
 _models: dict[str, Any] = {}
-_models_lock = threading.Lock()
+# One lock PER cache key. The meta-lock guards only the lock dict itself (tiny,
+# held for nanoseconds), NEVER the model-loading factory. This lets two requests
+# that load *different* models proceed in parallel, while two requests loading
+# the *same* model still serialize so a multi-GB download happens exactly once.
+_models_locks: dict[str, threading.Lock] = {}
+_models_locks_guard = threading.Lock()
 
 
 def _get(key: str, factory: Callable[[], Any]) -> Any:
     """Return the cached value for ``key``, loading it once via ``factory``.
 
-    A module-level lock guards the check-then-set so two concurrent requests
-    cannot both invoke ``factory()`` (each triggering a multi-GB model download)
-    under a multi-worker or threaded deployment.
+    Per-key locking: two concurrent requests for the *same* key cannot both run
+    ``factory()`` (each triggering a multi-GB model download), but requests for
+    *different* keys do not block each other — loading SBERT while a gensim
+    model downloads is no longer serialized behind a single global lock.
     """
-    with _models_lock:
+    with _models_locks_guard:
+        lock = _models_locks.setdefault(key, threading.Lock())
+    with lock:
         if key not in _models:
             _models[key] = factory()
         return _models[key]
@@ -199,7 +291,18 @@ def _extract_nltk_zip(resource: str) -> None:
 ODENET_ID = "odenet:1.4"
 
 
+def cache_summary() -> dict[str, Any]:
+    """Return a snapshot of the in-memory model cache (for observability).
+
+    Exposes which keys are loaded so an operator can see which models are
+    resident (and, indirectly, RAM usage) without logging internals.
+    """
+    with _models_locks_guard:
+        return {"keys": sorted(_models.keys()), "count": len(_models)}
+
+
 def clear_all() -> None:
     """Clear all cached models (useful for testing)."""
-    with _models_lock:
+    with _models_locks_guard:
         _models.clear()
+        _models_locks.clear()

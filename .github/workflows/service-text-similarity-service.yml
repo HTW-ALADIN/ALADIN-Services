@@ -254,16 +254,35 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   # ── OPTIONAL: DKPro Java sidecar ─────────────────────────────────────────
-  # Only runs when dkpro-sidecar/** changed. Non-blocking for the Python path
-  # (no job depends on it). If you never need topic_model / structural_stylistic,
-  # delete this job and the dkpro-sidecar/ directory — the Python service still
-  # passes all tests without them.
+  # Only runs when dkpro-sidecar/** changed (or on a push to master). The
+  # previous `contains(github.event.pull_request.changed_files, ...)` check was
+  # wrong: GitHub Actions does not expose such an array on the event, so the
+  # job never ran for PRs. We detect changed paths reliably with
+  # dorny/paths-filter. Non-blocking for the Python path (nothing depends on it);
+  # if you never need topic_model / structural_stylistic, delete this job and
+  # the dkpro-sidecar/ directory — the Python service passes all tests without it.
+  dkpro-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      dkpro: ${{ steps.filter.outputs.dkpro }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Needed by dorny/paths-filter to diff against the base branch.
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            dkpro:
+              - 'services/text-similarity-service/dkpro-sidecar/**'
+
   dkpro-sidecar:
     name: DKPro sidecar (optional, Java)
     runs-on: ubuntu-latest
-    if: |
-      contains(github.event.pull_request.changed_files, 'services/text-similarity-service/dkpro-sidecar/') ||
-      startsWith(github.ref, 'refs/heads/master')
+    needs: dkpro-changes
+    # Run on a push to master, or on a PR that actually touched the sidecar.
+    if: github.event_name == 'push' || needs.dkpro-changes.outputs.dkpro == 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Setup Java

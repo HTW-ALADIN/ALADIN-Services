@@ -224,16 +224,60 @@ class TestEmbeddingVariants:
         assert captured == ["glove-wiki-gigaword-50"]
 
     def test_explicit_model_name_wins(self, monkeypatch):
+        """An explicit params.model_name overrides the default model.
+
+        The chosen name is patched to resolve as *small* (below the cost gate)
+        so the test stays deterministic and offline; only the
+        "explicit name wins over the default" behavior is under test here.
+        """
         captured: list[str] = []
 
         def fake_get(name):
             captured.append(name)
             return FakeKeyedVectors()
 
+        # A small, gate-free explicit model (kept deterministic, no network).
+        monkeypatch.setattr("src.model_cache._resolve_download_size_mb", lambda name: 50, raising=False)
         monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
         clear_all()
-        compute_similarity("embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"model_name": "word2vec-google-news-300"})
-        assert captured == ["word2vec-google-news-300"]
+        compute_similarity("embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"model_name": "some-small-custom-model"})
+        assert captured == ["some-small-custom-model"]
+
+    def test_explicit_large_model_requires_opt_in(self, monkeypatch):
+        """A large explicit params.model_name still hits the cost gate.
+
+        Regression for the old behavior where the gensim-metadata lookup could
+        silently resolve to 0 MB and let a multi-GB model_name download without
+        an opt-in (a >500 MB runtime download slipped past the gate).
+        """
+
+        def fake_get(name):
+            raise AssertionError("model should not be downloaded without opt-in")
+
+        monkeypatch.setattr("src.model_cache._resolve_download_size_mb", lambda name: 1600, raising=False)
+        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
+        clear_all()
+        with pytest.raises(LargeModelDownloadBlocked):
+            compute_similarity(
+                "embedding_cosine", "gensim", {"text_a": "car", "text_b": "auto"}, {"model_name": "word2vec-google-news-300"}
+            )
+
+        # With the opt-in the download proceeds.
+        imported: list[str] = []
+
+        def fake_get_ok(name):
+            imported.append(name)
+            return FakeKeyedVectors()
+
+        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get_ok)
+        clear_all()
+        compute_similarity(
+            "embedding_cosine",
+            "gensim",
+            {"text_a": "car", "text_b": "auto"},
+            {"model_name": "word2vec-google-news-300", "confirm_large_download": True},
+        )
+        assert imported == ["word2vec-google-news-300"]
 
     def test_cache_is_used(self, monkeypatch):
         """The real get_gensim_model cache downloads a model only once."""
@@ -466,6 +510,92 @@ class TestSbertModelName:
         )
         assert captured == ["paraphrase-multilingual-MiniLM-L12-v2"]
         assert r["similarity"] == pytest.approx(0.0)
+
+
+class TestHfModelAllowlist:
+    """HF weight loading is restricted to a curated allow-list (#1).
+
+    These do NOT need the optional [model] extra: the allow-list check runs
+    before any model import/load, so (a) rejected names raise a clean 400 and
+    (b) accepted names can be verified against a mocked model loader.
+    """
+
+    def test_direct_allowlist_default_sbert(self):
+        from src.model_cache import require_allowed_model
+
+        require_allowed_model("sbert_cosine", "all-MiniLM-L6-v2")  # default — ok
+        require_allowed_model("sbert_cosine", None)  # None -> built-in default
+
+    def test_allowlist_is_org_prefix_tolerant(self):
+        from src.model_cache import require_allowed_model
+
+        require_allowed_model("sbert_cosine", "sentence-transformers/all-MiniLM-L6-v2")
+        require_allowed_model("cross_encoder", "cross-encoder/stsb-roberta-base")
+        require_allowed_model("bertscore", "roberta-large")
+
+    def test_disallowed_model_rejected(self):
+        from src.model_cache import require_allowed_model
+
+        with pytest.raises(ValueError, match="not on the allow-list"):
+            require_allowed_model("sbert_cosine", "some-arbitrary-hf-model")
+        with pytest.raises(ValueError, match="not on the allow-list"):
+            require_allowed_model("cross_encoder", "facebook/bart-large")
+        with pytest.raises(ValueError, match="not on the allow-list"):
+            require_allowed_model("bertscore", "microsoft/deberta-v3-large")
+
+    def test_unknown_measure_fails_loud(self):
+        from src.model_cache import require_allowed_model
+
+        with pytest.raises(ValueError, match="not an HF model-backed measure"):
+            require_allowed_model("nonsense_measure", "x")
+
+    def test_sbert_cosine_accepts_allowlisted_model(self, monkeypatch):
+        captured: list[str] = []
+
+        class FakeModel:
+            def encode(self, texts, **kw):
+                return np.array([[1.0, 0.0], [1.0, 0.0]])
+
+        monkeypatch.setattr("src.model_cache.get_sbert_model", lambda name: (captured.append(name), FakeModel())[1])
+        clear_all()
+        r = compute_similarity(
+            "sbert_cosine",
+            "sentence_transformers",
+            {"text_a": "a", "text_b": "b"},
+            {"model_name": "sentence-transformers/all-MiniLM-L6-v2"},
+        )
+        assert captured == ["sentence-transformers/all-MiniLM-L6-v2"]
+        assert r["similarity"] == pytest.approx(1.0)
+
+    def test_sbert_cosine_rejects_disallowed_model(self, monkeypatch):
+        def fake_get(name):  # must never be reached
+            raise AssertionError("should not load a disallowed model")
+
+        monkeypatch.setattr("src.model_cache.get_sbert_model", fake_get)
+        clear_all()
+        with pytest.raises(ValueError, match="not on the allow-list"):
+            compute_similarity(
+                "sbert_cosine",
+                "sentence_transformers",
+                {"text_a": "a", "text_b": "b"},
+                {"model_name": "some-arbitrary-hf-model"},
+            )
+
+    def test_semantic_search_rejects_disallowed_model(self, monkeypatch):
+        def fake_get(name):
+            raise AssertionError("should not load a disallowed model")
+
+        monkeypatch.setattr("src.model_cache.get_sbert_model", fake_get)
+        clear_all()
+        from src.retrieval import compute_retrieval
+
+        with pytest.raises(ValueError, match="not on the allow-list"):
+            compute_retrieval(
+                "semantic_search",
+                "sentence_transformers",
+                {"query": "cat", "candidates": ["a cat", "a dog"]},
+                {"model_name": "evil-model"},
+            )
 
 
 class TestDiscoveryMetadata:

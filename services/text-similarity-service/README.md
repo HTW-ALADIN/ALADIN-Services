@@ -39,7 +39,9 @@ Three independent things matter for how expensive the service is to run:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/health` | Health check |
+| `GET` | `/health` | Liveness check |
+| `GET` | `/health/ready` | Readiness check (reports accepting requests once the app is up) |
+| `GET` | `/metrics` | Lightweight, dependency-free observability snapshot (JSON: uptime, pid, profile, model-cache, peak RSS) |
 | `GET` | `/v1/similarity/text/algorithms` | Discovery — list all algorithm/backend combinations with metadata |
 | `POST` | `/v1/similarity/text/distance` | Compute text similarity (synchronous, batch) |
 | `POST` | `/v1/similarity/text/retrieval` | Rank query candidates (synchronous, batch) |
@@ -179,7 +181,7 @@ so it can never trigger by accident.
 | Odenet data | ~10–30 MB | `backend: odenet` | none — automatic (after `[de]` install) |
 | gensim GloVe (`glove-wiki-gigaword-50`) | ~200 MB | `embedding_cosine` variant `glove` (default), `wmd` | none — automatic |
 | ConceptNet API (remote) | 0 MB local, network call only | `embedding_cosine` variant `conceptnet_numberbatch`, `backend: remote` (default) | none — external API, see [below](#conceptnet-numberbatch-local-vs-remote) |
-| HuggingFace checkpoints | 100–400 MB each | `sbert_cosine`, `cross_encoder`, `bertscore`, `semantic_search` | none — automatic (after `[model]` install) |
+| HuggingFace checkpoints | 100–400 MB each (`roberta-large` for `bertscore` is larger) | `sbert_cosine`, `cross_encoder`, `bertscore`, `semantic_search` | **allow-list only** — `params.model_name`/`model_type` is restricted to the curated list below |
 | gensim FastText | ~2 GB | `embedding_cosine` variant `fasttext` | **required** |
 | gensim ConceptNet Numberbatch (local) | ~1.2 GB | `embedding_cosine` variant `conceptnet_numberbatch`, `backend: local` | **required** |
 
@@ -191,6 +193,30 @@ unlock it — no silent multi-GB disk/RAM usage on the host. Already-cached
 models skip the gate on later calls (the resource is already paid — in disk
 space, not money — so there's nothing left to guard). Threshold and per-model
 sizes live in `src/model_cache.py` (`LARGE_DOWNLOAD_THRESHOLD_MB`).
+
+> The large-download gate guards *gensim* models. The HuggingFace-backed measures
+> (`sbert_cosine`, `semantic_search`, `cross_encoder`, `bertscore`) are protected
+> differently — by an **allow-list**, not by a size gate:
+
+### HuggingFace model allow-list (`params.model_name` / `params.model_type`)
+
+The `[model]` measures load pre-trained weights from HuggingFace Hub at runtime.
+Their `model_name` / `model_type` params are free-form by default, which would
+let a caller pull any (potentially multi-GB or third-party) checkpoint down
+server-side. To prevent that, only a short **curated list** of well-known models
+is accepted (in `src/model_cache.py::_ALLOWED_BASE_MODELS`); anything else is
+rejected up-front with `400`. Common HuggingFace org prefixes
+(`sentence-transformers/`, `cross-encoder/`) are optional — the base model name
+is what is checked.
+
+| Measure | Allowed `model_name` / `model_type` |
+|---|---|
+| `sbert_cosine`, `semantic_search` | `all-MiniLM-L6-v2` (default), `all-mpnet-base-v2`, `paraphrase-multilingual-MiniLM-L12-v2` |
+| `cross_encoder` | `stsb-roberta-base` (default) |
+| `bertscore` | `roberta-large` (BERTScore's default for `lang='en'`; a `lang`-based default resolves to this) |
+
+To add a new model, extend `_ALLOWED_BASE_MODELS` in `src/model_cache.py` (and
+re-deploy the `text-similarity-pytorch` image).
 
 > Note: the gate guards disk usage only. RAM/CPU/GPU needed to *run* a measure are a separate, additive cost — see
 > [Runtime resource requirements](#runtime-resource-requirements-cpu-ram-gpu).
@@ -429,6 +455,60 @@ gensim resources fetch automatically on first use; large ones (> 500 MB) only
 after the cost-gate opt-in. In the images, the cache lives under the writable
 `/var/text-similarity-cache` (set via `HOME`/`HF_HOME`/`GENSIM_DATA_DIR`/`NLTK_DATA`),
 so the unprivileged `nobody` user can persist downloads across restarts.
+
+## Operations: scaling, memory and threading model
+
+Three operational facts shape how you deploy and scale this service:
+
+- **The model cache is per-process.** Loaded models live in an in-memory dict
+  (`src/model_cache.py`), one copy per Uvicorn worker/replica. With several
+  workers behind a load balancer, a heavy model (e.g. `fasttext` ~2 GB download,
+  4–8 GB RAM resident) is held once **per worker**, and each worker performs its
+  own first-time download. Use **sticky sessions** per model variant, or a
+  single worker per heavy-model host, if RAM is a concern. The cache is also
+  keyed **per model name** with independent locks, so concurrent *different*
+  models load in parallel while the *same* model still loads exactly once.
+- **Compute endpoints are synchronous (`def`, thread-pool).** FastAPI runs each
+  `def` endpoint in its thread pool (default ~40 threads). Long CPU-bound
+  measures (`bertscore`, `cross_encoder`, WMD over large matrices, BM25 over big
+  candidate lists) can saturate the pool and add queueing latency for all other
+  requests. Size worker/thread counts against your model load, and prefer a
+  small number of replicas with generous resources over many tiny ones.
+- **`/metrics` gives a live cache/uptime snapshot** but is dependency-free by
+  design; for a real metrics pipeline (Prometheus/Datadog/...) scrape it with an
+  exporter, or Uvicorn's built-in access logs, or wrap it in the gateway.
+
+## Authentication & rate limiting (deployment)
+
+The service itself is **stateless and intentionally does not implement
+authentication or rate limiting.** Any caller may hit the compute endpoints
+synchronously; there is no token check, quota, or per-IP throttle in the
+process. That is a deliberate separation of concerns: enforcing identity and
+traffic limits is the responsibility of the **API gateway / service mesh in
+front of this service** (e.g. an OAuth/mTLS gate, `ratelimit` sidecar, or
+Redfish/BFF layer), not of the model host.
+
+This matters because several measures are **expensive to run** (see
+[Runtime resource requirements](#runtime-resource-requirements-cpu-ram-gpu)):
+`bertscore`, `cross_encoder`, `sbert_cosine`, `semantic_search` and the heavy
+gensim embeddings consume CPU/GPU per request and can download large models
+server-side. Without a gateway-level quota, a single unauthenticated client can
+drive repeated `cross_encoder`/`bertscore` requests (up to
+`MAX_BATCH_SIZE = 500` inputs each) and exhaust host CPU/RAM.
+
+Concretely, the gateway is expected to:
+
+- authenticate every client (mTLS / bearer token / API key) and allow-list only
+  trusted callers;
+- rate-limit per client **and** per `algorithm`, since per-algorithm cost varies
+  by orders of magnitude (a `jaccard` request is microseconds; a `bertscore`
+  batch with a heavy model is seconds-to-minutes of compute);
+- cap request body size and batch size if needed (the service itself already
+  rejects > 500 inputs / > 100k chars per field);
+- surface the service's `[0,1]`-normalized scores without further rounding.
+
+If this service is reachable only inside a trusted private network behind such a
+gateway, no in-process auth is required.
 
 ## License
 
