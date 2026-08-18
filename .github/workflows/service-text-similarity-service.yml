@@ -159,12 +159,14 @@ jobs:
 
   # ── PyTorch profile (text-similarity-pytorch build) ─────────────────────────
   # Heavy on purpose: installs the `model` extra (PyTorch ~2.5 GB) and runs the
-  # pytorch-profile end-to-end compute tests (real SBERT models, ~90-440 MB
-  # downloads). This validates that the pytorch image's algorithms actually work
-  # end-to-end, not just that they're advertised. Kept separate from `test` so
-  # the fast base path stays quick; only these `model_download` tests run here.
+  # full set of tests that depend on it — the `model_download` end-to-end compute
+  # tests (real SBERT/cross-encoder/semantic_search + BERTScore weights,
+  # ~90 MB - ~1.3 GB downloads) and the `model` HF allow-list unit test. This
+  # validates that the pytorch image's algorithms actually work end-to-end, not
+  # just that they're advertised. Kept separate from `test` so the fast base
+  # path stays quick; network tests (external APIs) stay deselected.
   pytorch-test:
-    name: PyTorch Build Tests
+    name: PyTorch [model] tests
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -184,10 +186,14 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -e ".[dev,model]"
-      - name: Run PyTorch profile compute tests
-        # Only the pytorch-profile model tests (marked model_download). Network
-        # tests stay deselected. An explicit -m replaces addopts, so both are stated.
-        run: pytest -v --tb=short -m "model_download and not network" tests/test_async.py::TestPytorchProfileCompute
+      - name: Run [model] tests
+        # Run EVERY test that needs the optional `[model]` extra (PyTorch):
+        #   - `model_download` (SBERT / cross_encoder / semantic_search /
+        #     BERTScore) download real HuggingFace weights,
+        #   - `model` (the HF allow-list unit test) only needs the extra, no download.
+        # Network tests (external public APIs) stay deselected. An explicit -m
+        # replaces the addopts in pyproject.toml, so the negation is stated here.
+        run: pytest -v --tb=short -m "(model_download or model) and not network"
 
   generate-openapi:
     name: Generate OpenAPI Spec
