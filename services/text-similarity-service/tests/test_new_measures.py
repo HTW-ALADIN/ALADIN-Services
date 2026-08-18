@@ -549,7 +549,11 @@ class TestHfModelAllowlist:
         with pytest.raises(ValueError, match="not an HF model-backed measure"):
             require_allowed_model("nonsense_measure", "x")
 
+    @pytest.mark.model
     def test_sbert_cosine_accepts_allowlisted_model(self, monkeypatch):
+        # Requires the optional [model] extra: the accepted path calls the real
+        # sentence_transformers.util.cos_sim, so it cannot run in the base
+        # (no-model) test job. Deselected there via the `model` marker.
         captured: list[str] = []
 
         class FakeModel:

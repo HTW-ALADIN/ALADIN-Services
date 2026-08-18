@@ -11,8 +11,6 @@ from typing import Any
 
 
 def _semantic_search_sbert(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
-    from sentence_transformers import util
-
     from .model_cache import get_sbert_model, require_allowed_model
 
     query = input_data.get("query", "")
@@ -20,7 +18,11 @@ def _semantic_search_sbert(input_data: dict[str, Any], params: dict[str, Any]) -
     model_name = params.get("model_name", "all-MiniLM-L6-v2")
     top_k = params.get("top_k", 10)
 
+    # Validate BEFORE importing sentence_transformers so a disallowed model name
+    # fails fast with a clean 400 without importing the heavy torch stack.
     require_allowed_model("semantic_search", model_name)
+    from sentence_transformers import util
+
     model = get_sbert_model(model_name)
     query_emb = model.encode([query], convert_to_tensor=True)
     corpus_emb = model.encode(candidates, convert_to_tensor=True)
