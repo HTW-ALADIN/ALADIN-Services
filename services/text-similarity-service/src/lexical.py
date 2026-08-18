@@ -6,8 +6,6 @@ a free-licensed alternative to GermaNet.
 """
 
 import time
-from functools import partial
-from typing import Any
 
 # Published Odenet lexicon id in the ``wn`` index (Free German WordNet).
 ODENET_ID = "odenet:1.4"

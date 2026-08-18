@@ -20,7 +20,6 @@ import random
 import re
 import threading
 import time
-from typing import Any
 
 import httpx
 

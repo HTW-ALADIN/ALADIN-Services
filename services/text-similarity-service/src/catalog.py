@@ -32,7 +32,6 @@ full, single source of truth; ``get_catalog()`` applies the profile filter.
 """
 
 import os
-from typing import Any
 
 PROFILES = ("pytorch", "cpu")
 PROFILE = os.environ.get("SIMILARITY_PROFILE", "cpu")

@@ -2,8 +2,6 @@
 
 import os
 import threading
-from collections.abc import Callable
-from typing import Any
 
 # ─── Large-download cost gate ─────────────────────────────────────────────────
 #

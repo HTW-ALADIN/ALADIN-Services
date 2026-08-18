@@ -9,27 +9,14 @@ and returns the results synchronously.
 import logging
 import os
 import time
-from collections.abc import Callable
-from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
 
-from .catalog import CATALOG, PROFILE, get_catalog
-from .conceptnet_api import MAX_REMOTE_INPUTS, ConceptNetError
-from .dkpro_proxy import compute_via_sidecar, is_dkpro_request
-from .lexical import DEFAULT_LEXICAL_BACKENDS, compute_lexical
-from .model_cache import LargeModelDownloadBlocked, cache_summary
-from .models import (
     LexicalRequest,
     RetrievalRequest,
     TextComputeResponse,
     TextDistanceRequest,
     TextResult,
 )
-from .retrieval import DEFAULT_RETRIEVAL_BACKENDS, compute_retrieval
-from .similarity import DEFAULT_BACKENDS, SIMILARITY_DISPATCH, compute_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -359,3 +346,37 @@ def text_lexical(request: LexicalRequest) -> TextComputeResponse:
         compute_lexical,
     )
     return TextComputeResponse(algorithm=algorithm, backend=backend, results=results, meta={"compute_time_ms": total_ms})
+"""Writes the OpenAPI spec(s) for the profile(s) at the service root.
+
+The service builds as two images (``pytorch`` / ``cpu``) that differ in the
+PyTorch-based algorithms they offer, so each gets its own spec file:
+
+    text-similarity-service-pytorch.openapi.json
+    text-similarity-service-cpu.openapi.json
+
+Run ``make generate-openapi`` (both), or set ``SIMILARITY_PROFILE`` for one.
+"""
+
+import importlib
+import json
+import os
+
+
+def generate(profile: str) -> None:
+    import src.catalog as catalog
+    import src.main as main
+
+    os.environ["SIMILARITY_PROFILE"] = profile
+    importlib.reload(catalog)  # re-reads SIMILARITY_PROFILE -> PROFILE
+    importlib.reload(main)  # re-imports catalog profile + rebuilds app
+
+    spec = main.app.openapi()
+    out_path = Path(__file__).resolve().parent.parent / f"text-similarity-service-{profile}.openapi.json"
+    out_path.write_text(json.dumps(spec, indent=2) + "\n")
+    print(f"Wrote OpenAPI spec to {out_path}")
+
+
+if __name__ == "__main__":
+    target = os.environ.get("SIMILARITY_PROFILE")
+    for p in (target,) if target else ("pytorch", "cpu"):
+        generate(p)

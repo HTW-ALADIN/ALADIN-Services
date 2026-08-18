@@ -7,7 +7,6 @@ is sentence-transformers only and therefore requires the ``[model]`` extra.
 
 import math
 import time
-from typing import Any
 
 
 def _semantic_search_sbert(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
