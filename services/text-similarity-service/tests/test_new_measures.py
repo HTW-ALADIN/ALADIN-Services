@@ -163,6 +163,12 @@ class TestBM25:
 class FakeKeyedVectors:
     """Minimal stand-in for a gensim KeyedVectors (avoids model downloads)."""
 
+    key_to_index = {
+        "/c/en/car": 0,
+        "/c/en/auto": 1,
+        "/c/en/cat": 2,
+    }
+
     def __init__(self, dim=4):
         self._dim = dim
 
@@ -189,10 +195,10 @@ class TestEmbeddingVariants:
         assert captured == ["fasttext-wiki-news-subwords-300"]
 
     def test_conceptnet_variant(self, monkeypatch):
-        """Local gensim path for conceptnet_numberbatch is selected via backend='local'.
+        """Local gensim path for conceptnet_numberbatch (the default backend).
 
-        ``params.backend`` defaults to ``"remote"`` for this variant (public
-        api.conceptnet.io API), so the local model-selection path must be
+        ``params.backend`` defaults to ``"local"`` for this variant — the
+        local Numberbatch model (URI keys) is selected unless ``"remote"`` is
         requested explicitly — see tests/test_conceptnet_remote.py.
         """
         captured: list[str] = []

@@ -264,12 +264,15 @@ def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
 
     # The ConceptNet remote path makes one HTTP request per input against an
     # externally rate-limited public API. Reject oversized batches up-front
-    # (instead of burning the 3600/h limit in seconds) with a clean 400.
+    # (instead of burning the 3600/h limit in seconds) with a clean 400. The
+    # remote path is explicit opt-in only (local is the default for the
+    # conceptnet_numberbatch variant), so the cap applies solely when
+    # params.backend == "remote".
     _remote_conceptnet = (
         algorithm == "embedding_cosine"
         and backend == "gensim"
         and request.params.get("variant", "glove") == "conceptnet_numberbatch"
-        and request.params.get("backend", "remote") in ("remote", None)
+        and request.params.get("backend") == "remote"
     )
     if _remote_conceptnet and len(request.inputs) > MAX_REMOTE_INPUTS:
         raise HTTPException(
@@ -287,9 +290,10 @@ def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
             try:
                 return compute_similarity(alg, bck, input_data, params)
             except ConceptNetError as e:
-                # External ConceptNet API failure -> clean 502/503 problem+json.
-                # Deliberately NO silent fallback to the local gensim model
-                # (that would trigger the ~1.2 GB Numberbatch download).
+                # External ConceptNet API failure (explicit backend: remote)
+                # -> clean 502/503 problem+json. No cross-backend fallback: the
+                # local Numberbatch model is only used through backend: local
+                # (the default), never swapped in under the API path.
                 raise HTTPException(status_code=e.status, detail=f"ConceptNet API request failed: {e}") from None
         try:
             return compute_via_sidecar(alg, params.get("variant"), input_data, params)

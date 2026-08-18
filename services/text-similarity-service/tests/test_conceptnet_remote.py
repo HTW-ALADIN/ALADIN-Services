@@ -2,12 +2,15 @@
 
 Covers:
 1. the remote path with a mocked HTTP response (schema mapping, URI
-   normalization, lang override, degenerate inputs)
+   normalization, lang override, degenerate inputs) — remote must be selected
+   EXPLICITLY via ``params.backend: "remote"`` (local is the default)
 2. error paths (timeout / network error / 429 / 5xx / malformed response ->
    502/503 problem+json, and NO silent fallback to the local gensim model)
 3. ``params.backend`` validation (explicit local preserved; glove/fasttext
    reject remote; invalid value rejected)
 4. the batch-size cap for ``backend: "remote"``
+5. the LOCAL path (now the default) — word -> /c/{lang}/{term} URI resolution,
+   graceful handling of tokens missing from the Numberbatch model
 
 The integration test (real api.conceptnet.io call) is marked ``network`` and
 skipped by default (``pytest -m "not network"``).
@@ -84,6 +87,13 @@ def _assert_no_local_fallback(*args, **kwargs):
 class _FakeKeyedVectors:
     """Minimal gensim KeyedVectors stand-in (avoids the 1.2 GB download)."""
 
+    key_to_index = {
+        "/c/en/car": 0,
+        "/c/en/auto": 1,
+        "/c/en/cat": 2,
+        "/c/en/dog": 3,
+    }
+
     def similarity(self, a, b):
         return 0.9 if a == b else 0.4
 
@@ -102,12 +112,17 @@ def _post_remote(params, inputs):
 
 
 class TestRemotePath:
-    def test_remote_is_default_and_maps_value(self, fake_httpx, monkeypatch):
-        """No params.backend -> remote; API 'value' maps onto the result schema."""
+    def test_remote_must_be_explicit(self, fake_httpx, monkeypatch):
+        """local is the default; remote requires an explicit params.backend."""
         monkeypatch.setattr("src.model_cache.get_gensim_model", _assert_no_local_fallback)
         fake = fake_httpx([FakeResponse(200, {"value": 0.75, "relatedness": 0.75, "similarity": 0.75})])
 
-        result = compute_similarity("embedding_cosine", "gensim", {"text_a": "cat", "text_b": "dog"}, {"variant": "conceptnet_numberbatch"})
+        result = compute_similarity(
+            "embedding_cosine",
+            "gensim",
+            {"text_a": "cat", "text_b": "dog"},
+            {"variant": "conceptnet_numberbatch", "backend": "remote"},
+        )
         assert result["raw"] == 0.75
         assert result["similarity"] == 0.75
         assert result["distance"] == pytest.approx(0.25)
@@ -130,7 +145,7 @@ class TestRemotePath:
     def test_api_success_returns_mapped_schema(self, fake_httpx, monkeypatch):
         monkeypatch.setattr("src.model_cache.get_gensim_model", _assert_no_local_fallback)
         fake_httpx([FakeResponse(200, {"value": 0.6})])
-        resp = _post_remote({"variant": "conceptnet_numberbatch"}, [{"id": "p1", "a": "cat", "b": "dog"}])
+        resp = _post_remote({"variant": "conceptnet_numberbatch", "backend": "remote"}, [{"id": "p1", "a": "cat", "b": "dog"}])
         assert resp.status_code == 200
         body = resp.json()
         assert body["backend"] == "gensim"  # top-level backend unchanged
@@ -145,7 +160,7 @@ class TestRemotePath:
             "embedding_cosine",
             "gensim",
             {"text_a": "cat in the hat", "text_b": "  feline  "},
-            {"variant": "conceptnet_numberbatch"},
+            {"variant": "conceptnet_numberbatch", "backend": "remote"},
         )
         url, params = fake.calls[0]
         assert params["node1"] == "/c/en/cat_in_the_hat"  # spaces -> underscores
@@ -157,7 +172,7 @@ class TestRemotePath:
             "embedding_cosine",
             "gensim",
             {"text_a": "Haus", "text_b": "Wohnung"},
-            {"variant": "conceptnet_numberbatch", "lang": "de"},
+            {"variant": "conceptnet_numberbatch", "backend": "remote", "lang": "de"},
         )
         url, params = fake.calls[0]
         assert params["node1"] == "/c/de/Haus"
@@ -165,9 +180,13 @@ class TestRemotePath:
 
     def test_empty_inputs_do_not_hit_api(self, fake_httpx):
         fake = fake_httpx([])
-        both_empty = compute_similarity("embedding_cosine", "gensim", {"text_a": "  ", "text_b": ""}, {"variant": "conceptnet_numberbatch"})
+        both_empty = compute_similarity(
+            "embedding_cosine", "gensim", {"text_a": "  ", "text_b": ""}, {"variant": "conceptnet_numberbatch", "backend": "remote"}
+        )
         assert both_empty["similarity"] == 1.0
-        one_empty = compute_similarity("embedding_cosine", "gensim", {"text_a": "cat", "text_b": ""}, {"variant": "conceptnet_numberbatch"})
+        one_empty = compute_similarity(
+            "embedding_cosine", "gensim", {"text_a": "cat", "text_b": ""}, {"variant": "conceptnet_numberbatch", "backend": "remote"}
+        )
         assert one_empty["similarity"] == 0.0
         assert fake.calls == []  # no HTTP call for degenerate inputs
 
@@ -196,6 +215,83 @@ class TestLocalPath:
         assert captured == ["conceptnet-numberbatch-17-06-300"]
         assert result["similarity"] == 0.4
         assert "source" not in result  # local results keep the plain schema
+
+    def test_local_is_the_default_backend(self, monkeypatch):
+        """No params.backend for conceptnet_numberbatch -> local gensim, no remote call."""
+        captured: list[str] = []
+
+        def fake_get(name):
+            captured.append(name)
+            return _FakeKeyedVectors()
+
+        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
+        import src.conceptnet_api as cn
+
+        class _NoHttp:
+            def __init__(self, *a, **k):
+                raise AssertionError("remote API must not be called for the default (local) backend")
+
+        monkeypatch.setattr(cn.httpx, "Client", _NoHttp)
+        from src.model_cache import clear_all
+
+        clear_all()
+        result = compute_similarity(
+            "embedding_cosine",
+            "gensim",
+            {"text_a": "car", "text_b": "auto"},
+            {"variant": "conceptnet_numberbatch", "confirm_large_download": True},
+        )
+        assert captured == ["conceptnet-numberbatch-17-06-300"]
+        assert result["similarity"] == 0.4
+        assert "source" not in result
+
+    def test_local_resolves_conceptnet_uris(self, monkeypatch):
+        """Local path maps bare words to /c/{lang}/{term} URIs before lookup."""
+        looked_up: list[tuple[str, str]] = []
+        captured: list[str] = []
+
+        class _Kv(_FakeKeyedVectors):
+            def similarity(self, a, b):
+                looked_up.append((a, b))
+                return super().similarity(a, b)
+
+        def fake_get(name):
+            captured.append(name)
+            return _Kv()
+
+        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
+        from src.model_cache import clear_all
+
+        clear_all()
+        result = compute_similarity(
+            "embedding_cosine",
+            "gensim",
+            {"text_a": "car", "text_b": "auto"},
+            {"variant": "conceptnet_numberbatch", "confirm_large_download": True},
+        )
+        assert result["similarity"] == 0.4
+        # words are URI-normalized before the KeyedVectors similarity call
+        assert ("/c/en/car", "/c/en/auto") in looked_up
+
+    def test_local_missing_tokens_do_not_crash(self, monkeypatch):
+        """Words absent from the Numberbatch model yield a graceful 0.0, not a KeyError."""
+
+        class _Kv(_FakeKeyedVectors):
+            def similarity(self, a, b):
+                assert a in self.key_to_index and b in self.key_to_index
+                return super().similarity(a, b)
+
+        monkeypatch.setattr("src.model_cache.get_gensim_model", lambda name: _Kv())
+        from src.model_cache import clear_all
+
+        clear_all()
+        result = compute_similarity(
+            "embedding_cosine",
+            "gensim",
+            {"text_a": "zzqxnonexistent", "text_b": "car"},
+            {"variant": "conceptnet_numberbatch", "confirm_large_download": True},
+        )
+        assert result["similarity"] == 0.0
 
 
 # ─── params.backend validation ────────────────────────────────────────────────
@@ -240,7 +336,7 @@ class TestErrorPaths:
     def test_timeout_returns_503(self, fake_httpx, monkeypatch):
         monkeypatch.setattr("src.model_cache.get_gensim_model", _assert_no_local_fallback)
         fake_httpx([conceptnet_api.httpx.ConnectTimeout("connect timed out")])
-        resp = _post_remote({"variant": "conceptnet_numberbatch"}, [{"id": "p1", "a": "cat", "b": "dog"}])
+        resp = _post_remote({"variant": "conceptnet_numberbatch", "backend": "remote"}, [{"id": "p1", "a": "cat", "b": "dog"}])
         assert resp.status_code == 503
         body = resp.json()
         assert body["title"]
@@ -249,7 +345,7 @@ class TestErrorPaths:
     def test_network_error_returns_503(self, fake_httpx, monkeypatch):
         monkeypatch.setattr("src.model_cache.get_gensim_model", _assert_no_local_fallback)
         fake_httpx([conceptnet_api.httpx.ConnectError("connection refused")])
-        resp = _post_remote({"variant": "conceptnet_numberbatch"}, [{"id": "p1", "a": "cat", "b": "dog"}])
+        resp = _post_remote({"variant": "conceptnet_numberbatch", "backend": "remote"}, [{"id": "p1", "a": "cat", "b": "dog"}])
         assert resp.status_code == 503
         assert "ConceptNet" in resp.json()["detail"]
 
@@ -257,7 +353,7 @@ class TestErrorPaths:
         monkeypatch.setattr(conceptnet_api, "_MAX_429_RETRIES", 2)
         monkeypatch.setattr("src.model_cache.get_gensim_model", _assert_no_local_fallback)
         fake = fake_httpx([FakeResponse(429, text="rate limited")] * 3)  # initial + 2 retries
-        resp = _post_remote({"variant": "conceptnet_numberbatch"}, [{"id": "p1", "a": "cat", "b": "dog"}])
+        resp = _post_remote({"variant": "conceptnet_numberbatch", "backend": "remote"}, [{"id": "p1", "a": "cat", "b": "dog"}])
         assert resp.status_code == 503
         body = resp.json()
         assert "429" in body["detail"]
@@ -266,14 +362,14 @@ class TestErrorPaths:
     def test_http_500_returns_502(self, fake_httpx, monkeypatch):
         monkeypatch.setattr("src.model_cache.get_gensim_model", _assert_no_local_fallback)
         fake_httpx([FakeResponse(500, text="upstream error")])
-        resp = _post_remote({"variant": "conceptnet_numberbatch"}, [{"id": "p1", "a": "cat", "b": "dog"}])
+        resp = _post_remote({"variant": "conceptnet_numberbatch", "backend": "remote"}, [{"id": "p1", "a": "cat", "b": "dog"}])
         assert resp.status_code == 502
         assert "ConceptNet" in resp.json()["detail"]
 
     def test_missing_value_returns_502(self, fake_httpx, monkeypatch):
         monkeypatch.setattr("src.model_cache.get_gensim_model", _assert_no_local_fallback)
         fake_httpx([FakeResponse(200, {"foo": "bar"})])  # 200 but no numeric value
-        resp = _post_remote({"variant": "conceptnet_numberbatch"}, [{"id": "p1", "a": "cat", "b": "dog"}])
+        resp = _post_remote({"variant": "conceptnet_numberbatch", "backend": "remote"}, [{"id": "p1", "a": "cat", "b": "dog"}])
         assert resp.status_code == 502
         assert "missing numeric 'value'" in resp.json()["detail"]
 
@@ -284,7 +380,7 @@ class TestErrorPaths:
 class TestBatchCap:
     def test_remote_batch_over_cap_rejected(self):
         inputs = [{"id": f"p{i}", "a": "cat", "b": "dog"} for i in range(conceptnet_api.MAX_REMOTE_INPUTS + 1)]
-        resp = _post_remote({"variant": "conceptnet_numberbatch"}, inputs)
+        resp = _post_remote({"variant": "conceptnet_numberbatch", "backend": "remote"}, inputs)
         assert resp.status_code == 400
         detail = resp.json()["detail"]
         assert str(conceptnet_api.MAX_REMOTE_INPUTS) in detail
@@ -312,7 +408,7 @@ class TestBatchCap:
         monkeypatch.setattr("src.model_cache.get_gensim_model", _assert_no_local_fallback)
         fake = fake_httpx([FakeResponse(200, {"value": 0.6}) for _ in range(n)])
         inputs = [{"id": f"p{i}", "a": "cat", "b": "dog"} for i in range(n)]
-        resp = _post_remote({"variant": "conceptnet_numberbatch"}, inputs)
+        resp = _post_remote({"variant": "conceptnet_numberbatch", "backend": "remote"}, inputs)
         assert resp.status_code == 200
         assert len(fake.calls) == n  # one HTTP call per input
         assert [r["id"] for r in resp.json()["results"]] == ["p0", "p1", "p2"]

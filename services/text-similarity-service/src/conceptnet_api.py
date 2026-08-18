@@ -1,8 +1,9 @@
 """HTTP client for the public ConceptNet relatedness API (remote backend).
 
 Used by ``embedding_cosine`` variant ``conceptnet_numberbatch`` when
-``params.backend == "remote"`` (the default): the API hosts a reduced ConceptNet
-Numberbatch matrix server-side, so the local ~1.2 GB gensim download is avoided.
+``params.backend == "remote"`` (requested **explicitly**; the default for the
+variant is ``local``): the API hosts a reduced ConceptNet Numberbatch matrix
+server-side, avoiding the local ~1.2 GB gensim download.
 
 External API (NOT under our control): ``GET https://api.conceptnet.io/
 relatedness?node1=/c/{lang}/{a}&node2=/c/{lang}/{b}`` — 3600 requests/hour
@@ -70,10 +71,13 @@ def _throttle() -> None:
         time.sleep(wait)
 
 
-def _to_conceptnet_uri(word: str, lang: str = DEFAULT_LANG) -> str:
+def to_conceptnet_uri(word: str, lang: str = DEFAULT_LANG) -> str:
     """Normalize a word to a ConceptNet ``/c/{lang}/{term}`` URI (spaces -> underscores)."""
     term = re.sub(r"[^0-9A-Za-z_]+", "_", "_".join(word.split())).strip("_")
     return f"/c/{lang}/{term}"
+
+
+_to_conceptnet_uri = to_conceptnet_uri  # backward-compatible alias
 
 
 def compute_relatedness_remote(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:

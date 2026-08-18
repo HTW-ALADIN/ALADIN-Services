@@ -19,7 +19,7 @@ Before using this service, understand **three independent decisions**. Everythin
 
 **2. Is the optional Java DKPro sidecar running?** If yes, you also get `topic_model`, `structural_stylistic`, and `dkpro` backends for two base algorithms. If no, those requests fail with `502/503`.
 
-**3. Do you allow the external ConceptNet API?** Only one algorithm variant (`embedding_cosine` / `conceptnet_numberbatch` / `backend: remote`) calls a third-party API — and only when you ask for it explicitly. Its alternative is a local ~1.2 GB model download. Everything else is fully self-contained. See [External API](#external-api).
+**3. Do you allow the external ConceptNet API?** Only one algorithm variant (`embedding_cosine` / `conceptnet_numberbatch` / `backend: remote`) calls a third-party API — and only when you ask for it explicitly. The default for that variant is a local ~1.2 GB model download (gated). Everything else is fully self-contained. See [External API](#external-api).
 
 
 ---
@@ -34,7 +34,7 @@ Before using this service, understand **three independent decisions**. Everythin
 | `/distance` | `tfidf_cosine` | `sklearn`, `dkpro`\* | **cpu** + pytorch | vector-space cosine |
 | `/distance` | `token_set_overlap` | `builtin` | **cpu** + pytorch | `jaccard` (default) / `dice` |
 | `/distance` | `jaccard` / `dice` | `builtin` | **cpu** + pytorch | legacy aliases of `token_set_overlap` |
-| `/distance` | `embedding_cosine` | `gensim` | **cpu** + pytorch | `glove` (default), `fasttext`†, `conceptnet_numberbatch` (remote default / local†) |
+| `/distance` | `embedding_cosine` | `gensim` | **cpu** + pytorch | `glove` (default), `fasttext`†, `conceptnet_numberbatch` (local default† / remote opt-in) |
 | `/distance` | `wmd` | `gensim` | **cpu** + pytorch | Word Mover's Distance; `params.model_name` |
 | `/distance` | `sbert_cosine` | `sentence_transformers` | **pytorch only** | `params.model_name` restricted to allow-list |
 | `/distance` | `cross_encoder` | `sentence_transformers` | **pytorch only** | pairwise reranking |
@@ -58,7 +58,7 @@ Before using this service, understand **three independent decisions**. Everythin
 
 ## External API
 
-`embedding_cosine` variant `conceptnet_numberbatch`, `backend: "remote"` (the default for that variant) calls the public ConceptNet API — **not under our control**:
+`embedding_cosine` variant `conceptnet_numberbatch`, `backend: "remote"` (an **explicit opt-in**; the default is the local Numberbatch model) calls the public ConceptNet API — **not under our control**:
 
 - `GET https://api.conceptnet.io/relatedness?node1=/c/{lang}/{a}&node2=/c/{lang}/{b}`
 - no auth · rate limit 3600 req/h sustained, 120 req/min burst
@@ -67,11 +67,11 @@ It's **selected per request**, not a global switch:
 
 | Want external API? | Request |
 |---|---|
-| **Off** (default) | use `glove`/`fasttext` variant, or any other algorithm |
+| **Off** (default) | `params: {variant: conceptnet_numberbatch}` → local ~1.2 GB Numberbatch model (gated) |
 | **On** | `params: {variant: conceptnet_numberbatch, backend: remote}` |
-| **On, fully offline** | `params: {variant: conceptnet_numberbatch, backend: local}` → local ~1.2 GB download (gated) |
+| **On, fully offline** | `params: {variant: conceptnet_numberbatch, backend: local}` → same as the default, explicit |
 
-Safeguards: ~5 s timeout, batch cap `CONCEPTNET_MAX_REMOTE_INPUTS` (60), throttle `CONCEPTNET_REMOTE_REQUEST_DELAY` (0.05 s), 429 backoff retries. Failures → `503` (timeout/network/429) or `502` (other upstream) — **never** silent fallback to the 1.2 GB download. `glove`/`fasttext` have no remote backend (no public API exists); `backend: remote` on them is rejected with `400`.
+Safeguards: ~5 s timeout, batch cap `CONCEPTNET_MAX_REMOTE_INPUTS` (60), throttle `CONCEPTNET_REMOTE_REQUEST_DELAY` (0.05 s), 429 backoff retries. Failures → `503` (timeout/network/429) or `502` (other upstream). The remote path only runs when explicitly requested (`backend: remote`) and never silently downgrades to any other backend. `glove`/`fasttext` have no remote backend (no public API exists); `backend: remote` on them is rejected with `400`.
 
 ---
 
