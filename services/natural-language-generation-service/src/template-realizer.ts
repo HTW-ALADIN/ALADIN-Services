@@ -58,7 +58,7 @@ function createTemplateWorker(payload: TemplateWorkerPayload): Worker {
 		workerData: payload,
 		/* c8 ignore next -- tsx is needed only when executing TypeScript directly. */
 		execArgv: sourceMode ? ['--import', 'tsx'] : [],
-		resourceLimits: { maxOldGenerationSizeMb: 256 },
+		resourceLimits: { maxOldGenerationSizeMb: 512 },
 	});
 }
 
@@ -90,7 +90,10 @@ export async function runTemplateWorker(
 			if (settled) return;
 			settled = true;
 			clearTimeout(timer);
-			if (terminateWorker) void worker.terminate();
+			if (terminateWorker) {
+				void worker.terminate().then(action, action);
+				return;
+			}
 			action();
 		}
 

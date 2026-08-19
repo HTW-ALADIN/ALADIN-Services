@@ -154,7 +154,7 @@ The two modes have different trust requirements:
 The service rejects Pug `include` and `extends` directives and prevents data
 from replacing renderer control options. These are boundary checks, not a
 security sandbox. Each template runs in a dedicated Node.js worker thread with
-a 256 MiB old-generation heap limit. The worker is terminated when
+a 512 MiB old-generation heap limit. The worker is terminated when
 `NLG_TEMPLATE_TIMEOUT_MS` expires, so a looping template cannot block the REST
 or CLI process indefinitely. Worker isolation limits availability failures; it
 does not remove the template's operating-system permissions. Deploy the service
@@ -244,7 +244,7 @@ internal implementation details.
 Schema validation additionally limits template length, individual strings,
 collection sizes, lemmas, and formatting properties. `NLG_MAX_NODES` applies
 to jsRealB structure nodes and RosaeNLG data values. Template workers also use
-a fixed 256 MiB V8 old-generation heap limit.
+a fixed 512 MiB V8 old-generation heap limit.
 
 ## Docker and hardware
 
