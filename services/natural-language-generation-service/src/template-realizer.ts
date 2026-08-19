@@ -76,7 +76,7 @@ export async function runTemplateWorker(
 	timeoutMs: number,
 	workerFactory: TemplateWorkerFactory = createTemplateWorker
 ): Promise<TemplateWorkerSuccess> {
-	return await new Promise<TemplateWorkerSuccess>((resolve, reject) => {
+	return new Promise<TemplateWorkerSuccess>((resolve, reject) => {
 		let worker: Worker;
 		try {
 			worker = workerFactory(payload);
