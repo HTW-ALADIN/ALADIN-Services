@@ -39,17 +39,6 @@ PROFILE = os.environ.get("SIMILARITY_PROFILE", "cpu")
 if PROFILE not in PROFILES:
     PROFILE = "cpu"
 
-# Whether the *local* ConceptNet Numberbatch model (the ~1.2 GB gensim
-# KeyedVectors) may be loaded by this process. A "hf" (light) image ships all
-# HuggingFace/PyTorch models but deliberately omits the heavy gensim Numberbatch
-# weights; a dedicated "conceptnet" image pre-caches them. To keep the "hf"
-# image both small *and* predictable at runtime, its local Numberbatch variants
-# are filtered out of the catalog and blocked in similarity.py. The *remote*
-# ConceptNet API backend stays available regardless (it loads no local model).
-# Set ``SIMILARITY_DISABLE_LOCAL_CONCEPTNET=true`` for the light image; unset
-# (default) for the "conceptnet" / "pytorch" images that ship it.
-LOCAL_CONCEPTNET_DISABLED = os.environ.get("SIMILARITY_DISABLE_LOCAL_CONCEPTNET", "").lower() in ("1", "true", "yes")
-
 
 def is_enabled(entry: dict[str, Any]) -> bool:
     """Whether a catalog entry is available in the active profile."""
@@ -96,6 +85,7 @@ def _entry(
     category: str = "",
     requires_model: bool = False,
     requires_gpu: bool = False,
+    requires_sidecar: bool = False,
     variants: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Expand one algorithm into one catalog entry per backend."""
@@ -118,6 +108,7 @@ def _entry(
             "category": category,
             "requires_model": b.get("requires_model", requires_model),
             "requires_gpu": b.get("requires_gpu", requires_gpu),
+            "requires_sidecar": requires_sidecar,
         }
         for key in ("language", "extra", "variants", "alias_of", "fixed_variant"):
             if key in b:
@@ -140,9 +131,11 @@ CATALOG: list[dict[str, Any]] = [
         stateful=True,
         category="word_embedding",
         # gensim is base-tier (no [model] extra needed). Large runtime downloads
-        # (fasttext ~2 GB, conceptnet_numberbatch local ~1.2 GB) are gated by an
-        # explicit opt-in, not by a pip extra — see README "Cost threshold".
-        variants=(["glove", "fasttext"] if LOCAL_CONCEPTNET_DISABLED else ["glove", "fasttext", "conceptnet_numberbatch"]),
+        # (fasttext ~2 GB) are gated by an explicit opt-in, not by a pip extra.
+        # ``conceptnet_numberbatch`` (local default) is served by the optional
+        # ConceptNet sidecar and is independent of the build profile.
+        requires_sidecar=True,
+        variants=["glove", "fasttext", "conceptnet_numberbatch"],
     ),
     *_entry(
         "similarity",

@@ -191,40 +191,50 @@ class TestRemotePath:
         assert fake.calls == []  # no HTTP call for degenerate inputs
 
 
-# ─── Local path: unchanged behaviour ─────────────────────────────────────────
+# ─── Local path: served by the ConceptNet sidecar ────────────────────────────
 
 
 class TestLocalPath:
-    def test_explicit_local_uses_gensim(self, monkeypatch):
-        captured: list[str] = []
+    """The ``params.backend: local`` path (the default for conceptnet_numberbatch)
 
-        def fake_get(name):
-            captured.append(name)
-            return _FakeKeyedVectors()
+    now proxies to the conceptnet-sidecar process instead of loading the gensim
+    Numberbatch model in-process (see ADR-0001). ``compute_similarity`` receives
+    the sidecar's raw score (None + ``error`` for OOV) and maps it through the
+    same normalizer, so the response shape is unchanged.
+    """
 
-        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
-        from src.model_cache import clear_all
+    def test_explicit_local_uses_sidecar(self, monkeypatch):
+        captured: list[dict] = []
 
-        clear_all()
+        def fake_get_relatedness(pairs):
+            captured.append(pairs)
+            return [{"id": pairs[0]["id"], "score": 0.4, "error": None}]
+
+        monkeypatch.setattr("src.conceptnet_client.get_relatedness", fake_get_relatedness)
         result = compute_similarity(
             "embedding_cosine",
             "gensim",
             {"text_a": "car", "text_b": "auto"},
             {"variant": "conceptnet_numberbatch", "backend": "local", "confirm_large_download": True},
         )
-        assert captured == ["conceptnet-numberbatch-17-06-300"]
-        assert result["similarity"] == 0.4
+        # The pair is forwarded to the sidecar, word_a/word_b intact.
+        assert captured[0][0]["word_a"] == "car"
+        assert captured[0][0]["word_b"] == "auto"
+        # Raw sidecar score -> normalized legacy envelope.
+        assert result["similarity"] == pytest.approx(0.4)
+        assert result["raw"] == pytest.approx(0.4)
+        assert result["distance"] == pytest.approx(0.6)
         assert "source" not in result  # local results keep the plain schema
 
     def test_local_is_the_default_backend(self, monkeypatch):
-        """No params.backend for conceptnet_numberbatch -> local gensim, no remote call."""
-        captured: list[str] = []
+        """No params.backend for conceptnet_numberbatch -> sidecar, no remote call."""
+        captured: list[dict] = []
 
-        def fake_get(name):
-            captured.append(name)
-            return _FakeKeyedVectors()
+        def fake_get_relatedness(pairs):
+            captured.append(pairs)
+            return [{"id": pairs[0]["id"], "score": -0.2, "error": None}]
 
-        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
+        monkeypatch.setattr("src.conceptnet_client.get_relatedness", fake_get_relatedness)
         import src.conceptnet_api as cn
 
         class _NoHttp:
@@ -232,66 +242,65 @@ class TestLocalPath:
                 raise AssertionError("remote API must not be called for the default (local) backend")
 
         monkeypatch.setattr(cn.httpx, "Client", _NoHttp)
-        from src.model_cache import clear_all
-
-        clear_all()
         result = compute_similarity(
             "embedding_cosine",
             "gensim",
             {"text_a": "car", "text_b": "auto"},
             {"variant": "conceptnet_numberbatch", "confirm_large_download": True},
         )
-        assert captured == ["conceptnet-numberbatch-17-06-300"]
-        assert result["similarity"] == 0.4
+        assert captured, "sidecar should be called for the default (local) backend"
+        # Negative raw cosine is clamped into [0,1] by the normalizer.
+        assert result["similarity"] == 0.0
         assert "source" not in result
 
-    def test_local_resolves_conceptnet_uris(self, monkeypatch):
-        """Local path maps bare words to /c/{lang}/{term} URIs before lookup."""
-        looked_up: list[tuple[str, str]] = []
-        captured: list[str] = []
+    def test_local_forwards_lang(self, monkeypatch):
+        """The lang param is forwarded to the sidecar."""
+        captured: list[dict] = []
 
-        class _Kv(_FakeKeyedVectors):
-            def similarity(self, a, b):
-                looked_up.append((a, b))
-                return super().similarity(a, b)
+        def fake_get_relatedness(pairs):
+            captured.append(pairs)
+            return [{"id": pairs[0]["id"], "score": 0.3, "error": None}]
 
-        def fake_get(name):
-            captured.append(name)
-            return _Kv()
-
-        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
-        from src.model_cache import clear_all
-
-        clear_all()
-        result = compute_similarity(
+        monkeypatch.setattr("src.conceptnet_client.get_relatedness", fake_get_relatedness)
+        compute_similarity(
             "embedding_cosine",
             "gensim",
-            {"text_a": "car", "text_b": "auto"},
-            {"variant": "conceptnet_numberbatch", "confirm_large_download": True},
+            {"text_a": "Haus", "text_b": "Wohnung"},
+            {"variant": "conceptnet_numberbatch", "lang": "de"},
         )
-        assert result["similarity"] == 0.4
-        # words are URI-normalized before the KeyedVectors similarity call
-        assert ("/c/en/car", "/c/en/auto") in looked_up
+        assert captured[0][0]["lang"] == "de"
 
-    def test_local_missing_tokens_do_not_crash(self, monkeypatch):
-        """Words absent from the Numberbatch model yield a graceful 0.0, not a KeyError."""
+    def test_local_sidecar_unavailable(self, monkeypatch):
+        """A missing/unreachable sidecar surfaces as ConceptNetSidecarError (503)."""
+        from src.conceptnet_client import ConceptNetSidecarError
 
-        class _Kv(_FakeKeyedVectors):
-            def similarity(self, a, b):
-                assert a in self.key_to_index and b in self.key_to_index
-                return super().similarity(a, b)
+        def fake_get_relatedness(pairs):
+            raise ConceptNetSidecarError("ConceptNet sidecar unreachable", status=503)
 
-        monkeypatch.setattr("src.model_cache.get_gensim_model", lambda name: _Kv())
-        from src.model_cache import clear_all
+        monkeypatch.setattr("src.conceptnet_client.get_relatedness", fake_get_relatedness)
+        with pytest.raises(ConceptNetSidecarError):
+            compute_similarity(
+                "embedding_cosine",
+                "gensim",
+                {"text_a": "car", "text_b": "auto"},
+                {"variant": "conceptnet_numberbatch", "backend": "local"},
+            )
 
-        clear_all()
+    def test_local_oov_pair_graceful(self, monkeypatch):
+        """An OOV word yields a null-score result with an error, not a crash."""
+
+        def fake_get_relatedness(pairs):
+            return [{"id": pairs[0]["id"], "score": None, "error": "oov: zzqxnonexistent"}]
+
+        monkeypatch.setattr("src.conceptnet_client.get_relatedness", fake_get_relatedness)
         result = compute_similarity(
             "embedding_cosine",
             "gensim",
             {"text_a": "zzqxnonexistent", "text_b": "car"},
             {"variant": "conceptnet_numberbatch", "confirm_large_download": True},
         )
-        assert result["similarity"] == 0.0
+        assert result["similarity"] is None
+        assert "oov" in (result.get("error") or "")
 
 
 # ─── params.backend validation ────────────────────────────────────────────────
@@ -388,16 +397,11 @@ class TestBatchCap:
 
     def test_local_batch_ignores_cap(self, monkeypatch):
         """The cap only applies to backend='remote'; local batches are unchanged."""
-        captured: list[str] = []
 
-        def fake_get(name):
-            captured.append(name)
-            return _FakeKeyedVectors()
+        def fake_get_relatedness(pairs):
+            return [{"id": p["id"], "score": 0.5, "error": None} for p in pairs]
 
-        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
-        from src.model_cache import clear_all
-
-        clear_all()
+        monkeypatch.setattr("src.conceptnet_client.get_relatedness", fake_get_relatedness)
         inputs = [{"id": f"p{i}", "a": "cat", "b": "dog"} for i in range(conceptnet_api.MAX_REMOTE_INPUTS + 1)]
         resp = _post_remote({"variant": "conceptnet_numberbatch", "backend": "local", "confirm_large_download": True}, inputs)
         assert resp.status_code == 200

@@ -1,14 +1,12 @@
 # syntax=docker/dockerfile:1
 
-# One repo builds three images:
-#   text-similarity-cpu            — (default) no PyTorch, no pre-cached models
-#   text-similarity-hf             — full PyTorch stack + all HF models pre-cached,
-#                                    but WITHOUT the local ConceptNet Numberbatch model
-#                                    (SIMILARITY_DISABLE_LOCAL_CONCEPTNET=true)
-#   text-similarity-conceptnet     — full PyTorch stack + HF models + the local
-#                                    ConceptNet Numberbatch model pre-cached
+# One repo builds two images:
+#   text-similarity-cpu   — (default) no PyTorch, no pre-cached models
+#   text-similarity-hf    — full PyTorch stack + all HF models pre-cached
 # The profile is baked in as an ENV so the runtime catalog/spec only advertises
-# what this image actually ships.
+# what this image actually ships. The local ConceptNet Numberbatch model is NOT
+# in any main image — it lives in the optional conceptnet-sidecar (see
+# services/conceptnet-sidecar/, ADR-0001).
 FROM python:3.12-slim AS builder
 ARG SIMILARITY_PROFILE=cpu
 ENV SIMILARITY_PROFILE=$SIMILARITY_PROFILE
@@ -18,15 +16,12 @@ ENV SIMILARITY_PROFILE=$SIMILARITY_PROFILE
 # cpu image stays small.
 ARG INSTALL_MODEL=false
 # Pre-cache the HuggingFace models (SBERT MiniLM/MPNet/multilingual, cross-encoder
-# stsb-roberta-base, bertscore roberta-large) at build time so a fresh "hf" or
-# "conceptnet" container serves the first request offline. Downloads land in a
+# stsb-roberta-base, bertscore roberta-large) at build time so a fresh "hf"
+# container serves the first request offline. Downloads land in a
 # build-time HF cache dir that is COPY'd into the runtime cache. A failure (e.g.
 # offline build farm) must not fail the image: models remain lazy-downloaded at
 # runtime if this step did not run.
 ARG PRECACHE_HF=false
-# Pre-cache the local gensim ConceptNet Numberbatch model (only for the
-# "conceptnet" image). Downloads to a stable path (does NOT load it into RAM).
-ARG PRECACHE_CONCEPTNET=false
 # German lexical relations (Odenet) — tiny, OPT-IN for all images.
 ARG INSTALL_DE=false
 
@@ -62,16 +57,6 @@ RUN mkdir -p $BUILT_HF && \
     HF_HOME=$BUILT_HF TRANSFORMERS_CACHE=$BUILT_HF PRECACHE_HF=$PRECACHE_HF python src/__precache_hf.py || \
     echo "WARN: HuggingFace pre-cache failed; models will download at runtime"
 
-# ── Optional: pre-cache the gensim ConceptNet Numberbatch model at BUILD time ──
-ENV BUILT_GENSIM_DATA=/app/built-gensim-data
-RUN if [ "$PRECACHE_CONCEPTNET" = "true" ]; then \
-        mkdir -p $BUILT_GENSIM_DATA && \
-        GENSIM_DATA_DIR=$BUILT_GENSIM_DATA python -c "import gensim.downloader as api; api.load('conceptnet-numberbatch-17-06-300', return_path=True)" \
-        || echo "WARN: ConceptNet Numberbatch pre-cache failed; will download at runtime"; \
-    else \
-        mkdir -p $BUILT_GENSIM_DATA; \
-    fi
-
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM python:3.12-slim
 
@@ -88,12 +73,6 @@ COPY pyproject.toml .
 ARG SIMILARITY_PROFILE=cpu
 ENV SIMILARITY_PROFILE=$SIMILARITY_PROFILE
 
-# Local ConceptNet model availability is baked in at build time: the "hf" image
-# sets DISABLE_LOCAL_CONCEPTNET=true (keeps the runtime tiny and deterministic);
-# the "conceptnet"/"pytorch" images leave it off.
-ARG DISABLE_LOCAL_CONCEPTNET=false
-ENV SIMILARITY_DISABLE_LOCAL_CONCEPTNET=$DISABLE_LOCAL_CONCEPTNET
-
 # The service runs as `nobody`, whose default HOME (/nonexistent) is not
 # writable. Runtime model/data downloads cache under `$HOME`, so point HOME at a
 # writable dir and own it.
@@ -108,8 +87,6 @@ RUN mkdir -p /var/text-similarity-cache && chown -R 65534:65534 /var/text-simila
 
 # Seed the HF cache if it was built.
 COPY --from=builder /app/built-hf/ /var/text-similarity-cache/hf/
-# Seed the gensim cache if ConceptNet was pre-cached (harmless no-op otherwise).
-COPY --from=builder /app/built-gensim-data/. /var/text-similarity-cache/gensim-data/
 RUN chown -R 65534:65534 /var/text-similarity-cache
 
 USER nobody

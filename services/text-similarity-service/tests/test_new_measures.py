@@ -195,27 +195,26 @@ class TestEmbeddingVariants:
         assert captured == ["fasttext-wiki-news-subwords-300"]
 
     def test_conceptnet_variant(self, monkeypatch):
-        """Local gensim path for conceptnet_numberbatch (the default backend).
+        """Sidecar path for conceptnet_numberbatch (the default backend).
 
-        ``params.backend`` defaults to ``"local"`` for this variant — the
-        local Numberbatch model (URI keys) is selected unless ``"remote"`` is
-        requested explicitly — see tests/test_conceptnet_remote.py.
+        ``params.backend`` defaults to ``"local"`` for this variant — it is
+        served by the ConceptNet sidecar (see tests/test_conceptnet_remote.py),
+        NOT loaded as an in-process gensim model.
         """
         captured: list[str] = []
 
-        def fake_get(name):
-            captured.append(name)
-            return FakeKeyedVectors()
+        def fake_get_relatedness(pairs):
+            captured.append(pairs[0]["word_a"])
+            return [{"id": pairs[0]["id"], "score": 0.4, "error": None}]
 
-        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
-        clear_all()
+        monkeypatch.setattr("src.conceptnet_client.get_relatedness", fake_get_relatedness)
         compute_similarity(
             "embedding_cosine",
             "gensim",
             {"text_a": "car", "text_b": "auto"},
             {"variant": "conceptnet_numberbatch", "backend": "local", "confirm_large_download": True},
         )
-        assert captured == ["conceptnet-numberbatch-17-06-300"]
+        assert captured == ["car"]
 
     def test_default_is_glove(self, monkeypatch):
         captured: list[str] = []
@@ -367,42 +366,31 @@ class TestCostGate:
         finally:
             clear_all()
 
-    def test_conceptnet_local_blocked_without_opt_in(self, monkeypatch):
-        # Force "not on disk" for determinism (the model may already be cached
-        # in the gensim data dir on this machine).
-        monkeypatch.setattr("src.model_cache._gensim_model_on_disk", lambda name: False)
-        clear_all()
-        with pytest.raises(LargeModelDownloadBlocked):
-            compute_similarity(
-                "embedding_cosine",
-                "gensim",
-                {"text_a": "car", "text_b": "auto"},
-                {"variant": "conceptnet_numberbatch", "backend": "local"},
-            )
+    def test_conceptnet_local_bypasses_in_process_gate(self, monkeypatch):
+        """The conceptnet local path no longer downloads/loads the model in-process.
 
-    def test_precached_on_disk_model_needs_no_opt_in(self, monkeypatch):
-        """A large model whose data is ALREADY on disk passes the gate without opt-in.
-
-        Matches a build-time pre-cache (e.g. the ConceptNet Numberbatch baked
-        into the pytorch image): nothing would be downloaded, so the cost gate
-        must not block.
+        It is served by the ConceptNet sidecar (see ADR-0001), so the in-process
+        gensim cost gate must not engage — the sidecar owns the model's life.
         """
-        captured: list[str] = []
+        monkeypatch.setattr(
+            "src.model_cache.get_gensim_model",
+            lambda name: (_ for _ in ()).throw(AssertionError("conceptnet must not load a gensim model in-process")),
+        )
+        captured: list[dict] = []
 
-        def fake_get(name):
-            captured.append(name)
-            return FakeKeyedVectors()
+        def fake_get_relatedness(pairs):
+            captured.append(pairs)
+            return [{"id": pairs[0]["id"], "score": 0.4, "error": None}]
 
-        monkeypatch.setattr("src.model_cache.get_gensim_model", fake_get)
-        monkeypatch.setattr("src.model_cache._gensim_model_on_disk", lambda name: True)
-        clear_all()
+        monkeypatch.setattr("src.conceptnet_client.get_relatedness", fake_get_relatedness)
+        # No opt-in is needed and no in-process model is touched.
         result = compute_similarity(
             "embedding_cosine",
             "gensim",
             {"text_a": "car", "text_b": "auto"},
             {"variant": "conceptnet_numberbatch", "backend": "local"},
         )
-        assert captured == ["conceptnet-numberbatch-17-06-300"]
+        assert captured, "should have routed to the sidecar"
         assert result["similarity"] == 0.4
 
     def test_glove_default_needs_no_opt_in(self, monkeypatch):

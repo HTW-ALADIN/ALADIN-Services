@@ -10,22 +10,22 @@ Semantic text similarity service — measures the *meaning* similarity of words,
 
 Before using this service, understand **three independent decisions**. Everything else is per-algorithm detail you can look up at runtime via `GET /v1/similarity/text/algorithms`.
 
-**1. Which image?** Three images differ in the PyTorch/HuggingFace models and in whether the heavy local ConceptNet Numberbatch model is shipped.
+**1. Which image?** Two images differ in the PyTorch/HuggingFace models they ship. The local ConceptNet Numberbatch model no longer lives in any main image — it runs as an optional sidecar (see [ConceptNet sidecar](#conceptnet-sidecar)).
 
 | Image | Enables |
 |---|---|
 | `text-similarity-cpu` (default, ~0.7–1 GB) | Base algorithms — no PyTorch |
-| `text-similarity-hf` | Base **+** SBERT/BERTScore/cross-encoder/semantic_search — **no local ConceptNet model** (the lightest full-stack image) |
-| `text-similarity-conceptnet` | Base **+** all HF models **+** the local gensim ConceptNet Numberbatch model pre-cached (~1.2 GB) |
+| `text-similarity-hf` | Base **+** SBERT/BERTScore/cross-encoder/semantic_search — the lightest full-stack image |
 
-- `text-similarity-cpu` offers no PyTorch models at all; a request for one is rejected with a 400 pointing at the `hf`/`conceptnet` image. This is the default build (smallest, no heavy downloads).
-- `text-similarity-hf` is the recommended light "everything-else" deployment: it pre-caches all HuggingFace models (`all-MiniLM-L6-v2`, `all-mpnet-base-v2`, `paraphrase-multilingual-MiniLM-L12-v2`, `stsb-roberta-base`, `roberta-large`) at build time (`PRECACHE_HF=true`), so SBERT/cross-encoder/BERTScore serve instantly from a fresh container — offline. It sets `SIMILARITY_DISABLE_LOCAL_CONCEPTNET=true`, so `embedding_cosine` / `conceptnet_numberbatch` with `params.backend=local` is blocked with a clear pointer to `text-similarity-conceptnet`; a request for it returns 400. The *remote* ConceptNet API backend stays available (no local model).
-- `text-similarity-conceptnet` additionally pre-caches the local gensim ConceptNet Numberbatch model (`PRECACHE_CONCEPTNET=true`) — `embedding_cosine` / `conceptnet_numberbatch` (local default) works fully offline on the very first request.
-
+- `text-similarity-cpu` offers no PyTorch models at all; a request for one is rejected with a 400 pointing at the `hf` image. This is the default build (smallest, no heavy downloads).
+- `text-similarity-hf` is the recommended light "everything-else" deployment: it pre-caches all HuggingFace models (`all-MiniLM-L6-v2`, `all-mpnet-base-v2`, `paraphrase-multilingual-MiniLM-L12-v2`, `stsb-roberta-base`, `roberta-large`) at build time (`PRECACHE_HF=true`), so SBERT/cross-encoder/BERTScore serve instantly from a fresh container — offline. It is the **only** full-feature build; ConceptNet Numberbatch is served by the optional sidecar, never pre-cached into the image.
+- `embedding_cosine` / `conceptnet_numberbatch` with `params.backend=local` is served by the ConceptNet sidecar; with no sidecar configured it returns `502/503` (see below), never a local in-process computation or download.
 
 **2. Is the optional Java DKPro sidecar running?** If yes, you also get `topic_model`, `structural_stylistic`, and `dkpro` backends for two base algorithms. If no, those requests fail with `502/503`.
 
-**3. Do you allow the external ConceptNet API?** Only one algorithm variant (`embedding_cosine` / `conceptnet_numberbatch` / `backend: remote`) calls a third-party API — and only when you ask for it explicitly. The default for that variant is a local ~1.2 GB model download (gated). Everything else is fully self-contained. See [External API](#external-api).
+**3. Is the optional ConceptNet sidecar running?** If yes, `embedding_cosine` / `conceptnet_numberbatch` / `params.backend: local` is served by the separate `conceptnet-sidecar` process. If no, those requests fail with `502/503`. See [ConceptNet sidecar](#conceptnet-sidecar).
+
+**4. Do you allow the external ConceptNet API?** Only one algorithm variant (`embedding_cosine` / `conceptnet_numberbatch` / `backend: remote`) calls a third-party API — and only when you ask for it explicitly. Everything else is fully self-contained. See [External API](#external-api).
 
 
 ---
@@ -40,15 +40,15 @@ Before using this service, understand **three independent decisions**. Everythin
 | `/distance` | `tfidf_cosine` | `sklearn`, `dkpro`\* | **cpu** + pytorch | vector-space cosine |
 | `/distance` | `token_set_overlap` | `builtin` | **cpu** + pytorch | `jaccard` (default) / `dice` |
 | `/distance` | `jaccard` / `dice` | `builtin` | **cpu** + pytorch | legacy aliases of `token_set_overlap` |
-| `/distance` | `embedding_cosine` | `gensim` | **cpu** + pytorch | `glove` (default), `fasttext`†, `conceptnet_numberbatch` (local default† / remote opt-in) |
+| `/distance` | `embedding_cosine` | `gensim` | **cpu** + pytorch | `glove` (default), `fasttext`†, `conceptnet_numberbatch` (sidecar default / remote opt-in) |
 | `/distance` | `wmd` | `gensim` | **cpu** + pytorch | Word Mover's Distance; `params.model_name` |
-| `/distance` | `sbert_cosine` | `sentence_transformers` | **hf + conceptnet** | `params.model_name` restricted to allow-list |
-| `/distance` | `cross_encoder` | `sentence_transformers` | **hf + conceptnet** | pairwise reranking |
-| `/distance` | `bertscore` | `bertscore` | **hf + conceptnet** | P/R/F1; `lang`-based default = `roberta-large` |
+| `/distance` | `sbert_cosine` | `sentence_transformers` | **hf** | `params.model_name` restricted to allow-list |
+| `/distance` | `cross_encoder` | `sentence_transformers` | **hf** | pairwise reranking |
+| `/distance` | `bertscore` | `bertscore` | **hf** | P/R/F1; `lang`-based default = `roberta-large` |
 | `/distance` | `topic_model` | `dkpro`\* | **sidecar required** | LSA / ESA |
 | `/distance` | `structural_stylistic` | `dkpro`\* | **sidecar required** | n-gram containment / TTR / greedy string tiling |
 | `/retrieval` | `bm25` | `builtin` | **cpu** + pytorch | `k1` (1.5), `b` (0.75), `top_k` (10) |
-| `/retrieval` | `semantic_search` | `sentence_transformers` | **hf + conceptnet** | nearest-neighbor retrieval |
+| `/retrieval` | `semantic_search` | `sentence_transformers` | **hf** | nearest-neighbor retrieval |
 | `/lexical` | `synonym` / `antonym` / `hypernym` / `hyponym` | `nltk`, `odenet` | **cpu** + pytorch | `odenet` = German (needs `[de]` extra) |
 
 \* `dkpro` backend requires the Java sidecar — works with **either** image.
@@ -64,7 +64,7 @@ Before using this service, understand **three independent decisions**. Everythin
 
 ## External API
 
-`embedding_cosine` variant `conceptnet_numberbatch`, `backend: "remote"` (an **explicit opt-in**; the default is the local Numberbatch model) calls the public ConceptNet API — **not under our control**:
+`embedding_cosine` variant `conceptnet_numberbatch` is served locally by the optional ConceptNet sidecar; `backend: "remote"` (an **explicit opt-in**; the default is to the local sidecar/service path) calls the public ConceptNet API — **not under our control**:
 
 - `GET https://api.conceptnet.io/relatedness?node1=/c/{lang}/{a}&node2=/c/{lang}/{b}`
 - no auth · rate limit 3600 req/h sustained, 120 req/min burst
@@ -73,11 +73,38 @@ It's **selected per request**, not a global switch:
 
 | Want external API? | Request |
 |---|---|
-| **Off** (default) | `params: {variant: conceptnet_numberbatch}` → local ~1.2 GB Numberbatch model (gated) |
+| **Off** (default) | `params: {variant: conceptnet_numberbatch}` → local path via the ConceptNet sidecar |
 | **On** | `params: {variant: conceptnet_numberbatch, backend: remote}` |
 | **On, fully offline** | `params: {variant: conceptnet_numberbatch, backend: local}` → same as the default, explicit |
 
 Safeguards: ~5 s timeout, batch cap `CONCEPTNET_MAX_REMOTE_INPUTS` (60), throttle `CONCEPTNET_REMOTE_REQUEST_DELAY` (0.05 s), 429 backoff retries. Failures → `503` (timeout/network/429) or `502` (other upstream). The remote path only runs when explicitly requested (`backend: remote`) and never silently downgrades to any other backend. `glove`/`fasttext` have no remote backend (no public API exists); `backend: remote` on them is rejected with `400`.
+
+## ConceptNet sidecar
+
+> **Is the optional ConceptNet sidecar running?** If yes, `embedding_cosine` /
+> `conceptnet_numberbatch` / `params.backend: local` is served by the separate
+> `conceptnet-sidecar` process (pure Python + gensim) instead of a model loaded
+> in-process. If no, those requests fail with `502/503` — the main service process
+> stays healthy, it never crashes and never falls back to a local download.
+
+The sidecar lives in `conceptnet-sidecar/` beside the DKPro sidecar (see its [README](conceptnet-sidecar/README.md)),
+with its URL configured via `TEXT_SIMILARITY_CONCEPTNET_URL` (default
+`http://localhost:8200`). It works with **either** main image (`cpu`/`hf`), exactly
+like the DKPro sidecar. Run it locally with:
+
+```sh
+cd conceptnet-sidecar
+make prep
+CONCEPTNET_MODEL_PATH=/path/to/conceptnet-numberbatch-17-06-300 make test
+CONCEPTNET_MODEL_PATH=/path/to/conceptnet-numberbatch-17-06-300 make start   # uvicorn on :8200
+```
+
+**Lazy-load + TTL.** The sidecar does **not** load the ~1.2 GB model at startup. It
+loads on the first `/v1/relatedness` request, and evicts the model from RAM after
+`CONCEPTNET_IDLE_TTL_SECONDS` (default 900 s) of inactivity — so an idle sidecar sits
+at < 200 MB, not ~3-6 GB (see [ADR-0001](docs/adr/0001-conceptnet-as-sidecar.md) and
+[Resource requirements](#resource-requirements)). A request immediately after an
+eviction re-loads the model automatically; that one call just takes longer.
 
 ---
 
@@ -94,11 +121,22 @@ Safeguards: ~5 s timeout, batch cap `CONCEPTNET_MAX_REMOTE_INPUTS` (60), throttl
 | `cross_encoder` | `stsb-roberta-base` | ~440 MB | ~2–4 GB | GPU recommended for real-time |
 | `bertscore` | `roberta-large` | several 100 MB | ~2–4 GB+ | **GPU strongly recommended** |
 | `embedding_cosine` (`fasttext`) | `fasttext-wiki-news-subwords-300` | ~2 GB | ~4–8 GB | CPU only |
-| `embedding_cosine` (`conceptnet` local) | `conceptnet-numberbatch-17-06-300` | ~1.2 GB | ~3–6 GB | CPU only |
 
 - No measure *requires* a GPU; GPU only cuts transformer latency.
 - In-memory footprint ≈ **4× the download size** (float32 + runtime libs).
 - Heavy models are **cached per process** (`src/model_cache.py`); more workers = more RAM.
+
+### ConceptNet sidecar
+
+Runs in its own process (`conceptnet-sidecar`), so its RAM is isolated from the main
+service (see [ADR-0001](docs/adr/0001-conceptnet-as-sidecar.md)). It loads the
+~1.2 GB Numberbatch model **lazily** on first request and evicts it from RAM after an
+inactivity TTL:
+
+| State | RAM |
+|---|---|
+| Active (model loaded) | ~3–6 GB (CPU only) |
+| Idle (`CONCEPTNET_IDLE_TTL_SECONDS` elapsed, model evicted) | **< 200 MB** |
 
 ### DKPro sidecar
 Extra Java process: ~2 cores, 1–2 GB RAM alongside the Python service.
@@ -128,8 +166,8 @@ Synchronous & stateless: `{"algorithm", "params", "inputs":[...]}` → result pe
 | Variable | Default | Description |
 |---|---|---|
 | `SIMILARITY_PROFILE` | `cpu` | image/run profile (`cpu` / `pytorch`), baked in at build |
-| `SIMILARITY_DISABLE_LOCAL_CONCEPTNET` | `false` | `1/true/yes` blocks the local ConceptNet Numberbatch model (the `hf` image sets it), keeping the remote API backend available |
 | `TEXT_SIMILARITY_DKPRO_URL` | `http://localhost:8100` | DKPro Java sidecar URL |
+| `TEXT_SIMILARITY_CONCEPTNET_URL` | `http://localhost:8200` | ConceptNet sidecar URL for `embedding_cosine` / `conceptnet_numberbatch` / `params.backend: local` |
 | `CONCEPTNET_API_URL` | `https://api.conceptnet.io` | ConceptNet relatedness API base |
 | `CONCEPTNET_MAX_REMOTE_INPUTS` | `60` | max inputs/request for `remote` backend |
 | `CONCEPTNET_REMOTE_REQUEST_DELAY` | `0.05` | min seconds between API calls |
@@ -143,21 +181,27 @@ make prep                    # base deps (cpu profile)
 pip install -e ".[model]"    # + PyTorch / HuggingFace
 pip install -e ".[de]"       # + German lexical (Odenet)
 make docker-build-cpu        # text-similarity-cpu (no PyTorch, no pre-cache)
-make docker-build-hf         # text-similarity-hf (all HF models, NO local ConceptNet)
-make docker-build-conceptnet # text-similarity-conceptnet (HF + local ConceptNet pre-cached)
-make docker-build-pytorch    # alias of docker-build-conceptnet (full-stack, ConceptNet)
+make docker-build-hf         # text-similarity-hf (all HF models)
 make test                    # run tests
 make start                   # uvicorn on :8000
+
+# ConceptNet sidecar (optional, separate process — see conceptnet-sidecar/)
+cd conceptnet-sidecar
+make prep
+CONCEPTNET_MODEL_PATH=/path/to/conceptnet-numberbatch-17-06-300 make docker-build
 ```
 
-- **`text-similarity-hf`** is built with `PRECACHE_HF=true` (downloads the five HuggingFace models at build time so the first SBERT/cross-encoder/BERTScore request is served offline from a fresh container) and `DISABLE_LOCAL_CONCEPTNET=true` (blocks the local ConceptNet Numberbatch model; the remote API backend stays usable). Image size ≈ base + PyTorch/CUDA (~5.5 GB) + HF models (~2.9 GB).
-- **`text-similarity-conceptnet`** additionally sets `PRECACHE_CONCEPTNET=true`, which downloads `conceptnet-numberbatch-17-06-300` (~1.2 GB) into the image.
-- The default `text-similarity-cpu` ships neither; it stays small (~0.7–1 GB) and downloads the small corpora (WordNet, GloVe) at runtime.
+- **`text-similarity-hf`** is built with `PRECACHE_HF=true` (downloads the five HuggingFace models at build time so the first SBERT/cross-encoder/BERTScore request is served offline from a fresh container). Image size ≈ base + PyTorch/CUDA (~5.5 GB) + HF models (~2.9 GB).
+- The local ConceptNet Numberbatch model is **no longer baked into any main image** — it lives in the `conceptnet-sidecar` container and is loaded lazily there (see [ConceptNet sidecar](#conceptnet-sidecar)).
+- The default `text-similarity-cpu` stays small (~0.7–1 GB) and downloads the small corpora (WordNet, GloVe) at runtime.
 - For manual control, bypass the `make` targets and pass build args directly:
   `docker build --build-arg SIMILARITY_PROFILE=pytorch --build-arg INSTALL_MODEL=true \
-   --build-arg PRECACHE_HF=true --build-arg DISABLE_LOCAL_CONCEPTNET=true -t text-similarity-hf .`
+   --build-arg PRECACHE_HF=true -t text-similarity-hf .`
 
-Set `SIMILARITY_DISABLE_LOCAL_CONCEPTNET=true` at runtime to dynamically hide the local ConceptNet Numberbatch models (useful when running the `hf` image or pointing a full image at a shared cache without it).
+The `conceptnet_numberbatch` variant's behavior no longer depends on the build: both
+images serve it through the optional ConceptNet sidecar (or return `502/503` when the
+sidecar is down). The legacy `SIMILARITY_DISABLE_LOCAL_CONCEPTNET` switch no longer
+exists — there is no in-process Numberbatch model to hide.
 
 
 ## License

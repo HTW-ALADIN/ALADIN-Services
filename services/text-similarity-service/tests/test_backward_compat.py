@@ -123,26 +123,24 @@ def test_cpu_blocks_model_requests(profile_client):
         json={"algorithm": "sbert_cosine", "params": {}, "inputs": [{"id": "p1", "a": "a", "b": "b"}]},
     )
     assert resp.status_code == 400
-    assert "text-similarity-pytorch" in resp.json()["detail"]
+    assert "text-similarity-hf" in resp.json()["detail"]
 
 
 @pytest.mark.parametrize("profile_client", ["pytorch"], indirect=True)
-def test_hf_profile_omits_local_conceptnet(profile_client):
-    """The "hf" build (pytorch + DISABLE_LOCAL_CONCEPTNET) still ships all HF
-    models but excludes the local ConceptNet Numberbatch variant, and blocks
-    requests that would need it while keeping the remote backend."""
-    client = profile_client(disable_conceptnet=True)
+def test_pytorch_profile_lists_conceptnet(profile_client):
+    """The conceptnet_numberbatch variant is always present (served by the sidecar)."""
+    client = profile_client()
     catalog = client.get("/v1/similarity/text/algorithms").json()
     emb = [e for e in catalog if e["algorithm"] == "embedding_cosine"]
-    assert emb, "embedding_cosine should still be present in hf catalog"
+    assert emb, "embedding_cosine should still be present"
     variants = emb[0].get("variants", [])
-    assert variants == ["glove", "fasttext"], f"hf catalog should exclude conceptnet_numberbatch, got {variants}"
+    assert "conceptnet_numberbatch" in variants, f"conceptnet_numberbatch should be present, got {variants}"
+    # The local path is served by the optional sidecar now.
+    assert emb[0].get("requires_sidecar") is True
+    assert "sidecar_reachable" in emb[0]
 
-    # HF measures remain available
-    names = {e["algorithm"] for e in catalog}
-    assert {"sbert_cosine", "cross_encoder", "bertscore", "semantic_search"} <= names
-
-    # Local conceptnet request is blocked with a clear pointer.
+    # A request for the local conceptnet variant with no sidecar running returns
+    # 502/503 (problem+json), never a local in-process computation.
     resp = client.post(
         "/v1/similarity/text/distance",
         json={
@@ -151,11 +149,10 @@ def test_hf_profile_omits_local_conceptnet(profile_client):
             "inputs": [{"id": "p1", "a": "dog", "b": "cat"}],
         },
     )
-    assert resp.status_code == 400
-    assert "conceptnet" in resp.json()["detail"].lower()
-    assert "text-similarity-conceptnet" in resp.json()["detail"]
+    assert resp.status_code in (502, 503)
+    assert "sidecar" in resp.json().get("detail", "").lower()
 
-    # The remote backend (no local model) must NOT be blocked by the flag.
+    # The remote backend stays available regardless of the sidecar.
     resp_remote = client.post(
         "/v1/similarity/text/distance",
         json={
@@ -164,6 +161,7 @@ def test_hf_profile_omits_local_conceptnet(profile_client):
             "inputs": [{"id": "p1", "a": "dog", "b": "cat"}],
         },
     )
-    # It must not hit the local-model guard (a 400 about the missing model). It may
-    # succeed, or fail with a network/API error (502/503) — never the local guard.
-    assert resp_remote.status_code != 400 or "not ship" not in resp_remote.json().get("detail", ""), resp_remote.text
+    # It must not hit a sidecar guard (a 502/503 about a missing sidecar); it may
+    # succeed or fail with a real network/API error (502/503) — never an
+    # artificial "configure the sidecar" message.
+    assert resp_remote.status_code != 400 or "sidecar" not in resp_remote.json().get("detail", ""), resp_remote.text

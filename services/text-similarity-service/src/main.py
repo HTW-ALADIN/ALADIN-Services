@@ -16,8 +16,10 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from . import conceptnet_client
 from .catalog import CATALOG, PROFILE, get_catalog
 from .conceptnet_api import MAX_REMOTE_INPUTS, ConceptNetError
+from .conceptnet_client import ConceptNetSidecarError, is_sidecar_reachable
 from .dkpro_proxy import compute_via_sidecar, is_dkpro_request
 from .lexical import DEFAULT_LEXICAL_BACKENDS, compute_lexical
 from .model_cache import LargeModelDownloadBlocked, cache_summary
@@ -29,7 +31,7 @@ from .models import (
     TextResult,
 )
 from .retrieval import DEFAULT_RETRIEVAL_BACKENDS, compute_retrieval
-from .similarity import DEFAULT_BACKENDS, SIMILARITY_DISPATCH, compute_similarity
+from .similarity import DEFAULT_BACKENDS, SIMILARITY_DISPATCH, _conceptnet_sidecar_result, compute_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +80,7 @@ def _require_enabled(algorithm: str) -> None:
             status_code=400,
             detail=(
                 f"Algorithm '{algorithm}' requires the PyTorch stack and is not available "
-                f"in this build (text-similarity-cpu). Deploy the text-similarity-pytorch image to use it."
+                f"in this build (text-similarity-cpu). Deploy the text-similarity-hf image to use it."
             ),
         )
 
@@ -180,8 +182,19 @@ def _safe_cache_summary() -> dict:
 
 @app.get("/v1/similarity/text/algorithms")
 def list_algorithms() -> list[dict]:
-    """Discovery: list all algorithm/backend combinations with metadata."""
-    return get_catalog()
+    """Discovery: list all algorithm/backend combinations with metadata.
+
+    Entries that rely on the optional ConceptNet sidecar (``requires_sidecar``)
+    carry a best-effort live ``sidecar_reachable`` flag so a client can predict
+    whether ``embedding_cosine`` / ``conceptnet_numberbatch`` / ``local`` will
+    succeed without issuing a request.
+    """
+    catalog = get_catalog()
+    sidecar_ok = is_sidecar_reachable()
+    for entry in catalog:
+        if entry.get("requires_sidecar"):
+            entry["sidecar_reachable"] = sidecar_ok
+    return catalog
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -220,6 +233,14 @@ def _run_batch(
             # an explicit opt-in (params.confirm_large_download / env var). The
             # exception message names size, opt-in and how to enable it.
             raise HTTPException(status_code=400, detail=str(e)) from None
+        except ConceptNetSidecarError as e:
+            # ConceptNet sidecar unavailable (optional process). Soft degradation:
+            # 503 when unreachable/timed out, 502 on an upstream error — never a
+            # 500. The message points operators at the sidecar URL / service.
+            raise HTTPException(
+                status_code=e.status,
+                detail=str(e) + " (hint: set TEXT_SIMILARITY_CONCEPTNET_URL or start the conceptnet-sidecar service)",
+            ) from None
         except ModuleNotFoundError as e:
             module_name = e.name or "unknown"
             extra = _MODULE_EXTRA.get(module_name, "model")
@@ -283,6 +304,40 @@ def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
                 f"api.conceptnet.io rate limit (3600/h, 120/min burst). Split the batch into smaller requests or "
                 f"set params.backend='local'."
             ),
+        )
+
+    # Batched local ConceptNet dispatch: embed_cosine / conceptnet_numberbatch /
+    # backend local (the default) is served by the conceptnet-sidecar. The whole
+    # batch is scored with ONE get_relatedness call instead of one HTTP round-trip
+    # per input, which matters for large batches against a cold/loaded sidecar.
+    conceptnet_local = (
+        algorithm == "embedding_cosine"
+        and backend == "gensim"
+        and request.params.get("variant", "glove") == "conceptnet_numberbatch"
+        and request.params.get("backend") in (None, "local")
+    )
+    if conceptnet_local:
+        lang = request.params.get("lang", "en")
+        pairs = [{"id": item.id, "word_a": item.a, "word_b": item.b, "lang": lang} for item in request.inputs]
+        try:
+            sidecar_items = conceptnet_client.get_relatedness(pairs)
+        except ConceptNetSidecarError as e:
+            raise HTTPException(
+                status_code=e.status,
+                detail=str(e) + " (hint: set TEXT_SIMILARITY_CONCEPTNET_URL or start the conceptnet-sidecar service)",
+            ) from None
+        results: list[TextResult] = []
+        total_ms = 0.0
+        for item in sidecar_items:
+            result = _conceptnet_sidecar_result(item, request.params)
+            result["compute_time_ms"] = item.get("compute_time_ms", 0)
+            total_ms += result.get("compute_time_ms", 0)
+            results.append(TextResult(id=item["id"], result=result))
+        return TextComputeResponse(
+            algorithm=algorithm,
+            backend="gensim",
+            results=results,
+            meta={"compute_time_ms": round(total_ms, 2)},
         )
 
     def _compute(alg: str, bck: str, input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:

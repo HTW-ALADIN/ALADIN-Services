@@ -111,12 +111,8 @@ def profile_client(request):
     _DEFAULT = "cpu"
     _param = getattr(request, "param", None)
 
-    def _make(profile: str = _param or _DEFAULT, disable_conceptnet: bool = False) -> TestClient:
+    def _make(profile: str = _param or _DEFAULT) -> TestClient:
         os.environ["SIMILARITY_PROFILE"] = profile
-        if disable_conceptnet:
-            os.environ["SIMILARITY_DISABLE_LOCAL_CONCEPTNET"] = "true"
-        else:
-            os.environ.pop("SIMILARITY_DISABLE_LOCAL_CONCEPTNET", None)
         importlib.reload(catalog)
         importlib.reload(main)
         return TestClient(main.app)
@@ -125,6 +121,5 @@ def profile_client(request):
 
     # Restore module state to the default so later tests see a clean cpu app.
     os.environ["SIMILARITY_PROFILE"] = _DEFAULT
-    os.environ.pop("SIMILARITY_DISABLE_LOCAL_CONCEPTNET", None)
     importlib.reload(catalog)
     importlib.reload(main)

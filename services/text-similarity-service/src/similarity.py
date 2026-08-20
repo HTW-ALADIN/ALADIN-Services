@@ -70,6 +70,10 @@ _EMBEDDING_VARIANTS = {
     "conceptnet_numberbatch": "conceptnet-numberbatch-17-06-300",
 }
 
+# The Numberbatch model is owned by the ConceptNet sidecar (ADR-0001); any
+# reference to it (variant OR explicit model_name) routes through the sidecar.
+_CONCEPTNET_MODEL = "conceptnet-numberbatch-17-06-300"
+
 
 def _embedding_cosine_gensim(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
     """Embedding cosine for the ``gensim`` backend.
@@ -78,14 +82,17 @@ def _embedding_cosine_gensim(input_data: dict[str, Any], params: dict[str, Any])
     is an additional ``params.backend`` selector (a parameter *inside* params,
     distinct from the top-level ``backend`` field which stays ``gensim``):
 
-    - ``params.backend: "local"`` (default) — lazy-load / download the local
-      ~1.2 GB gensim Numberbatch model and resolve ConceptNet ``/c/{lang}/{term}``
-      URIs (self-contained, offline-capable).
+    - ``params.backend: "local"`` (default) — served by the optional
+      ``conceptnet-sidecar`` process over HTTP (see ADR-0001). The main service
+      no longer loads the ~3-6 GB Numberbatch model in-process; it forwards the
+      pair to the sidecar. If the sidecar is absent, the request fails 502/503
+      like a missing DKPro sidecar.
     - ``params.backend: "remote"`` — explicit opt-in to call the public
       api.conceptnet.io relatedness API instead (see ``conceptnet_api``).
 
     ``glove`` / ``fasttext`` are local-only (no public similarity API exists),
-    so ``params.backend: "remote"`` on those variants is rejected.
+    so ``params.backend: "remote"`` on those variants is rejected; they load the
+    local gensim model in-process as before.
     """
     variant = params.get("variant", "glove")
     backend = params.get("backend")
@@ -96,47 +103,51 @@ def _embedding_cosine_gensim(input_data: dict[str, Any], params: dict[str, Any])
             f"params.backend='remote' is only available for variant 'conceptnet_numberbatch'; "
             f"variant '{variant}' has no public similarity API and must use backend 'local'"
         )
+    if (variant == "conceptnet_numberbatch" and backend != "remote") or (
+        backend != "remote" and params.get("model_name", "").split("/", 1)[-1] == _CONCEPTNET_MODEL
+    ):
+        # local (default), and any explicit Numberbatch model_name (non-remote) —
+        # both are served by the ConceptNet sidecar, never loaded in-process.
+        from .conceptnet_client import get_relatedness
+
+        a = input_data.get("text_a", "")
+        b = input_data.get("text_b", "")
+        lang = str(params.get("lang", "en"))
+        item = get_relatedness([{"id": "x", "word_a": a, "word_b": b, "lang": lang}])[0]
+        return _conceptnet_sidecar_result(item, params)
+
     if variant == "conceptnet_numberbatch" and backend == "remote":
         # remote must now be requested explicitly (local is the default).
         from .conceptnet_api import compute_relatedness_remote
 
         return compute_relatedness_remote(input_data, params)
 
-    # In the "hf" (light) image the heavy local ConceptNet Numberbatch model is
-    # deliberately not shipped. Block requests that would need it up-front with
-    # a clear pointer to the "conceptnet" image instead of triggering a (gated,
-    # ~1.2 GB) runtime download or tripping over a missing model. The *remote*
-    # API backend is unaffected (it returned above and loads no local model).
-    from .catalog import LOCAL_CONCEPTNET_DISABLED
-    _model_name = params.get("model_name")
-    if LOCAL_CONCEPTNET_DISABLED and (
-        variant == "conceptnet_numberbatch"
-        or (_model_name and _model_name.split("/", 1)[-1] == "conceptnet-numberbatch-17-06-300")
-    ):
-        raise ValueError(
-            "This build does not ship the local ConceptNet Numberbatch model. "
-            "Deploy the 'text-similarity-conceptnet' image to use "
-            "variant 'conceptnet_numberbatch' (or params.model_name "
-            "'conceptnet-numberbatch-17-06-300'). Use params.backend='remote' "
-            "here to call the public ConceptNet API instead without the local model."
-        )
-
     from .model_cache import get_gensim_model, require_large_download_ok
 
     a = input_data.get("text_a", "")
     b = input_data.get("text_b", "")
     model_name = params.get("model_name") or _EMBEDDING_VARIANTS.get(variant, "glove-wiki-gigaword-50")
-    # Cost gate: fasttext (~2 GB) and conceptnet_numberbatch local (~1.2 GB)
-    # downloads need an explicit opt-in BEFORE the first download; glove and
-    # already-cached models pass through. (remote never reaches this path.)
+    # Cost gate: fasttext (~2 GB) downloads need an explicit opt-in BEFORE the
+    # first download; glove and already-cached models pass through. (ConceptNet
+    # and remote never reach this path anymore.)
     require_large_download_ok(model_name, params)
     kv = get_gensim_model(model_name)
 
-    if variant == "conceptnet_numberbatch":
-        raw = _conceptnet_local_similarity(kv, a, b, str(params.get("lang", "en")))
-    else:
-        raw = _gensim_word_similarity(kv, a, b)
+    raw = _gensim_word_similarity(kv, a, b)
     return _normalize_similarity(raw, "embedding_cosine", "gensim")
+
+
+def _conceptnet_sidecar_result(item: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    """Build the legacy {raw, similarity, distance} envelope from a sidecar item.
+
+    The sidecar returns raw cosine similarity in [-1, 1] (or None + error for
+    out-of-vocabulary words) and stays dumb about normalization; we map its raw
+    value through the exact same normalizer as before, so existing clients see an
+    identical response shape (see ADR-0001).
+    """
+    if item.get("score") is None:
+        return {"raw": None, "similarity": None, "distance": None, "error": item.get("error") or item.get("id") or "no score"}
+    return _normalize_similarity(float(item["score"]), "embedding_cosine", "gensim")
 
 
 def _gensim_word_similarity(kv, a: str, b: str) -> float:
@@ -146,51 +157,6 @@ def _gensim_word_similarity(kv, a: str, b: str) -> float:
     if len(words_a) == 1 and len(words_b) == 1:
         return float(kv.similarity(words_a[0], words_b[0]))
     return float(kv.n_similarity(words_a, words_b))
-
-
-def _conceptnet_local_similarity(kv, a: str, b: str, lang: str) -> float:
-    """Resolve ConceptNet Numberbatch URIs for the local model.
-
-    The gensim Numberbatch model keys its vectors by ConceptNet URIs
-    (``/c/en/cat``), NOT bare words (``cat``) — a bare-key lookup raises
-    ``KeyError``. We normalize both sides to ``/c/{lang}/{term}`` URIs and guard
-    against missing keys: any token with no vector is skipped (never a hard
-    error), and identical non-empty normalized terms score 1.0.
-    """
-    from .conceptnet_api import to_conceptnet_uri
-
-    uri_a = to_conceptnet_uri(a, lang)
-    uri_b = to_conceptnet_uri(b, lang)
-    if not uri_a == uri_b and (not uri_a or not uri_b):
-        # one side meaningless -> nothing in common (mirrors the remote path)
-        return 0.0 if (uri_a or uri_b) else 1.0
-    if uri_a == uri_b:
-        return 1.0
-    # Tokenize the *term* component of each URI (after the last slash), e.g.
-    # "/c/en/cat_in_the_hat" -> ["cat", "in", "the", "hat"].
-    a_tokens = [t for t in uri_a.rsplit("/", 1)[-1].split("_") if t]
-    b_tokens = [t for t in uri_b.rsplit("/", 1)[-1].split("_") if t]
-    # Best single-token pair is a stable, offline-capable proxy that never
-    # crashes on phrases the Numberbatch model does not contain.
-    sims, weights = [], []
-    for ta in a_tokens:
-        ua = to_conceptnet_uri(ta, lang)
-        if ua not in kv.key_to_index:
-            continue
-        best = None
-        for tb in b_tokens:
-            ub = to_conceptnet_uri(tb, lang)
-            if ub not in kv.key_to_index:
-                continue
-            s = float(kv.similarity(ua, ub))
-            if best is None or s > best:
-                best = s
-        if best is not None:
-            sims.append(best)
-            weights.append(1.0)
-    if not sims:
-        return 0.0
-    return sum(s * w for s, w in zip(sims, weights, strict=True)) / sum(weights)
 
 
 # ─── SBERT cosine ─────────────────────────────────────────────────────────────
@@ -215,13 +181,6 @@ def _sbert_cosine(input_data: dict[str, Any], params: dict[str, Any]) -> dict[st
 
 
 def _wmd_gensim(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
-    from .catalog import LOCAL_CONCEPTNET_DISABLED
-    if LOCAL_CONCEPTNET_DISABLED and params.get("model_name", "").split("/", 1)[-1] == "conceptnet-numberbatch-17-06-300":
-        raise ValueError(
-            "This build does not ship the local ConceptNet Numberbatch model. "
-            "Deploy the 'text-similarity-conceptnet' image to use wmd with "
-            "model_name 'conceptnet-numberbatch-17-06-300'."
-        )
     from .model_cache import get_gensim_model, require_large_download_ok
 
     a = input_data.get("text_a", "")
