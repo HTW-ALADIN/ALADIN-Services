@@ -102,6 +102,25 @@ def _embedding_cosine_gensim(input_data: dict[str, Any], params: dict[str, Any])
 
         return compute_relatedness_remote(input_data, params)
 
+    # In the "hf" (light) image the heavy local ConceptNet Numberbatch model is
+    # deliberately not shipped. Block requests that would need it up-front with
+    # a clear pointer to the "conceptnet" image instead of triggering a (gated,
+    # ~1.2 GB) runtime download or tripping over a missing model. The *remote*
+    # API backend is unaffected (it returned above and loads no local model).
+    from .catalog import LOCAL_CONCEPTNET_DISABLED
+    _model_name = params.get("model_name")
+    if LOCAL_CONCEPTNET_DISABLED and (
+        variant == "conceptnet_numberbatch"
+        or (_model_name and _model_name.split("/", 1)[-1] == "conceptnet-numberbatch-17-06-300")
+    ):
+        raise ValueError(
+            "This build does not ship the local ConceptNet Numberbatch model. "
+            "Deploy the 'text-similarity-conceptnet' image to use "
+            "variant 'conceptnet_numberbatch' (or params.model_name "
+            "'conceptnet-numberbatch-17-06-300'). Use params.backend='remote' "
+            "here to call the public ConceptNet API instead without the local model."
+        )
+
     from .model_cache import get_gensim_model, require_large_download_ok
 
     a = input_data.get("text_a", "")
@@ -196,6 +215,13 @@ def _sbert_cosine(input_data: dict[str, Any], params: dict[str, Any]) -> dict[st
 
 
 def _wmd_gensim(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    from .catalog import LOCAL_CONCEPTNET_DISABLED
+    if LOCAL_CONCEPTNET_DISABLED and params.get("model_name", "").split("/", 1)[-1] == "conceptnet-numberbatch-17-06-300":
+        raise ValueError(
+            "This build does not ship the local ConceptNet Numberbatch model. "
+            "Deploy the 'text-similarity-conceptnet' image to use wmd with "
+            "model_name 'conceptnet-numberbatch-17-06-300'."
+        )
     from .model_cache import get_gensim_model, require_large_download_ok
 
     a = input_data.get("text_a", "")

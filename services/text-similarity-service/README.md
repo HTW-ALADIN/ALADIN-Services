@@ -10,14 +10,18 @@ Semantic text similarity service — measures the *meaning* similarity of words,
 
 Before using this service, understand **three independent decisions**. Everything else is per-algorithm detail you can look up at runtime via `GET /v1/similarity/text/algorithms`.
 
-**1. Which image?** Two images differ *only* in the PyTorch/HuggingFace models.
+**1. Which image?** Three images differ in the PyTorch/HuggingFace models and in whether the heavy local ConceptNet Numberbatch model is shipped.
 
 | Image | Enables |
 |---|---|
-| `text-similarity-cpu` (default, ~730 MB) | Base algorithms — no PyTorch |
-| `text-similarity-pytorch` | Base **+** SBERT/BERTScore/cross-encoder/semantic_search |
+| `text-similarity-cpu` (default, ~0.7–1 GB) | Base algorithms — no PyTorch |
+| `text-similarity-hf` | Base **+** SBERT/BERTScore/cross-encoder/semantic_search — **no local ConceptNet model** (the lightest full-stack image) |
+| `text-similarity-conceptnet` | Base **+** all HF models **+** the local gensim ConceptNet Numberbatch model pre-cached (~1.2 GB) |
 
-The `text-similarity-pytorch` image additionally **pre-caches the gensim ConceptNet Numberbatch model (~1.2 GB)** at build time — `embedding_cosine` / `conceptnet_numberbatch` (the local default backend) is served immediately on the first request, fully offline. The slim `text-similarity-cpu` image omits it and downloads the model on first use (gated by `confirm_large_download`). Pre-caching is controlled by the `PRECACHE_CONCEPTNET` build arg:
+- `text-similarity-cpu` offers no PyTorch models at all; a request for one is rejected with a 400 pointing at the `hf`/`conceptnet` image. This is the default build (smallest, no heavy downloads).
+- `text-similarity-hf` is the recommended light "everything-else" deployment: it pre-caches all HuggingFace models (`all-MiniLM-L6-v2`, `all-mpnet-base-v2`, `paraphrase-multilingual-MiniLM-L12-v2`, `stsb-roberta-base`, `roberta-large`) at build time (`PRECACHE_HF=true`), so SBERT/cross-encoder/BERTScore serve instantly from a fresh container — offline. It sets `SIMILARITY_DISABLE_LOCAL_CONCEPTNET=true`, so `embedding_cosine` / `conceptnet_numberbatch` with `params.backend=local` is blocked with a clear pointer to `text-similarity-conceptnet`; a request for it returns 400. The *remote* ConceptNet API backend stays available (no local model).
+- `text-similarity-conceptnet` additionally pre-caches the local gensim ConceptNet Numberbatch model (`PRECACHE_CONCEPTNET=true`) — `embedding_cosine` / `conceptnet_numberbatch` (local default) works fully offline on the very first request.
+
 
 **2. Is the optional Java DKPro sidecar running?** If yes, you also get `topic_model`, `structural_stylistic`, and `dkpro` backends for two base algorithms. If no, those requests fail with `502/503`.
 
@@ -38,13 +42,13 @@ The `text-similarity-pytorch` image additionally **pre-caches the gensim Concept
 | `/distance` | `jaccard` / `dice` | `builtin` | **cpu** + pytorch | legacy aliases of `token_set_overlap` |
 | `/distance` | `embedding_cosine` | `gensim` | **cpu** + pytorch | `glove` (default), `fasttext`†, `conceptnet_numberbatch` (local default† / remote opt-in) |
 | `/distance` | `wmd` | `gensim` | **cpu** + pytorch | Word Mover's Distance; `params.model_name` |
-| `/distance` | `sbert_cosine` | `sentence_transformers` | **pytorch only** | `params.model_name` restricted to allow-list |
-| `/distance` | `cross_encoder` | `sentence_transformers` | **pytorch only** | pairwise reranking |
-| `/distance` | `bertscore` | `bertscore` | **pytorch only** | P/R/F1; `lang`-based default = `roberta-large` |
+| `/distance` | `sbert_cosine` | `sentence_transformers` | **hf + conceptnet** | `params.model_name` restricted to allow-list |
+| `/distance` | `cross_encoder` | `sentence_transformers` | **hf + conceptnet** | pairwise reranking |
+| `/distance` | `bertscore` | `bertscore` | **hf + conceptnet** | P/R/F1; `lang`-based default = `roberta-large` |
 | `/distance` | `topic_model` | `dkpro`\* | **sidecar required** | LSA / ESA |
 | `/distance` | `structural_stylistic` | `dkpro`\* | **sidecar required** | n-gram containment / TTR / greedy string tiling |
 | `/retrieval` | `bm25` | `builtin` | **cpu** + pytorch | `k1` (1.5), `b` (0.75), `top_k` (10) |
-| `/retrieval` | `semantic_search` | `sentence_transformers` | **pytorch only** | nearest-neighbor retrieval |
+| `/retrieval` | `semantic_search` | `sentence_transformers` | **hf + conceptnet** | nearest-neighbor retrieval |
 | `/lexical` | `synonym` / `antonym` / `hypernym` / `hyponym` | `nltk`, `odenet` | **cpu** + pytorch | `odenet` = German (needs `[de]` extra) |
 
 \* `dkpro` backend requires the Java sidecar — works with **either** image.
@@ -124,6 +128,7 @@ Synchronous & stateless: `{"algorithm", "params", "inputs":[...]}` → result pe
 | Variable | Default | Description |
 |---|---|---|
 | `SIMILARITY_PROFILE` | `cpu` | image/run profile (`cpu` / `pytorch`), baked in at build |
+| `SIMILARITY_DISABLE_LOCAL_CONCEPTNET` | `false` | `1/true/yes` blocks the local ConceptNet Numberbatch model (the `hf` image sets it), keeping the remote API backend available |
 | `TEXT_SIMILARITY_DKPRO_URL` | `http://localhost:8100` | DKPro Java sidecar URL |
 | `CONCEPTNET_API_URL` | `https://api.conceptnet.io` | ConceptNet relatedness API base |
 | `CONCEPTNET_MAX_REMOTE_INPUTS` | `60` | max inputs/request for `remote` backend |
@@ -137,17 +142,23 @@ Synchronous & stateless: `{"algorithm", "params", "inputs":[...]}` → result pe
 make prep                    # base deps (cpu profile)
 pip install -e ".[model]"    # + PyTorch / HuggingFace
 pip install -e ".[de]"       # + German lexical (Odenet)
-make docker-build-cpu        # text-similarity-cpu (no model, no pre-cache)
-make docker-build-pytorch    # text-similarity-pytorch (pre-caches ConceptNet Numberbatch)
+make docker-build-cpu        # text-similarity-cpu (no PyTorch, no pre-cache)
+make docker-build-hf         # text-similarity-hf (all HF models, NO local ConceptNet)
+make docker-build-conceptnet # text-similarity-conceptnet (HF + local ConceptNet pre-cached)
+make docker-build-pytorch    # alias of docker-build-conceptnet (full-stack, ConceptNet)
 make test                    # run tests
 make start                   # uvicorn on :8000
 ```
 
-The pytorch image is built by `make docker-build-pytorch` with `PRECACHE_CONCEPTNET=true`,
-which downloads `conceptnet-numberbatch-17-06-300` (~1.2 GB) into the image so the first
-`conceptnet_numberbatch` request needs no runtime download. Disable it with
-`docker build --build-arg SIMILARITY_PROFILE=pytorch --build-arg INSTALL_MODEL=true \
---build-arg PRECACHE_CONCEPTNET=false .` if you do not want the model baked in.
+- **`text-similarity-hf`** is built with `PRECACHE_HF=true` (downloads the five HuggingFace models at build time so the first SBERT/cross-encoder/BERTScore request is served offline from a fresh container) and `DISABLE_LOCAL_CONCEPTNET=true` (blocks the local ConceptNet Numberbatch model; the remote API backend stays usable). Image size ≈ base + PyTorch/CUDA (~5.5 GB) + HF models (~2.9 GB).
+- **`text-similarity-conceptnet`** additionally sets `PRECACHE_CONCEPTNET=true`, which downloads `conceptnet-numberbatch-17-06-300` (~1.2 GB) into the image.
+- The default `text-similarity-cpu` ships neither; it stays small (~0.7–1 GB) and downloads the small corpora (WordNet, GloVe) at runtime.
+- For manual control, bypass the `make` targets and pass build args directly:
+  `docker build --build-arg SIMILARITY_PROFILE=pytorch --build-arg INSTALL_MODEL=true \
+   --build-arg PRECACHE_HF=true --build-arg DISABLE_LOCAL_CONCEPTNET=true -t text-similarity-hf .`
+
+Set `SIMILARITY_DISABLE_LOCAL_CONCEPTNET=true` at runtime to dynamically hide the local ConceptNet Numberbatch models (useful when running the `hf` image or pointing a full image at a shared cache without it).
+
 
 ## License
 

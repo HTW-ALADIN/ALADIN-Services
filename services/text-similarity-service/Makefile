@@ -1,4 +1,6 @@
-.PHONY: prep build test lint start clean docker-build docker-build-cpu docker-build-pytorch generate-openapi
+.PHONY: prep build test lint start clean \
+        docker-build docker-build-cpu docker-build-pytorch docker-build-hf docker-build-conceptnet \
+        generate-openapi
 
 PORT ?= 8000
 REGISTRY ?= ghcr.io
@@ -25,10 +27,13 @@ clean:
 	rm -rf *.egg-info
 	rm -f text-similarity-service-*.openapi.json
 
-# The repo builds two images from one Dockerfile — they differ only in the
-# SIMILARITY_PROFILE / INSTALL_MODEL build args. Tags (omit -service suffix):
-#   text-similarity-cpu      (base, no PyTorch)
-#   text-similarity-pytorch  (full, includes PyTorch-based algorithms)
+# The repo builds images from one Dockerfile — they differ only in the
+# SIMILARITY_PROFILE / INSTALL_MODEL / PRECACHE_* / DISABLE_LOCAL_CONCEPTNET
+# build args.
+#   text-similarity-cpu       (base, no PyTorch, no models pre-cached)
+#   text-similarity-pytorch   (full — includes PyTorch + ConceptNet pre-cached)
+#   text-similarity-hf        (PyTorch + all HF models, NO local ConceptNet)
+#   text-similarity-conceptnet(PyTorch + HF + local ConceptNet pre-cached)
 docker-build-cpu:
 	docker build -f Dockerfile \
 		--build-arg SIMILARITY_PROFILE=cpu \
@@ -38,10 +43,27 @@ docker-build-pytorch:
 	docker build -f Dockerfile \
 		--build-arg SIMILARITY_PROFILE=pytorch \
 		--build-arg INSTALL_MODEL=true \
+		--build-arg PRECACHE_HF=true \
 		--build-arg PRECACHE_CONCEPTNET=true \
 		-t $(REGISTRY)/text-similarity-pytorch .
 
-docker-build: docker-build-cpu docker-build-pytorch
+docker-build-hf:
+	docker build -f Dockerfile \
+		--build-arg SIMILARITY_PROFILE=pytorch \
+		--build-arg INSTALL_MODEL=true \
+		--build-arg PRECACHE_HF=true \
+		--build-arg DISABLE_LOCAL_CONCEPTNET=true \
+		-t $(REGISTRY)/text-similarity-hf .
+
+docker-build-conceptnet:
+	docker build -f Dockerfile \
+		--build-arg SIMILARITY_PROFILE=pytorch \
+		--build-arg INSTALL_MODEL=true \
+		--build-arg PRECACHE_HF=true \
+		--build-arg PRECACHE_CONCEPTNET=true \
+		-t $(REGISTRY)/text-similarity-conceptnet .
+
+docker-build: docker-build-cpu docker-build-pytorch docker-build-hf docker-build-conceptnet
 
 generate-openapi:
 	python -m src.generate_openapi

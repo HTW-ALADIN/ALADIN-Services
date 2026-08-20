@@ -225,6 +225,7 @@ jobs:
           path: |
             services/text-similarity-service/text-similarity-service-cpu.openapi.json
             services/text-similarity-service/text-similarity-service-pytorch.openapi.json
+            services/text-similarity-service/text-similarity-service-pytorch-hf.openapi.json
 
   build:
     name: Build & Push Docker Images
@@ -237,17 +238,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # One repo builds two images; they differ only in the PyTorch
-        # algorithms they ship. Tags: text-similarity-cpu, text-similarity-pytorch.
+        # One repo builds images that differ in what they ship:
+        #   text-similarity-cpu       — (default) no PyTorch, no pre-cached models
+        #   text-similarity-pytorch   — full stack (HF + local ConceptNet pre-cached)
+        #   text-similarity-hf        — full PyTorch + HF models, NO local ConceptNet
         include:
           - image: text-similarity-cpu
             profile: cpu
             install_model: "false"
+            precache_hf: "false"
             precache_conceptnet: "false"
+            disable_local_conceptnet: "false"
           - image: text-similarity-pytorch
             profile: pytorch
             install_model: "true"
+            precache_hf: "true"
             precache_conceptnet: "true"
+            disable_local_conceptnet: "false"
+          - image: text-similarity-hf
+            profile: pytorch
+            install_model: "true"
+            precache_hf: "true"
+            precache_conceptnet: "false"
+            disable_local_conceptnet: "true"
     steps:
       - uses: actions/checkout@v4
       - name: Log in to GitHub Container Registry
@@ -275,6 +288,8 @@ jobs:
             SIMILARITY_PROFILE=${{ matrix.profile }}
             INSTALL_MODEL=${{ matrix.install_model }}
             PRECACHE_CONCEPTNET=${{ matrix.precache_conceptnet }}
+            PRECACHE_HF=${{ matrix.precache_hf }}
+            DISABLE_LOCAL_CONCEPTNET=${{ matrix.disable_local_conceptnet }}
           # Reuse layers across CI runs: without this, the ~2.5 GB PyTorch layer
           # is re-downloaded on every push to master. `type=gha` uses the GitHub
           # Actions cache backend scoped to this project/branch.
