@@ -125,6 +125,7 @@ eviction re-loads the model automatically; that one call just takes longer.
 - No measure *requires* a GPU; GPU only cuts transformer latency.
 - In-memory footprint ≈ **4× the download size** (float32 + runtime libs).
 - Heavy models are **cached per process** (`src/model_cache.py`); more workers = more RAM.
+- **Warm start (`HF_MODELS_PRELOAD=true`):** cold by default (boot ~1 s, idle RAM ~0.05 GB, but the *first* model request pays the transformer load, ~6–21 s). Set `HF_MODELS_PRELOAD=true` to preload all advertised HF models on startup — the first request then returns in milliseconds, in exchange for a longer boot (~1–2 min) and higher idle RAM (~1.5 GB). This is the main service's analogue of the ConceptNet sidecar's `CONCEPTNET_PRELOAD_ON_START`. Warm loads are non-fatal (a failure relaxes to lazy loading). See [`/metrics`](#api) (`"warm": true`).
 
 ### ConceptNet sidecar
 
@@ -173,6 +174,7 @@ Synchronous & stateless: `{"algorithm", "params", "inputs":[...]}` → result pe
 | `CONCEPTNET_REMOTE_REQUEST_DELAY` | `0.05` | min seconds between API calls |
 | `CONCEPTNET_429_RETRIES` | `3` | max backoff retries on HTTP 429 |
 | `ALLOW_LARGE_MODEL_DOWNLOADS` | `false` | server-wide opt-in for downloads > 500 MB |
+| `HF_MODELS_PRELOAD` | `false` | warm start: preload all HF models on startup (`true`/`1`/`yes`); higher idle RAM + boot time, no first-request delay |
 
 ## Development
 

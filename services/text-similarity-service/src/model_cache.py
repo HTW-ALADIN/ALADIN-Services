@@ -311,6 +311,64 @@ def _extract_nltk_zip(resource: str) -> None:
 
 ODENET_ID = "odenet:1.4"
 
+# ─── Warm-start preload (analogous to the ConceptNet sidecar) ──────────────
+#
+# By default the service starts COLD: no model is loaded, so boot is fast
+# (~1s) and idle RAM is tiny (~0.05 GB), but the FIRST request for a model
+# pays the full load time (downloading is pre-cached in the hf image, so it's
+# disk->RAM only, ~6-21s for a transformer). Operators that prefer a "warm"
+# start — higher idle RAM but no first-request delay — can set
+# ``HF_MODELS_PRELOAD=true`` (analogous to the ConceptNet sidecar's
+# ``CONCEPTNET_PRELOAD_ON_START``). This mirrors the list of HF models that the
+# runtime catalog advertises (see the build-time pre-cache, __precache_hf.py)
+# so exactly the models a warm process would otherwise lazily load are warm.
+# It is a no-op in the base ``cpu`` profile (no [model] extra installed).
+_DFLT_PRELOAD_HF = (
+    ("sbert_cosine", "all-MiniLM-L6-v2"),
+    ("sbert_cosine", "all-mpnet-base-v2"),
+    ("sbert_cosine", "paraphrase-multilingual-MiniLM-L12-v2"),
+    ("cross_encoder", "cross-encoder/stsb-roberta-base"),
+    ("bertscore", "roberta-large"),
+)
+
+
+def warm_start() -> None:
+    """Preload the advertised HF models into the in-process cache at startup.
+
+    Opt-in via ``HF_MODELS_PRELOAD=true`` (or ``1``/``yes``). Returns without
+    doing anything when the flag is unset, when the optional PyTorch stack is
+    not installed, or when a model fails to load (a warm start must never
+    prevent the app from booting — it just relaxes to lazy loading). Logs each
+    model as it is loaded so operators can observe the warm-up.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    if os.environ.get("HF_MODELS_PRELOAD", "").lower() not in ("1", "true", "yes"):
+        return
+
+    for measure, model_name in _DFLT_PRELOAD_HF:
+        try:
+            if measure == "sbert_cosine":
+                get_sbert_model(model_name)
+            elif measure == "cross_encoder":
+                get_cross_encoder_model(model_name)
+            elif measure == "bertscore":
+                # BERTScore keeps roberta-large in its own module-level cache,
+                # not via ``_get``, so warm it by wrapping a scorer (this loads
+                # the checkpoint + tokenizer into the module-level singleton).
+                from bert_score import BERTScorer
+
+                BERTScorer(lang="en", model_type=model_name)
+            logger.info("warm-start loaded %s(%s)", measure, model_name)
+        except Exception:  # noqa: BLE001  # warm start must be non-fatal
+            logger.warning("warm-start failed for %s(%s); models stay lazy", measure, model_name)
+
+
+def is_warm() -> bool:
+    """Whether ``HF_MODELS_PRELOAD`` is enabled (for the /metrics label)."""
+    return os.environ.get("HF_MODELS_PRELOAD", "").lower() in ("1", "true", "yes")
+
 
 def cache_summary() -> dict[str, Any]:
     """Return a snapshot of the in-memory model cache (for observability).

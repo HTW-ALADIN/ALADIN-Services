@@ -10,6 +10,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
@@ -22,7 +23,7 @@ from .conceptnet_api import MAX_REMOTE_INPUTS, ConceptNetError
 from .conceptnet_client import ConceptNetSidecarError, is_sidecar_reachable
 from .dkpro_proxy import compute_via_sidecar, is_dkpro_request
 from .lexical import DEFAULT_LEXICAL_BACKENDS, compute_lexical
-from .model_cache import LargeModelDownloadBlocked, cache_summary
+from .model_cache import LargeModelDownloadBlocked, cache_summary, is_warm, warm_start
 from .models import (
     LexicalRequest,
     RetrievalRequest,
@@ -51,9 +52,24 @@ for _noisy in ("httpx", "httpcore", "uvicorn.access"):
 _START_TS = time.monotonic()
 
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Startup: optionally warm the HF model cache (``HF_MODELS_PRELOAD=true``).
+
+    This is the main service's analogue of the ConceptNet sidecar's
+    ``CONCEPTNET_PRELOAD_ON_START``. Cold by default so boot stays fast and
+    idle RAM tiny; when enabled, loads the advertised HF models once into the
+    process cache so the first request for them is served instantly in exchange
+    for higher idle RAM. ``warm_start`` is non-fatal — failures relax to lazy.
+    """
+    warm_start()
+    yield
+
+
 app = FastAPI(
     title=f"Text Similarity Service ({PROFILE})",
     version="0.1.0",
+    lifespan=lifespan,
     description=(
         "Unified REST API for semantic text similarity — 16 algorithm families over multiple backends. "
         f"Build variant: {PROFILE}." + ("" if PROFILE == "pytorch" else " (PyTorch-based algorithms excluded)")
@@ -163,6 +179,7 @@ def metrics():
         "pid": os.getpid(),
         "profile": PROFILE,
         "catalog_entries": len(get_catalog()),
+        "warm": is_warm(),
         "model_cache": _safe_cache_summary(),
         "peak_rss_kb": rss_kb,
     }
