@@ -24,6 +24,15 @@ ARG INSTALL_MODEL=false
 ARG PRECACHE_HF=false
 # German lexical relations (Odenet) — tiny, OPT-IN for all images.
 ARG INSTALL_DE=false
+# Preload profile, baked in so the runtime catalog/spec only advertises the
+# models that this image actually warms at startup. Values:
+#   off    (default) — cold start, nothing preloaded into RAM (all lazy)
+#   all             — warm every advertised HF model at startup (== old
+#                     HF_MODELS_PRELOAD=true behaviour)
+#   measure:model[,measure:model...] — warm only the selected models (partial
+#                     lazy): the rest stay lazy-loaded on first request
+ARG HF_PRELOAD=off
+ENV HF_PRELOAD=$HF_PRELOAD
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -72,6 +81,11 @@ COPY pyproject.toml .
 
 ARG SIMILARITY_PROFILE=cpu
 ENV SIMILARITY_PROFILE=$SIMILARITY_PROFILE
+
+# Same preload profile as the build stage: baked in as ENV so a given image
+# always warms exactly the advertised models, and no runtime config is needed.
+ARG HF_PRELOAD=off
+ENV HF_PRELOAD=$HF_PRELOAD
 
 # The service runs as `nobody`, whose default HOME (/nonexistent) is not
 # writable. Runtime model/data downloads cache under `$HOME`, so point HOME at a

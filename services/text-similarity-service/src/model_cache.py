@@ -316,13 +316,26 @@ ODENET_ID = "odenet:1.4"
 # By default the service starts COLD: no model is loaded, so boot is fast
 # (~1s) and idle RAM is tiny (~0.05 GB), but the FIRST request for a model
 # pays the full load time (downloading is pre-cached in the hf image, so it's
-# disk->RAM only, ~6-21s for a transformer). Operators that prefer a "warm"
-# start — higher idle RAM but no first-request delay — can set
-# ``HF_MODELS_PRELOAD=true`` (analogous to the ConceptNet sidecar's
-# ``CONCEPTNET_PRELOAD_ON_START``). This mirrors the list of HF models that the
-# runtime catalog advertises (see the build-time pre-cache, __precache_hf.py)
-# so exactly the models a warm process would otherwise lazily load are warm.
-# It is a no-op in the base ``cpu`` profile (no [model] extra installed).
+# disk->RAM only, ~6-21s for a transformer).
+#
+# The set of models to warm at startup is BAKED IN at image build time via the
+# ``HF_PRELOAD`` build-arg (stored as an ENV in the image):
+#   off (default)  — nothing preloaded; a fresh container is fully lazy.
+#   all            — warm every advertised HF model (the old
+#                    ``HF_MODELS_PRELOAD=true`` behaviour): higher idle RAM,
+#                    no first-request delay.
+#   measure:model[,measure:model...] — PARTIAL lazy: only the selected models
+#                    are warmed into RAM; every other advertised model stays
+#                    lazy and loads on its first request.
+# The legacy ``HF_MODELS_PRELOAD=true`` env is still honoured as a synonym for
+# ``all`` so existing deployments keep working. This mirrors the list of HF
+# models that the runtime catalog advertises (see the build-time pre-cache,
+# __precache_hf.py) so exactly the models a warm process would otherwise
+# lazily load are warm. It is a no-op in the base ``cpu`` profile (no [model]
+# extra installed).
+HF_PRELOAD_ENV = "HF_PRELOAD"
+_LEGACY_PRELOAD_ENV = "HF_MODELS_PRELOAD"
+
 _DFLT_PRELOAD_HF = (
     ("sbert_cosine", "all-MiniLM-L6-v2"),
     ("sbert_cosine", "all-mpnet-base-v2"),
@@ -332,22 +345,82 @@ _DFLT_PRELOAD_HF = (
 )
 
 
-def warm_start() -> None:
-    """Preload the advertised HF models into the in-process cache at startup.
+def _normalize_measure(measure: str) -> str:
+    """Map a measure name to the allowlist key it must be validated against.
 
-    Opt-in via ``HF_MODELS_PRELOAD=true`` (or ``1``/``yes``). Returns without
-    doing anything when the flag is unset, when the optional PyTorch stack is
-    not installed, or when a model fails to load (a warm start must never
-    prevent the app from booting — it just relaxes to lazy loading). Logs each
-    model as it is loaded so operators can observe the warm-up.
+    ``semantic_search`` reuses the ``sbert_cosine`` allowlist (same underlying
+    SentenceTransformer models); everything else maps 1:1. An unknown measure
+    returns itself, so it simply fails validation below instead.
+    """
+    return "sbert_cosine" if measure == "semantic_search" else measure
+
+
+def _parse_preload_spec() -> list[tuple[str, str]]:
+    """Resolve the ``HF_PRELOAD`` env into an ordered list of (measure, model).
+
+    Accepts:
+      unset/off/none/false            -> ``[]`` (fully lazy)
+      all/true/1                      -> the whole ``_DFLT_PRELOAD_HF`` list
+      a CSV of ``measure:model`` pairs -> only those selected models
+    Unknown measures, models off the allowlist, or malformed entries are
+    logged and skipped (never fatal — warm start must not break boot). The
+    legacy ``HF_MODELS_PRELOAD=true`` env is treated as ``all``.
+    """
+    import logging
+    import re
+
+    logger = logging.getLogger(__name__)
+
+    raw = os.environ.get(HF_PRELOAD_ENV, "").strip()
+    if raw.lower() in ("", "off", "none", "false", "0"):
+        if os.environ.get(_LEGACY_PRELOAD_ENV, "").lower() in ("1", "true", "yes"):
+            return list(_DFLT_PRELOAD_HF)
+        return []
+    if raw.lower() in ("all", "true", "1"):
+        return list(_DFLT_PRELOAD_HF)
+
+    selected: list[tuple[str, str]] = []
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        match = re.match(r"^([^:/]+):(.+)$", entry)
+        if not match:
+            logger.warning("HF_PRELOAD: ignoring malformed entry %r (expected measure:model)", entry)
+            continue
+        measure, model = match.group(1).strip(), match.group(2).strip()
+        allowed = _ALLOWED_BASE_MODELS.get(_normalize_measure(measure))
+        if allowed is None:
+            logger.warning("HF_PRELOAD: unknown measure %r; ignoring %r", measure, entry)
+            continue
+        base = _normalize_hf_name(model)
+        if base not in allowed:
+            logger.warning(
+                "HF_PRELOAD: model %r not on the allow-list for measure %r; ignoring %r",
+                model,
+                measure,
+                entry,
+            )
+            continue
+        selected.append((measure, model))
+    return selected
+
+
+def warm_start() -> None:
+    """Preload the selected HF models into the in-process cache at startup.
+
+    The selection comes from the ``HF_PRELOAD`` env (baked in at build time) —
+    ``off`` (default), ``all``, or a partial ``measure:model`` list. Returns
+    without doing anything when the selection is empty, when the optional
+    PyTorch stack is not installed, or when a model fails to load (a warm
+    start must never prevent the app from booting — it just relaxes to lazy
+    loading for that model). Logs each model as it is loaded so operators can
+    observe the warm-up.
     """
     import logging
 
     logger = logging.getLogger(__name__)
-    if os.environ.get("HF_MODELS_PRELOAD", "").lower() not in ("1", "true", "yes"):
-        return
-
-    for measure, model_name in _DFLT_PRELOAD_HF:
+    for measure, model_name in _parse_preload_spec():
         try:
             if measure == "sbert_cosine":
                 get_sbert_model(model_name)
@@ -366,8 +439,13 @@ def warm_start() -> None:
 
 
 def is_warm() -> bool:
-    """Whether ``HF_MODELS_PRELOAD`` is enabled (for the /metrics label)."""
-    return os.environ.get("HF_MODELS_PRELOAD", "").lower() in ("1", "true", "yes")
+    """Whether the configured ``HF_PRELOAD`` profile warms any model (for /metrics).
+
+    True when the baked-in profile is ``all`` or a non-empty partial list;
+    False for ``off``. Note this reports the *configured* selection, not
+    whether those models actually finished loading (see ``cache_summary``).
+    """
+    return bool(_parse_preload_spec())
 
 
 def cache_summary() -> dict[str, Any]:

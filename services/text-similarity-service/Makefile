@@ -4,6 +4,9 @@
 
 PORT ?= 8000
 REGISTRY ?= ghcr.io
+# Warm-start preload profile baked into the image: off (default/cold), all,
+# or a partial measure:model[,measure:model...] list (see Dockerfile).
+HF_PRELOAD ?= off
 
 prep:
 	pip install -e ".[dev]"
@@ -28,9 +31,13 @@ clean:
 	rm -f text-similarity-service-*.openapi.json
 
 # The repo builds images from one Dockerfile — they differ only in the
-# SIMILARITY_PROFILE / INSTALL_MODEL / PRECACHE_HF build args.
+# SIMILARITY_PROFILE / INSTALL_MODEL / PRECACHE_HF / HF_PRELOAD build args.
 #   text-similarity-cpu            (base, no PyTorch, no models pre-cached)
 #   text-similarity-hf/pytorch     (full — PyTorch + all HF models pre-cached)
+# Warm-start profile (HF_PRELOAD): off (default/cold), all, or a partial
+# measure:model[,measure:model...] list. Examples:
+#   make docker-build-hf HF_PRELOAD=all                       # warm everything
+#   make docker-build-hf HF_PRELOAD="sbert_cosine:all-MiniLM-L6-v2,bertscore:roberta-large"  # partial lazy
 # The local ConceptNet Numberbatch model is NOT in any main image: it is served
 # by the optional conceptnet-sidecar (see services/conceptnet-sidecar/).
 docker-build-cpu:
@@ -45,6 +52,7 @@ docker-build-hf:
 		--build-arg SIMILARITY_PROFILE=pytorch \
 		--build-arg INSTALL_MODEL=true \
 		--build-arg PRECACHE_HF=true \
+		--build-arg HF_PRELOAD=$(HF_PRELOAD) \
 		-t $(REGISTRY)/text-similarity-hf \
 		-t $(REGISTRY)/text-similarity-pytorch .
 
