@@ -9,6 +9,7 @@ import { ASTBuilder } from './ast-builder';
 import { IParsedColumn, IPath } from '../../shared/interfaces/domain';
 import { joinType, randomJoinTypes } from '../../shared/constants';
 import { random, randomBoolean } from '../../shared/utils/random';
+import { quoteIdentifier } from '../../shared/utils/identifier-quoting';
 
 // Re-export for consumers that imported these from the old interfaces location
 export type { joinType };
@@ -118,16 +119,17 @@ export class SelectASTBuilder implements ASTBuilder {
 					joinType == 'CROSS JOIN'
 						? null
 						: isSelfJoin
-							? this.getRelationKeyWithAlias(
+							? this.buildJoinConditionOn(
 									joinPath[i].relationKey,
 									currentTable,
 								)
 							: isPreviousSelfJoin
-								? this.getRelationKeyWithPreviousAlias(
+								? this.buildJoinConditionOn(
 										joinPath[i].relationKey,
+										undefined,
 										previousTable,
 									)
-								: joinPath[i].relationKey,
+								: this.buildJoinConditionOn(joinPath[i].relationKey),
 			});
 			isPreviousSelfJoin = isSelfJoin;
 		}
@@ -300,25 +302,48 @@ export class SelectASTBuilder implements ASTBuilder {
 		return this.generatedAST;
 	}
 
-	private getRelationKeyWithAlias(relationKey: string, tableName: string) {
-		const alias1 = `${tableName.charAt(0)}${1}`;
-		const alias2 = `${tableName.charAt(0)}${2}`;
-
-		let count = 0;
-		return relationKey.replace(new RegExp(`\\b${tableName}\\.`, 'g'), () =>
-			++count === 1 ? `${alias1}.` : `${alias2}.`,
-		);
-	}
-
-	private getRelationKeyWithPreviousAlias(
+	/**
+	 * Builds the ON condition for a join from the analyzer's relation key.
+	 *
+	 * Relation keys always have the shape `T1.C1 = T2.C2`. The returned string
+	 * carries every identifier double-quoted (with embedded quotes doubled) so
+	 * that node-sql-parser's `sqlify`, which passes `on` strings through
+	 * verbatim, resolves case-sensitive identifiers exactly as declared.
+	 *
+	 * Self-join alias substitution mirrors the previous regex-based helpers:
+	 * references to `selfJoinTable` become `<first-char>1` (first side) and
+	 * `<first-char>2` (second side); references to a previously self-joined
+	 * table become `<first-char>2`.
+	 */
+	private buildJoinConditionOn(
 		relationKey: string,
-		previousTableName: string,
-	) {
-		const alias = `${previousTableName.charAt(0)}${2}`;
+		selfJoinTable?: string,
+		previousTable?: string,
+	): string {
+		const match = relationKey.match(
+			/^\s*([^\s.]+)\.([^\s.=]+)\s*=\s*([^\s.]+)\.([^\s.=]+)\s*$/,
+		);
+		if (!match) return relationKey;
 
-		return relationKey.replace(
-			new RegExp(`\\b${previousTableName}\\.`, 'g'),
-			() => `${alias}.`,
+		const [, leftTable, leftColumn, rightTable, rightColumn] = match;
+		let resolvedLeftTable = leftTable;
+		let resolvedRightTable = rightTable;
+
+		if (selfJoinTable) {
+			if (leftTable === selfJoinTable)
+				resolvedLeftTable = `${selfJoinTable.charAt(0)}1`;
+			if (rightTable === selfJoinTable)
+				resolvedRightTable = `${selfJoinTable.charAt(0)}2`;
+		}
+		if (previousTable) {
+			const previousAlias = `${previousTable.charAt(0)}2`;
+			if (leftTable === previousTable) resolvedLeftTable = previousAlias;
+			if (rightTable === previousTable) resolvedRightTable = previousAlias;
+		}
+
+		return (
+			`${quoteIdentifier(resolvedLeftTable)}.${quoteIdentifier(leftColumn)}` +
+			` = ${quoteIdentifier(resolvedRightTable)}.${quoteIdentifier(rightColumn)}`
 		);
 	}
 

@@ -10,6 +10,7 @@ import {
 	DescriptionResponse,
 	IRequestDescriptionOptions,
 } from '../../shared/interfaces/http';
+import { LlmGatewayConfig } from '../../shared/interfaces/llm-gateway';
 import {
 	buildAliasMapFromTables,
 	generateDatabaseKey,
@@ -71,8 +72,9 @@ const sqlParser = new Parser();
  *     summary: Generate an LLM description (default, temperature 0)
  *     description: >
  *       Uses a single-shot LLM call at temperature 0 to produce a
- *       natural-language description of the SQL query. Requires
- *       OPENAI_API_KEY to be set; falls back to the template engine otherwise.
+ *       natural-language description of the SQL query. Requires an
+ *       llmGateway block on the request; falls back to the template engine
+ *       otherwise.
  *     tags:
  *       - Description
  *     requestBody:
@@ -266,6 +268,7 @@ export class DescriptionController {
 		tables: IParsedTable[];
 		schemaAliasMap: IAliasMap | undefined;
 		schema: string;
+		llmGateway?: LlmGatewayConfig;
 	} | null> {
 		let options: IRequestDescriptionOptions;
 
@@ -346,7 +349,15 @@ export class DescriptionController {
 		const tables = this.resolveStoredTables(databaseKey, isSelfJoin);
 		const schemaAliasMap = buildAliasMapFromTables(tables);
 
-		return { options, databaseKey, lang, tables, schemaAliasMap, schema };
+		return {
+			options,
+			databaseKey,
+			lang,
+			tables,
+			schemaAliasMap,
+			schema,
+			llmGateway: options.llmGateway,
+		};
 	}
 
 	/**
@@ -430,7 +441,7 @@ export class DescriptionController {
 		const validated = await this.validateRequest(req, res);
 		if (!validated) return res;
 
-		const { options, databaseKey, lang, tables, schemaAliasMap, schema } =
+		const { options, databaseKey, lang, tables, schemaAliasMap, schema, llmGateway } =
 			validated;
 		const languageCode = options.languageCode ?? 'en';
 
@@ -447,6 +458,7 @@ export class DescriptionController {
 					schemaAliasMap,
 					tables,
 					lang,
+					llmGateway,
 				});
 
 			const response: DescriptionResponse = { description, languageCode };
@@ -470,7 +482,7 @@ export class DescriptionController {
 		const validated = await this.validateRequest(req, res);
 		if (!validated) return res;
 
-		const { options, databaseKey, lang, tables, schemaAliasMap, schema } =
+		const { options, databaseKey, lang, tables, schemaAliasMap, schema, llmGateway } =
 			validated;
 		const languageCode = options.languageCode ?? 'en';
 
@@ -487,6 +499,7 @@ export class DescriptionController {
 					schemaAliasMap,
 					tables,
 					lang,
+					llmGateway,
 				});
 
 			const response: DescriptionResponse = { description, languageCode };
@@ -510,7 +523,7 @@ export class DescriptionController {
 		const validated = await this.validateRequest(req, res);
 		if (!validated) return res;
 
-		const { options, databaseKey, lang, tables, schemaAliasMap, schema } =
+		const { options, databaseKey, lang, tables, schemaAliasMap, schema, llmGateway } =
 			validated;
 		const languageCode = options.languageCode ?? 'en';
 
@@ -527,6 +540,7 @@ export class DescriptionController {
 					schemaAliasMap,
 					tables,
 					lang,
+					llmGateway,
 				});
 
 			const response: DescriptionResponse = { description, languageCode };
@@ -550,7 +564,7 @@ export class DescriptionController {
 		const validated = await this.validateRequest(req, res);
 		if (!validated) return res;
 
-		const { options, databaseKey, lang, tables, schemaAliasMap, schema } =
+		const { options, databaseKey, lang, tables, schemaAliasMap, schema, llmGateway } =
 			validated;
 		const languageCode = options.languageCode ?? 'en';
 
@@ -576,6 +590,7 @@ export class DescriptionController {
 					schemaAliasMap,
 					tables,
 					lang,
+					llmGateway,
 				});
 
 			const response: DescriptionResponse = { description, languageCode };

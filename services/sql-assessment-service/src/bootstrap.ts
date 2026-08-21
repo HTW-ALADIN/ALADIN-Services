@@ -47,9 +47,8 @@ export function createControllers(options: CreateControllersOptions = {}) {
 	);
 	const templateTaskDescriptionGenerationEngine =
 		new TemplateTaskDescriptionGenerationEngine();
-	const llmTaskDescriptionGenerationEngine = process.env.OPENAI_API_KEY
-		? new LLMTaskDescriptionGenerationEngine()
-		: undefined;
+	const llmTaskDescriptionGenerationEngine =
+		new LLMTaskDescriptionGenerationEngine();
 	const taskDescriptionGenerationService = new TaskDescriptionGenerationService(
 		llmTaskDescriptionGenerationEngine,
 		templateTaskDescriptionGenerationEngine,

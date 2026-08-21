@@ -132,6 +132,63 @@ import path from 'path';
  *             orders:
  *               order_date: "Order Date"
  *
+ *     LlmGatewayConfig:
+ *       type: object
+ *       description: >
+ *         Per-request LLM gateway connection details. When present, LLM-based
+ *         description variants are generated via the supplied gateway instead
+ *         of the template engine. The service never reads gateway location or
+ *         credentials from its own environment; the apiKey is sent as an
+ *         Authorization: Bearer header on every outbound call and is never
+ *         logged.
+ *       required:
+ *         - endpoint
+ *         - apiKey
+ *       properties:
+ *         endpoint:
+ *           type: string
+ *           description: >
+ *             Base URL of an llm-gateway-service-compatible API. The client
+ *             appends /generate.
+ *           example: http://llm-gateway:8080
+ *         apiKey:
+ *           type: string
+ *           description: Bearer token sent to the gateway on every outbound call.
+ *           example: sk-...
+ *         provider:
+ *           type: string
+ *           description: >
+ *             Provider id override (e.g. "openai"). Defaults to "openai" when
+ *             omitted.
+ *           example: openai
+ *         model:
+ *           type: string
+ *           description: >
+ *             Model id override (e.g. "gpt-4o-mini"). Defaults to
+ *             "gpt-4o-mini" when omitted.
+ *           example: gpt-4o-mini
+ *         customProvider:
+ *           type: object
+ *           description: >
+ *             Optional inline OpenAI-compatible endpoint. When present, the
+ *             gateway routes the request directly to baseUrl with the given
+ *             apiKey, bypassing its own provider registration — so callers can
+ *             use any provider without pre-registering it.
+ *           required:
+ *             - baseUrl
+ *             - apiKey
+ *           properties:
+ *             baseUrl:
+ *               type: string
+ *               description: >
+ *                 Base URL of an OpenAI-compatible API. The gateway appends
+ *                 /chat/completions.
+ *               example: https://api.openai.com/v1
+ *             apiKey:
+ *               type: string
+ *               description: Provider-specific token for the custom endpoint.
+ *               example: sk-provider-key
+ *
  *     # -----------------------------------------------------------------------
  *     # Database endpoint schemas
  *     # -----------------------------------------------------------------------
@@ -215,6 +272,8 @@ import path from 'path';
  *         languageCode:
  *           type: string
  *           example: en
+ *         llmGateway:
+ *           $ref: '#/components/schemas/LlmGatewayConfig'
  *
  *     TaskResponse:
  *       type: object
@@ -268,6 +327,8 @@ import path from 'path';
  *           type: string
  *           description: BCP 47 language code for the generated description. Defaults to "en".
  *           example: en
+ *         llmGateway:
+ *           $ref: '#/components/schemas/LlmGatewayConfig'
  *
  *     DescriptionResponse:
  *       type: object
@@ -347,6 +408,8 @@ import path from 'path';
  *           type: string
  *           enum: [default, creative, multi-step]
  *           description: GPT option when generationStrategy is llm. Defaults to default.
+ *         llmGateway:
+ *           $ref: '#/components/schemas/LlmGatewayConfig'
  *
  *     GradeResponse:
  *       type: object

@@ -6,6 +6,7 @@ import {
 	GptOptions,
 	IRequestTaskOptions,
 	ITaskConfiguration,
+	LlmGatewayConfig,
 	TaskResponse,
 } from '../shared/interfaces/index';
 import {
@@ -153,57 +154,59 @@ export class TaskGenerationController {
 					.json({ message: t('DATABASE_NOT_REGISTERED', lang) });
 			}
 
-			const runQuery = async (sql: string) => {
-				const result = await pgliteDb.query(sql);
-				return result.rows as any[];
-			};
+		const runQuery = async (sql: string) => {
+			const result = await pgliteDb.query(sql);
+			return result.rows as any[];
+		};
 
-			return this.runGeneration(
-				res,
-				taskRequest.taskConfiguration,
-				databaseKey,
-				'public',
-				runQuery,
-				lang,
-				null,
-			);
-		}
-		// ---------------------------------------------------------------------
-
-		// ---- PostgreSQL branch ----------------------------------------------
-		const validationError = validateConnectionInfo(connectionInfo, lang);
-		if (validationError) {
-			return res.status(400).json({ message: validationError });
-		}
-
-		const databaseKey = generateDatabaseKey(
-			connectionInfo.host!,
-			connectionInfo.port!,
-			connectionInfo.schema!,
+		return this.runGeneration(
+			res,
+			taskRequest.taskConfiguration,
+			databaseKey,
+			'public',
+			runQuery,
+			lang,
+			null,
+			taskRequest.llmGateway,
 		);
-		if (!isDatabaseRegistered(databaseKey)) {
-			return res
-				.status(400)
-				.json({ message: t('DATABASE_NOT_REGISTERED', lang) });
-		}
+	}
+	// ---------------------------------------------------------------------
 
-		console.log('Received connection info:', connectionInfo);
+	// ---- PostgreSQL branch ----------------------------------------------
+	const validationError = validateConnectionInfo(connectionInfo, lang);
+	if (validationError) {
+		return res.status(400).json({ message: validationError });
+	}
 
-		const taskContext: ITaskConfiguration = taskRequest.taskConfiguration;
-		const dataSource = new DataSource(connectionInfo);
-		const isConnected = await connectToDatabase(dataSource);
+	const databaseKey = generateDatabaseKey(
+		connectionInfo.host!,
+		connectionInfo.port!,
+		connectionInfo.schema!,
+	);
+	if (!isDatabaseRegistered(databaseKey)) {
+		return res
+			.status(400)
+			.json({ message: t('DATABASE_NOT_REGISTERED', lang) });
+	}
 
-		if (isConnected) {
-			return this.runGeneration(
-				res,
-				taskContext,
-				databaseKey,
-				connectionInfo.schema!,
-				makeRowQueryFn(dataSource),
-				lang,
-				dataSource,
-			);
-		}
+	console.log('Received connection info:', connectionInfo);
+
+	const taskContext: ITaskConfiguration = taskRequest.taskConfiguration;
+	const dataSource = new DataSource(connectionInfo);
+	const isConnected = await connectToDatabase(dataSource);
+
+	if (isConnected) {
+		return this.runGeneration(
+			res,
+			taskContext,
+			databaseKey,
+			connectionInfo.schema!,
+			makeRowQueryFn(dataSource),
+			lang,
+			dataSource,
+			taskRequest.llmGateway,
+		);
+	}
 
 		await dataSource.destroy();
 		return res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
@@ -217,6 +220,7 @@ export class TaskGenerationController {
 		runQuery: (sql: string) => Promise<any[]>,
 		lang: SupportedLanguage,
 		dataSource: DataSource | null,
+		llmGateway?: LlmGatewayConfig,
 	): Promise<Response> {
 		const configValidation =
 			this.selectQueryGenerationService.validateConfiguration(taskContext);
@@ -260,6 +264,7 @@ export class TaskGenerationController {
 					databaseKey,
 					isSelfJoin,
 					lang,
+					llmGateway,
 				});
 			entityDescription =
 				await this.taskDescriptionGenerationService.generateTaskFromQuery({
@@ -271,6 +276,7 @@ export class TaskGenerationController {
 					isSelfJoin,
 					option: GptOptions.MultiStep,
 					lang,
+					llmGateway,
 				});
 			creativeDescription =
 				await this.taskDescriptionGenerationService.generateTaskFromQuery({
@@ -282,6 +288,7 @@ export class TaskGenerationController {
 					isSelfJoin,
 					option: GptOptions.Creative,
 					lang,
+					llmGateway,
 				});
 			schemaBasedDescription =
 				await this.taskDescriptionGenerationService.generateTaskFromQuery({
@@ -293,6 +300,7 @@ export class TaskGenerationController {
 					isSelfJoin,
 					option: GptOptions.Default,
 					lang,
+					llmGateway,
 				});
 			semanticNGL =
 				await this.taskDescriptionGenerationService.generateTaskFromQuery({
@@ -303,6 +311,7 @@ export class TaskGenerationController {
 					databaseKey,
 					isSelfJoin,
 					lang,
+					llmGateway,
 				});
 		} catch (error) {
 			console.log('Error in task description generation', error);
