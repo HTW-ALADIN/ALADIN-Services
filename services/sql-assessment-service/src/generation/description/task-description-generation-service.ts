@@ -5,16 +5,18 @@ import {
 	IAliasMap,
 	IParsedTable,
 } from '../../shared/interfaces/domain';
+import { LlmGatewayConfig } from '../../shared/interfaces/llm-gateway';
+import { isUsableLlmGatewayBlock } from '../../shared/llm-gateway/llm-gateway-config';
 import { LLMTaskDescriptionGenerationEngine } from './llm-task-description-generation-engine';
 import { TemplateTaskDescriptionGenerationEngine } from './template-task-description-generation-engine';
 import { SupportedLanguage } from '../../shared/i18n';
 
 export class TaskDescriptionGenerationService {
 	templateTaskDescriptionGenerationEngine: TemplateTaskDescriptionGenerationEngine;
-	llmTaskDescriptionGenerationEngine: LLMTaskDescriptionGenerationEngine | undefined;
+	llmTaskDescriptionGenerationEngine: LLMTaskDescriptionGenerationEngine;
 
 	constructor(
-		llmTaskDescriptionGenerationEngine: LLMTaskDescriptionGenerationEngine | undefined,
+		llmTaskDescriptionGenerationEngine: LLMTaskDescriptionGenerationEngine,
 		templateTaskDescriptionGenerationEngine: TemplateTaskDescriptionGenerationEngine,
 	) {
 		this.templateTaskDescriptionGenerationEngine =
@@ -34,6 +36,7 @@ export class TaskDescriptionGenerationService {
 		schemaAliasMap?: IAliasMap;
 		tables?: IParsedTable[];
 		lang?: SupportedLanguage;
+		llmGateway?: LlmGatewayConfig;
 	}): Promise<string> {
 		const {
 			generationType,
@@ -45,26 +48,28 @@ export class TaskDescriptionGenerationService {
 			option,
 			schemaAliasMap,
 			tables,
+			llmGateway,
 		} = config;
 
 		const lang = config.lang ?? 'en';
+		const usableGateway = isUsableLlmGatewayBlock(llmGateway);
+
+		const generateFromTemplate = () =>
+			this.templateTaskDescriptionGenerationEngine.generateTaskFromQuery({
+				query: queryAST,
+				schema,
+				schemaAliasMap,
+				tables,
+				lang,
+			});
+
 		switch (generationType) {
 			case 'template':
-				return this.templateTaskDescriptionGenerationEngine.generateTaskFromQuery(
-					{
-						query: queryAST,
-						schema,
-						schemaAliasMap,
-						tables,
-						lang,
-					},
-				);
+				return generateFromTemplate();
 
 			case 'llm':
-				if (!this.llmTaskDescriptionGenerationEngine) {
-					return this.templateTaskDescriptionGenerationEngine.generateTaskFromQuery(
-						{ query: queryAST, schema, schemaAliasMap, tables, lang },
-					);
+				if (!usableGateway) {
+					return generateFromTemplate();
 				}
 				if (!option) {
 					throw Error('Undefined GPT configuration');
@@ -76,19 +81,13 @@ export class TaskDescriptionGenerationService {
 						option,
 						isSelfJoin,
 						lang,
+						llmGateway,
 					},
 				);
 
 			case 'hybrid': {
-				const templateDescription =
-					this.templateTaskDescriptionGenerationEngine.generateTaskFromQuery({
-						query: queryAST,
-						schema,
-						schemaAliasMap,
-						tables,
-						lang,
-					});
-				if (!this.llmTaskDescriptionGenerationEngine) {
+				const templateDescription = generateFromTemplate();
+				if (!usableGateway) {
 					return templateDescription;
 				}
 				return await this.llmTaskDescriptionGenerationEngine.generateNLGTaskFromTemplateTask(
@@ -97,6 +96,7 @@ export class TaskDescriptionGenerationService {
 					databaseKey,
 					isSelfJoin,
 					lang,
+					llmGateway,
 				);
 			}
 

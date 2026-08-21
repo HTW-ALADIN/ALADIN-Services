@@ -10,6 +10,7 @@ import type { Request, Response } from 'express';
 import { DescriptionController } from '../../../src/generation/description/description-controller';
 import { TaskDescriptionGenerationService } from '../../../src/generation/description/task-description-generation-service';
 import { TemplateTaskDescriptionGenerationEngine } from '../../../src/generation/description/template-task-description-generation-engine';
+import { LLMTaskDescriptionGenerationEngine } from '../../../src/generation/description/llm-task-description-generation-engine';
 import { DatabaseService } from '../../../src/database/database-service';
 import { DatabaseAnalyzer } from '../../../src/database/database-analyzer';
 import {
@@ -61,7 +62,7 @@ describe('DescriptionController — PGlite auto-analyze', () => {
 		const databaseService = new DatabaseService(new DatabaseAnalyzer());
 		const templateEngine = new TemplateTaskDescriptionGenerationEngine();
 		const generationService = new TaskDescriptionGenerationService(
-			undefined,
+			new LLMTaskDescriptionGenerationEngine(),
 			templateEngine,
 		);
 		controller = new DescriptionController(generationService, databaseService);
@@ -171,6 +172,51 @@ describe('DescriptionController — PGlite auto-analyze', () => {
 				res,
 			);
 			expect(status).toHaveBeenCalledWith(200);
+		});
+	});
+
+	// ── LLM endpoints without a gateway block ────────────────────────────────
+
+	describe('POST /api/description/llm/default without llmGateway', () => {
+		it('returns 200 with a template-backed description (unchanged response shape)', async () => {
+			const { res, status, json } = mockRes();
+			await controller.generateLlmDefaultDescription(
+				mockReq({
+					connectionInfo: {
+						type: 'pglite',
+						databaseId: DB_ID,
+						sqlContent: SIMPLE_DDL,
+					},
+					query: SIMPLE_QUERY,
+				}),
+				res,
+			);
+			expect(status).toHaveBeenCalledWith(200);
+			const body = json.mock.calls[0]?.[0] as any;
+			expect(body).toHaveProperty('description');
+			expect(body).toHaveProperty('languageCode');
+			expect(typeof body.description).toBe('string');
+		});
+	});
+
+	describe('POST /api/description/llm/multi-step without llmGateway', () => {
+		it('returns 200 with a template-backed description (unchanged response shape)', async () => {
+			const { res, status, json } = mockRes();
+			await controller.generateLlmMultiStepDescription(
+				mockReq({
+					connectionInfo: {
+						type: 'pglite',
+						databaseId: DB_ID,
+						sqlContent: SIMPLE_DDL,
+					},
+					query: SIMPLE_QUERY,
+				}),
+				res,
+			);
+			expect(status).toHaveBeenCalledWith(200);
+			const body = json.mock.calls[0]?.[0] as any;
+			expect(body).toHaveProperty('description');
+			expect(typeof body.description).toBe('string');
 		});
 	});
 });

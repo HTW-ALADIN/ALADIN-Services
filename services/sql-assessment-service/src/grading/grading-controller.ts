@@ -27,6 +27,7 @@ import {
 	ReferenceQuery,
 } from '../shared/interfaces/index';
 import { TaskDescriptionGenerationService } from '../generation/description/task-description-generation-service';
+import { LlmGatewayConfig } from '../shared/interfaces/llm-gateway';
 import { t, resolveLanguageCode, SupportedLanguage } from '../shared/i18n';
 import { ResultSetComparator } from './result-set-comparator';
 import { ASTComparator } from './comparators/ast-comparator';
@@ -540,6 +541,7 @@ export class GradingController {
 				lang,
 				gradingRequestOptions.generationStrategy,
 				gradingRequestOptions.gptOption,
+				gradingRequestOptions.llmGateway,
 			);
 
 			await cleanup();
@@ -570,8 +572,8 @@ export class GradingController {
 	 * | `LLM`                 | Pure LLM call; uses `gptOption` (defaults to `GptOptions.Default`) |
 	 * | `Hybrid`              | Template engine → LLM NLG post-processing                      |
 	 *
-	 * When `OPENAI_API_KEY` is absent the service automatically falls back to the
-	 * Template engine so a description is always produced.
+	 * When no usable `llmGateway` block is supplied the service automatically
+	 * falls back to the Template engine so a description is always produced.
 	 *
 	 * The method is a no-op when the student query is already equivalent to the
 	 * reference query.
@@ -584,6 +586,7 @@ export class GradingController {
 		lang: SupportedLanguage,
 		strategy?: GenerationOptions,
 		gptOption?: GptOptions,
+		llmGateway?: LlmGatewayConfig,
 	): Promise<void> {
 		if (comparisonResult.equivalent) return;
 
@@ -609,10 +612,11 @@ export class GradingController {
 					isSelfJoin: undefined,
 					option: resolvedGptOption,
 					lang,
+					llmGateway,
 				});
 		} else {
 			// Default behaviour: Hybrid for supported types, LLM otherwise.
-			// When OPENAI_API_KEY is absent the service falls back to Template.
+			// Without a usable llmGateway block the service falls back to Template.
 			if (comparisonResult.supportedQueryType) {
 				const parser = new Parser();
 				const studentAST = parser.astify(studentQuery, {
@@ -628,6 +632,7 @@ export class GradingController {
 						isSelfJoin: undefined,
 						option: resolvedGptOption,
 						lang,
+						llmGateway,
 					});
 			} else {
 				studentTaskDescription =
@@ -640,6 +645,7 @@ export class GradingController {
 						isSelfJoin: undefined,
 						option: GptOptions.Default,
 						lang,
+						llmGateway,
 					});
 			}
 		}

@@ -1,12 +1,14 @@
-import { ChatOpenAI } from '@langchain/openai';
-import { SystemMessagePromptTemplate } from '@langchain/core/prompts';
 import {
 	databaseMetadata,
 	selfJoinDatabaseMetadata,
 } from '../../database/internal-memory';
-import { SystemMessage } from '@langchain/core/messages';
 import { GptOptions, IParsedTable } from '../../shared/interfaces/domain';
-import { RunnableLambda, RunnableSequence } from '@langchain/core/runnables';
+import { LlmGatewayConfig } from '../../shared/interfaces/llm-gateway';
+import {
+	GatewayChatMessage,
+	LlmGatewayClient,
+	toGatewayChatMessage,
+} from '../../shared/llm-gateway/llm-gateway-client';
 import { SupportedLanguage } from '../../shared/i18n';
 
 /** Maps a supported language code to a natural-language directive injected into prompts. */
@@ -15,22 +17,14 @@ const LANGUAGE_DIRECTIVES: Record<SupportedLanguage, string> = {
 	de: 'Antworte auf Deutsch.',
 };
 
-export class LLMTaskDescriptionGenerationEngine {
-	constructor() {
-		this.openai = new ChatOpenAI({
-			openAIApiKey: process.env.OPENAI_API_KEY,
-			modelName: 'gpt-4o-mini',
-			temperature: 0,
-		});
-		this.creativeOpenai = new ChatOpenAI({
-			openAIApiKey: process.env.OPENAI_API_KEY,
-			modelName: 'gpt-4o-mini',
-			temperature: 0.7,
-		});
-	}
+/** Temperature used for default and multi-step description variants. */
+const DEFAULT_TEMPERATURE = 0;
 
-	private readonly openai;
-	private readonly creativeOpenai;
+/** Temperature used for the creative description variant. */
+const CREATIVE_TEMPERATURE = 0.7;
+
+export class LLMTaskDescriptionGenerationEngine {
+	constructor(private readonly gatewayClient: LlmGatewayClient = new LlmGatewayClient()) {}
 
 	private readonly joinExamples =
 		'INNER_JOIN: Returns only the rows where there is a match in both tables based on the specified condition, LEFT_JOIN:  Returns all rows from the left table, and matching rows from the right table, RIGHT_JOIN: Returns all rows from the right table, and matching rows from the left table, FULL_JOIN:Combines all rows from both tables, including matching rows based on the condition, while unmatched rows from either table are filled with NULL values for the missing side., CROSS_JOIN:  Creates every possible combination of rows between two tables, where each row from the first table is paired with every row from the second table, regardless of any condition.';
@@ -62,8 +56,9 @@ export class LLMTaskDescriptionGenerationEngine {
 		option: GptOptions;
 		isSelfJoin?: boolean;
 		lang: SupportedLanguage;
+		llmGateway: LlmGatewayConfig;
 	}): Promise<string> {
-		const { query, databaseKey, option, isSelfJoin } = config;
+		const { query, databaseKey, option, isSelfJoin, llmGateway } = config;
 		const lang = config.lang ?? 'en';
 		switch (option) {
 			case 'creative':
@@ -72,6 +67,7 @@ export class LLMTaskDescriptionGenerationEngine {
 					databaseKey,
 					isSelfJoin,
 					lang,
+					llmGateway,
 				);
 			case 'multi-step':
 				return await this.generateTaskFromQueryMultiStep(
@@ -79,6 +75,7 @@ export class LLMTaskDescriptionGenerationEngine {
 					databaseKey,
 					isSelfJoin,
 					lang,
+					llmGateway,
 				);
 			case 'default':
 				return await this.generateTaskFromQueryNotCreative(
@@ -86,6 +83,7 @@ export class LLMTaskDescriptionGenerationEngine {
 					databaseKey,
 					isSelfJoin,
 					lang,
+					llmGateway,
 				);
 			default:
 				return 'Unknown option selected.';
@@ -130,8 +128,9 @@ export class LLMTaskDescriptionGenerationEngine {
 	}
 
 	/** Returns the language directive system message for the given language. */
-	private languageMessage(lang: SupportedLanguage): SystemMessage {
-		return new SystemMessage(
+	private languageMessage(lang: SupportedLanguage): GatewayChatMessage {
+		return toGatewayChatMessage(
+			'system',
 			LANGUAGE_DIRECTIVES[lang] ?? LANGUAGE_DIRECTIVES['en'],
 		);
 	}
@@ -139,8 +138,9 @@ export class LLMTaskDescriptionGenerationEngine {
 	private async generateTaskFromQueryMultiStep(
 		query: string,
 		databaseKey: string,
-		isSelfJoin?: boolean,
-		lang: SupportedLanguage = 'en',
+		isSelfJoin: boolean | undefined,
+		lang: SupportedLanguage,
+		llmGateway: LlmGatewayConfig,
 	): Promise<string> {
 		const tables = this.resolveMetadata(databaseKey, isSelfJoin);
 		const queryParts = this.splitSQLQuery(query);
@@ -149,76 +149,61 @@ export class LLMTaskDescriptionGenerationEngine {
 		const langDirective =
 			LANGUAGE_DIRECTIVES[lang] ?? LANGUAGE_DIRECTIVES['en'];
 
-		const sequence = RunnableSequence.from([
-			new RunnableLambda({
-				func: async (input: { tables: string }) => {
-					const entityPrompt = SystemMessagePromptTemplate.fromTemplate([
-						new SystemMessage(`You are a database expert.`),
-						new SystemMessage(`Given the following database schema: {tables}.`),
-						new SystemMessage(
-							`Describe entity relationships based on an entity relationship diagram.`,
-						),
-					]).pipe(this.openai);
-
-					const entityResponse = await entityPrompt.invoke(input);
-					return { entityDescription: entityResponse.content };
-				},
-			}),
-
-			...queryParts.map(
-				(part) =>
-					new RunnableLambda({
-						func: async (input: {
-							entityDescription: string;
-							queryPartResults?: string[];
-						}) => {
-							const queryPartPrompt = SystemMessagePromptTemplate.fromTemplate([
-								new SystemMessage(`You are a database and PostgreSQL expert.`),
-								new SystemMessage(
-									`Given the following query part: {query_part}`,
-								),
-								new SystemMessage(
-									`Describe the semantic meaning of that query part based on the provided entity relationships: {entity_description}.`,
-								),
-							]).pipe(this.openai);
-
-							const response = await queryPartPrompt.invoke({
-								query_part: part,
-								entity_description: input.entityDescription,
-							});
-
-							const updatedResults = [
-								...(input.queryPartResults || []),
-								response.content,
-							];
-							return { ...input, queryPartResults: updatedResults };
-						},
-					}),
-			),
-
-			new RunnableLambda({
-				func: async (input: { queryPartResults: string[] }) => {
-					const taskPrompt = SystemMessagePromptTemplate.fromTemplate([
-						new SystemMessage(`You are a SQL expert.`),
-						new SystemMessage(
-							`Based on the following semantic descriptions of query parts: {query_part_results}, create natural-language question that describes the requested data. The question should include all required information to formulate a query that returns the requested data. Return only the question.`,
-						),
-						new SystemMessage(langDirective),
-					]).pipe(this.openai);
-
-					const response = await taskPrompt.invoke({
-						query_part_results: input.queryPartResults.join('\n'),
-					});
-
-					return response.content;
-				},
-			}),
-		]);
-
 		try {
-			const response = await sequence.invoke({ tables: schemaString });
+			const entityResponse = await this.gatewayClient.generate(llmGateway, {
+				messages: [
+					toGatewayChatMessage('system', 'You are a database expert.'),
+					toGatewayChatMessage(
+						'system',
+						`Given the following database schema: ${schemaString}.`,
+					),
+					toGatewayChatMessage(
+						'system',
+						'Describe entity relationships based on an entity relationship diagram.',
+					),
+				],
+				temperature: DEFAULT_TEMPERATURE,
+			});
+			const entityDescription = entityResponse;
+
+			const queryPartResults: string[] = [];
+			for (const part of queryParts) {
+				const partResponse = await this.gatewayClient.generate(llmGateway, {
+					messages: [
+						toGatewayChatMessage(
+							'system',
+							'You are a database and PostgreSQL expert.',
+						),
+						toGatewayChatMessage(
+							'system',
+							`Given the following query part: ${part}`,
+						),
+						toGatewayChatMessage(
+							'system',
+							`Describe the semantic meaning of that query part based on the provided entity relationships: ${entityDescription}.`,
+						),
+					],
+					temperature: DEFAULT_TEMPERATURE,
+				});
+				queryPartResults.push(partResponse);
+			}
+
+			const response = await this.gatewayClient.generate(llmGateway, {
+				messages: [
+					toGatewayChatMessage('system', 'You are a SQL expert.'),
+					toGatewayChatMessage(
+						'system',
+						`Based on the following semantic descriptions of query parts: ${queryPartResults.join(
+							'\n',
+						)}, create natural-language question that describes the requested data. The question should include all required information to formulate a query that returns the requested data. Return only the question.`,
+					),
+					toGatewayChatMessage('system', langDirective),
+				],
+				temperature: DEFAULT_TEMPERATURE,
+			});
+
 			console.log('Generated Task Description:', response);
-			return response as string;
+			return response;
 		} catch (error) {
 			console.error(error);
 			throw new Error(`Error in generating task description using GPT.`);
@@ -228,28 +213,30 @@ export class LLMTaskDescriptionGenerationEngine {
 	private async generateTaskFromQueryCreative(
 		query: string,
 		databaseKey: string,
-		isSelfJoin?: boolean,
-		lang: SupportedLanguage = 'en',
+		isSelfJoin: boolean | undefined,
+		lang: SupportedLanguage,
+		llmGateway: LlmGatewayConfig,
 	): Promise<string> {
 		const tables = this.resolveMetadata(databaseKey, isSelfJoin);
 
-		const systemMessage = new SystemMessage(
-			`${this.instructions} As additional information you can find the parsed tables that describe the schema of the database.`,
-		);
-		const querySystemMessage = new SystemMessage(`This is the query: ${query}`);
-		const schemaSystemMessage = new SystemMessage(
-			`This is the schema: ${this.serializeSchemaForPrompt(tables)}`,
-		);
 		const messages = [
-			systemMessage,
-			querySystemMessage,
-			schemaSystemMessage,
+			toGatewayChatMessage(
+				'system',
+				`${this.instructions} As additional information you can find the parsed tables that describe the schema of the database.`,
+			),
+			toGatewayChatMessage('system', `This is the query: ${query}`),
+			toGatewayChatMessage(
+				'system',
+				`This is the schema: ${this.serializeSchemaForPrompt(tables)}`,
+			),
 			this.languageMessage(lang),
 		];
 
 		try {
-			const response = await this.creativeOpenai.invoke(messages);
-			return response.content as string;
+			return await this.gatewayClient.generate(llmGateway, {
+				messages,
+				temperature: CREATIVE_TEMPERATURE,
+			});
 		} catch (error) {
 			console.error(error);
 			throw Error('Error in generation task description using GPT.');
@@ -259,28 +246,30 @@ export class LLMTaskDescriptionGenerationEngine {
 	private async generateTaskFromQueryNotCreative(
 		query: string,
 		databaseKey: string,
-		isSelfJoin?: boolean,
-		lang: SupportedLanguage = 'en',
+		isSelfJoin: boolean | undefined,
+		lang: SupportedLanguage,
+		llmGateway: LlmGatewayConfig,
 	): Promise<string> {
 		const tables = this.resolveMetadata(databaseKey, isSelfJoin);
 
-		const systemMessage = new SystemMessage(
-			`${this.instructions} As additional information you can find the parsed tables that describe the schema of the database.`,
-		);
-		const querySystemMessage = new SystemMessage(`This is the query: ${query}`);
-		const schemaSystemMessage = new SystemMessage(
-			`This is the schema: ${this.serializeSchemaForPrompt(tables)}`,
-		);
 		const messages = [
-			systemMessage,
-			querySystemMessage,
-			schemaSystemMessage,
+			toGatewayChatMessage(
+				'system',
+				`${this.instructions} As additional information you can find the parsed tables that describe the schema of the database.`,
+			),
+			toGatewayChatMessage('system', `This is the query: ${query}`),
+			toGatewayChatMessage(
+				'system',
+				`This is the schema: ${this.serializeSchemaForPrompt(tables)}`,
+			),
 			this.languageMessage(lang),
 		];
 
 		try {
-			const response = await this.openai.invoke(messages);
-			return response.content as string;
+			return await this.gatewayClient.generate(llmGateway, {
+				messages,
+				temperature: DEFAULT_TEMPERATURE,
+			});
 		} catch (error) {
 			console.error(error);
 			throw Error('Error in generation task description using GPT.');
@@ -291,34 +280,34 @@ export class LLMTaskDescriptionGenerationEngine {
 		query: string,
 		taskDescription: string,
 		databaseKey: string,
-		isSelfJoin?: boolean,
-		lang: SupportedLanguage = 'en',
+		isSelfJoin: boolean | undefined,
+		lang: SupportedLanguage,
+		llmGateway: LlmGatewayConfig,
 	): Promise<string> {
 		const tables = this.resolveMetadata(databaseKey, isSelfJoin);
 
-		const systemMessage = new SystemMessage(
-			"You are a helpful assistant specializing in making PostgreSQL tasks more human-readable. Your goal is to rewrite the given task description into clear, continuous text that captures the core intent and semantic meaning of the SQL query. Maintain a direct, action-oriented style while preserving all original details. Ensure the improved task remains accurate, concise, and easy to understand, avoiding overly technical jargon. If values are null or not null, describe it in a human readable way (i.e. absent, undefined, any). When table aliases are used, describe them in a human-readable way based on their relationships, rather than mentioning the alias names. Describe aggregation functions (MIN, MAX, COUNT, etc.) in natural language, e.g. instead of saying 'MIN(Country)', describe it as 'the country that comes first alphabetically'. Do not leave out or summarize any of the expression values used in the Where and Having conditions, even if they are long values like paths or urls. You will be provided with the database schema and the query that solves the task for context.",
-		);
-
-		const querySystemMessage = new SystemMessage(`This is the query: ${query}`);
-		const schemaSystemMessage = new SystemMessage(
-			`This is the schema: ${this.serializeSchemaForPrompt(tables)}`,
-		);
-		const taskMessage = new SystemMessage(
-			`This is the task description that you should improve: ${taskDescription}`,
-		);
-
 		const messages = [
-			systemMessage,
-			querySystemMessage,
-			schemaSystemMessage,
-			taskMessage,
+			toGatewayChatMessage(
+				'system',
+				"You are a helpful assistant specializing in making PostgreSQL tasks more human-readable. Your goal is to rewrite the given task description into clear, continuous text that captures the core intent and semantic meaning of the SQL query. Maintain a direct, action-oriented style while preserving all original details. Ensure the improved task remains accurate, concise, and easy to understand, avoiding overly technical jargon. If values are null or not null, describe it in a human readable way (i.e. absent, undefined, any). When table aliases are used, describe them in a human-readable way based on their relationships, rather than mentioning the alias names. Describe aggregation functions (MIN, MAX, COUNT, etc.) in natural language, e.g. instead of saying 'MIN(Country)', describe it as 'the country that comes first alphabetically'. Do not leave out or summarize any of the expression values used in the Where and Having conditions, even if they are long values like paths or urls. You will be provided with the database schema and the query that solves the task for context.",
+			),
+			toGatewayChatMessage('system', `This is the query: ${query}`),
+			toGatewayChatMessage(
+				'system',
+				`This is the schema: ${this.serializeSchemaForPrompt(tables)}`,
+			),
+			toGatewayChatMessage(
+				'system',
+				`This is the task description that you should improve: ${taskDescription}`,
+			),
 			this.languageMessage(lang),
 		];
 
 		try {
-			const response = await this.openai.invoke(messages);
-			return response.content as string;
+			return await this.gatewayClient.generate(llmGateway, {
+				messages,
+				temperature: DEFAULT_TEMPERATURE,
+			});
 		} catch (error) {
 			console.error(error);
 			throw Error('Error in generation task description using GPT.');

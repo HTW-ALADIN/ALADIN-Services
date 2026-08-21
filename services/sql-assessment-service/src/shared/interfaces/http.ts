@@ -1,6 +1,11 @@
 import { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
-import { GenerationOptions, GptOptions, ITaskConfiguration } from './domain';
+import {
+	GenerationOptions,
+	GptOptions,
+	ITaskConfiguration,
+} from './domain';
 import { AssembledFeedback } from './feedback';
+import { LlmGatewayConfig } from './llm-gateway';
 
 /**
  * Connection info for an in-process PGlite database.
@@ -83,6 +88,12 @@ export interface IRequestTaskOptions {
 	taskConfiguration: ITaskConfiguration;
 	/** BCP 47 language code for error messages (e.g. "en", "de"). Defaults to "en". */
 	languageCode?: string;
+	/**
+	 * Optional LLM gateway connection details. When present, LLM-based
+	 * description variants are generated via the supplied gateway; when absent
+	 * they fall back to the template engine.
+	 */
+	llmGateway?: LlmGatewayConfig;
 }
 
 export interface IRequestGradingOptions {
@@ -101,6 +112,12 @@ export interface IRequestGradingOptions {
 	 * GenerationOptions.LLM.  Defaults to GptOptions.Default.
 	 */
 	gptOption?: GptOptions;
+	/**
+	 * Optional LLM gateway connection details. When present, LLM-based
+	 * task-description feedback is generated via the supplied gateway; when
+	 * absent it falls back to the template engine.
+	 */
+	llmGateway?: LlmGatewayConfig;
 }
 
 export interface TaskResponse {
@@ -131,6 +148,12 @@ export interface IRequestDescriptionOptions {
 	 * Defaults to "en".
 	 */
 	languageCode?: string;
+	/**
+	 * Optional LLM gateway connection details. When present, LLM and hybrid
+	 * description endpoints use the supplied gateway; when absent they fall
+	 * back to the template engine.
+	 */
+	llmGateway?: LlmGatewayConfig;
 }
 
 export interface DescriptionResponse {
