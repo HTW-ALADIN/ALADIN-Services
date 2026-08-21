@@ -54,11 +54,12 @@ _START_TS = time.monotonic()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Startup: optionally warm the HF model cache (``HF_MODELS_PRELOAD=true``).
+    """Startup: optionally warm the HF model cache (``HF_PRELOAD`` != off).
 
     This is the main service's analogue of the ConceptNet sidecar's
-    ``CONCEPTNET_PRELOAD_ON_START``. Cold by default so boot stays fast and
-    idle RAM tiny; when enabled, loads the advertised HF models once into the
+    ``CONCEPTNET_PRELOAD_ON_START``. Cold by default (``HF_PRELOAD=off``) so
+    boot stays fast and idle RAM tiny; when a profile (``all`` or a partial
+    ``measure:model,...``) is baked in, loads the selected models once into the
     process cache so the first request for them is served instantly in exchange
     for higher idle RAM. ``warm_start`` is non-fatal — failures relax to lazy.
     """

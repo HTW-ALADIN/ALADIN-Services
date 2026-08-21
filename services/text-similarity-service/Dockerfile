@@ -11,26 +11,25 @@ FROM python:3.12-slim AS builder
 ARG SIMILARITY_PROFILE=cpu
 ENV SIMILARITY_PROFILE=$SIMILARITY_PROFILE
 
-# Model-based measures (HF) pull in PyTorch (~2.5 GB CUDA wheel) and optionally
-# pre-download models at build time (PRECACHE_HF). They are OPT-IN; the default
-# cpu image stays small.
+# Model-based measures (HF) pull in PyTorch (~2.5 GB CUDA wheel). They are
+# OPT-IN; the default cpu image stays small.
 ARG INSTALL_MODEL=false
-# Pre-cache the HuggingFace models (SBERT MiniLM/MPNet/multilingual, cross-encoder
-# stsb-roberta-base, bertscore roberta-large) at build time so a fresh "hf"
-# container serves the first request offline. Downloads land in a
-# build-time HF cache dir that is COPY'd into the runtime cache. A failure (e.g.
-# offline build farm) must not fail the image: models remain lazy-downloaded at
-# runtime if this step did not run.
-ARG PRECACHE_HF=false
 # German lexical relations (Odenet) — tiny, OPT-IN for all images.
 ARG INSTALL_DE=false
-# Preload profile, baked in so the runtime catalog/spec only advertises the
-# models that this image actually warms at startup. Values:
-#   off    (default) — cold start, nothing preloaded into RAM (all lazy)
-#   all             — warm every advertised HF model at startup (== old
-#                     HF_MODELS_PRELOAD=true behaviour)
-#   measure:model[,measure:model...] — warm only the selected models (partial
-#                     lazy): the rest stay lazy-loaded on first request
+# ONE switch that controls both the disk pre-cache (weights downloaded onto the
+# image at build time) AND the RAM warm-start (loading at container start):
+#   off  (default) — MODE 1 = cold. Nothing pre-downloaded, nothing warmed;
+#                     everything lazy-loads (downloading if absent) per request.
+#   all            — MODE 2 = warm. Every advertised HF model (SBERT MiniLM /
+#                     MPNet / multilingual, cross-encoder stsb-roberta-base,
+#                     bertscore roberta-large) is pre-downloaded to the image
+#                     disk at build time AND loaded into RAM at startup.
+#   measure:model[,measure:model...] — same, but only the selected models
+#                     (partial): the rest are absent (lazy download at runtime).
+# Baked in as ENV so a given image always ships and warms exactly what it
+# advertises; no runtime config needed. Downloads land in a build-time HF cache
+# dir that is COPY'd into the runtime cache, so a fresh "hf" container serves
+# the first model request offline.
 ARG HF_PRELOAD=off
 ENV HF_PRELOAD=$HF_PRELOAD
 
@@ -55,15 +54,15 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     if [ "$INSTALL_MODEL" = "true" ]; then pip install --no-cache-dir -e ".[model]"; fi && \
     if [ "$INSTALL_DE" = "true" ]; then pip install --no-cache-dir -e ".[de]"; fi
 
-# ── Optional: pre-cache the HuggingFace models at BUILD time ────────────────
+# ── Optional: pre-cache the selected HF models at BUILD time ───────────────
 # Only fetches/downloads the weights into a build-time HF cache dir; it does NOT
 # import torch or load anything into RAM. Mirrors the runtime HF_HOME layout so
-# sentence-transformers/transformers find them with no extra migration.
+# sentence-transformers/transformers find them with no extra migration. The
+# helper script itself gates on HF_PRELOAD (off = skip, all/partial = download
+# the selection); this unconditional RUN keeps the Dockerfile parser simple.
 ENV BUILT_HF=/app/built-hf
-# The helper script itself gates on PRECACHE_HF; this unconditional RUN keeps the
-# Dockerfile parser simple (no nested python -c / if/then/fi confusion).
 RUN mkdir -p $BUILT_HF && \
-    HF_HOME=$BUILT_HF TRANSFORMERS_CACHE=$BUILT_HF PRECACHE_HF=$PRECACHE_HF python src/__precache_hf.py || \
+    HF_HOME=$BUILT_HF TRANSFORMERS_CACHE=$BUILT_HF python src/__precache_hf.py || \
     echo "WARN: HuggingFace pre-cache failed; models will download at runtime"
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────

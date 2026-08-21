@@ -4,8 +4,10 @@
 
 PORT ?= 8000
 REGISTRY ?= ghcr.io
-# Warm-start preload profile baked into the image: off (default/cold), all,
-# or a partial measure:model[,measure:model...] list (see Dockerfile).
+# HF_PRELOAD controls BOTH sides of the HF models: which weights are
+# pre-downloaded onto the image disk (build time) AND warmed into RAM at
+# container start. off (default) = cold start, all = warm start, or a partial
+# measure:model[,measure:model...] list (see Dockerfile).
 HF_PRELOAD ?= off
 
 prep:
@@ -31,18 +33,20 @@ clean:
 	rm -f text-similarity-service-*.openapi.json
 
 # The repo builds images from one Dockerfile — they differ only in the
-# SIMILARITY_PROFILE / INSTALL_MODEL / PRECACHE_HF / HF_PRELOAD build args.
-#   text-similarity-cpu            (base, no PyTorch, no models pre-cached)
-#   text-similarity-hf/pytorch     (full — PyTorch + all HF models pre-cached)
-# Warm-start profile (HF_PRELOAD): off (default/cold), all, or a partial
-# measure:model[,measure:model...] list. Examples:
-#   make docker-build-hf HF_PRELOAD=all                       # warm everything
-#   make docker-build-hf HF_PRELOAD="sbert_cosine:all-MiniLM-L6-v2,bertscore:roberta-large"  # partial lazy
+# SIMILARITY_PROFILE / INSTALL_MODEL / HF_PRELOAD build args.
+#   text-similarity-cpu            (base, no PyTorch, no model disk/RAM preload)
+#   text-similarity-hf/pytorch     (full — PyTorch; disk+RAM preload per HF_PRELOAD)
+# HF_PRELOAD: off (default/cold), all, or a partial measure:model[,...] list.
+# Examples:
+#   make docker-build-hf HF_PRELOAD=off      # cold: disk empty, boot ~1s, 1st request lazy
+#   make docker-build-hf HF_PRELOAD=all      # warm: disk+RAM filled, 1st request in ms
+#   make docker-build-hf HF_PRELOAD="sbert_cosine:all-MiniLM-L6-v2,bertscore:roberta-large"  # partial
 # The local ConceptNet Numberbatch model is NOT in any main image: it is served
 # by the optional conceptnet-sidecar (see services/conceptnet-sidecar/).
 docker-build-cpu:
 	docker build -f Dockerfile \
 		--build-arg SIMILARITY_PROFILE=cpu \
+		--build-arg HF_PRELOAD=off \
 		-t $(REGISTRY)/text-similarity-cpu .
 
 # hf and pytorch are the SAME full build now (the conceptnet pre-cache is gone);
@@ -51,7 +55,6 @@ docker-build-hf:
 	docker build -f Dockerfile \
 		--build-arg SIMILARITY_PROFILE=pytorch \
 		--build-arg INSTALL_MODEL=true \
-		--build-arg PRECACHE_HF=true \
 		--build-arg HF_PRELOAD=$(HF_PRELOAD) \
 		-t $(REGISTRY)/text-similarity-hf \
 		-t $(REGISTRY)/text-similarity-pytorch .

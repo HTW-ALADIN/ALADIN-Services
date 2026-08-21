@@ -18,7 +18,7 @@ Before using this service, understand **three independent decisions**. Everythin
 | `text-similarity-hf` | Base **+** SBERT/BERTScore/cross-encoder/semantic_search — the lightest full-stack image |
 
 - `text-similarity-cpu` offers no PyTorch models at all; a request for one is rejected with a 400 pointing at the `hf` image. This is the default build (smallest, no heavy downloads).
-- `text-similarity-hf` is the recommended light "everything-else" deployment: it pre-caches all HuggingFace models (`all-MiniLM-L6-v2`, `all-mpnet-base-v2`, `paraphrase-multilingual-MiniLM-L12-v2`, `stsb-roberta-base`, `roberta-large`) at build time (`PRECACHE_HF=true`), so SBERT/cross-encoder/BERTScore serve instantly from a fresh container — offline. It is the **only** full-feature build; ConceptNet Numberbatch is served by the optional sidecar, never pre-cached into the image.
+- `text-similarity-hf` is the recommended light "everything-else" deployment: built with [`HF_PRELOAD=all`](#hf_preload-build-arg) it pre-caches all HuggingFace models (`all-MiniLM-L6-v2`, `all-mpnet-base-v2`, `paraphrase-multilingual-MiniLM-L12-v2`, `stsb-roberta-base`, `roberta-large`) to disk at build time (and warms them into RAM at start), so SBERT/cross-encoder/BERTScore serve instantly from a fresh container — offline. It is the **only** full-feature build; ConceptNet Numberbatch is served by the optional sidecar, never pre-cached into the image.
 - `embedding_cosine` / `conceptnet_numberbatch` with `params.backend=local` is served by the ConceptNet sidecar; with no sidecar configured it returns `502/503` (see below), never a local in-process computation or download.
 
 **2. Is the optional Java DKPro sidecar running?** If yes, you also get `topic_model`, `structural_stylistic`, and `dkpro` backends for two base algorithms. If no, those requests fail with `502/503`.
@@ -125,7 +125,7 @@ eviction re-loads the model automatically; that one call just takes longer.
 - No measure *requires* a GPU; GPU only cuts transformer latency.
 - In-memory footprint ≈ **4× the download size** (float32 + runtime libs).
 - Heavy models are **cached per process** (`src/model_cache.py`); more workers = more RAM.
-- **Warm start (`HF_MODELS_PRELOAD=true`):** cold by default (boot ~1 s, idle RAM ~0.05 GB, but the *first* model request pays the transformer load, ~6–21 s). Set `HF_MODELS_PRELOAD=true` to preload all advertised HF models on startup — the first request then returns in milliseconds, in exchange for a longer boot (~1–2 min) and higher idle RAM (~1.5 GB). This is the main service's analogue of the ConceptNet sidecar's `CONCEPTNET_PRELOAD_ON_START`. Warm loads are non-fatal (a failure relaxes to lazy loading). See [`/metrics`](#api) (`"warm": true`).
+- **Warm start (`HF_PRELOAD=all`):** cold by default (boot ~1 s, idle RAM ~0.05 GB, but the *first* model request pays the transformer load, ~6–21 s). `HF_PRELOAD=all` pre-downloads every advertised HF model onto the image disk at build time **and** loads them into RAM at startup, so the first request returns in milliseconds — in exchange for a longer boot (~1–2 min) and higher idle RAM that **scales with the selected models** (each transformer adds roughly its "RAM to run" value below — a single MiniLM ~0.5–1 GB; all advertised models sum to ~7–10+ GB). A partial `HF_PRELOAD=measure:model,...` list warms only those (and pre-downloads only those to disk). This is the main service's analogue of the ConceptNet sidecar's `CONCEPTNET_PRELOAD_ON_START`. Warm loads are non-fatal (a failure relaxes to lazy loading). See [`/metrics`](#api) (`"warm"` + `model_cache.keys`).
 
 ### ConceptNet sidecar
 
@@ -174,8 +174,7 @@ Synchronous & stateless: `{"algorithm", "params", "inputs":[...]}` → result pe
 | `CONCEPTNET_REMOTE_REQUEST_DELAY` | `0.05` | min seconds between API calls |
 | `CONCEPTNET_429_RETRIES` | `3` | max backoff retries on HTTP 429 |
 | `ALLOW_LARGE_MODEL_DOWNLOADS` | `false` | server-wide opt-in for downloads > 500 MB |
-| `HF_PRELOAD` | `off` | warm-start profile, **baked in at build** (see [`HF_PRELOAD` build-arg](#hf-preload-build-arg)): `off` (cold, all lazy), `all` (warm every HF model), or partial `measure:model[,measure:model...]` (partial lazy) |
-| `HF_MODELS_PRELOAD` | `false` | legacy synonym for `HF_PRELOAD=all`: warm start, preload all HF models on startup (`true`/`1`/`yes`); higher idle RAM + boot time, no first-request delay |
+| `HF_PRELOAD` | `off` | preload profile for HF models, **baked in at build** (see [`HF_PRELOAD` build-arg](#hf_preload-build-arg)): `off` = cold (nothing on disk, all lazy), `all` = warm (every HF model pre-downloaded to disk + loaded into RAM), or partial `measure:model[,measure:model...]` |
 
 ## Development
 
@@ -183,10 +182,10 @@ Synchronous & stateless: `{"algorithm", "params", "inputs":[...]}` → result pe
 make prep                    # base deps (cpu profile)
 pip install -e ".[model]"    # + PyTorch / HuggingFace
 pip install -e ".[de]"       # + German lexical (Odenet)
-make docker-build-cpu        # text-similarity-cpu (no PyTorch, no pre-cache)
-make docker-build-hf         # text-similarity-hf (all HF models)
-make docker-build-hf HF_PRELOAD=all   # + warm every HF model at startup
-make docker-build-hf HF_PRELOAD="sbert_cosine:all-MiniLM-L6-v2,bertscore:roberta-large"  # + partial lazy
+make docker-build-cpu        # text-similarity-cpu (no PyTorch; HF_PRELOAD=off)
+make docker-build-hf         # text-similarity-hf, HF_PRELOAD=off (cold start)
+make docker-build-hf HF_PRELOAD=all   # mode 2: disk + RAM warmed, 1st request in ms
+make docker-build-hf HF_PRELOAD="sbert_cosine:all-MiniLM-L6-v2,bertscore:roberta-large"  # partial
 make test                    # run tests
 make start                   # uvicorn on :8000
 
@@ -196,33 +195,43 @@ make prep
 CONCEPTNET_MODEL_PATH=/path/to/conceptnet-numberbatch-17-06-300 make docker-build
 ```
 
-- **`text-similarity-hf`** is built with `PRECACHE_HF=true` (downloads the five HuggingFace models at build time so the first SBERT/cross-encoder/BERTScore request is served offline from a fresh container). Image size ≈ base + PyTorch/CUDA (~5.5 GB) + HF models (~2.9 GB).
+- **`text-similarity-hf`** built with `HF_PRELOAD=all` pre-downloads all five HuggingFace models to the image disk at build time (and warms them into RAM at start) so the first SBERT/cross-encoder/BERTScore request is served offline from a fresh container. Image size ≈ base + PyTorch/CUDA (~5.5 GB) + HF models (~2.9 GB). With `HF_PRELOAD=off` (default) the same image skips the pre-download entirely (smaller build, cold start, lazy runtime download).
 - The local ConceptNet Numberbatch model is **no longer baked into any main image** — it lives in the `conceptnet-sidecar` container and is loaded lazily there (see [ConceptNet sidecar](#conceptnet-sidecar)).
 - The default `text-similarity-cpu` stays small (~0.7–1 GB) and downloads the small corpora (WordNet, GloVe) at runtime.
 - For manual control, bypass the `make` targets and pass build args directly:
   `docker build --build-arg SIMILARITY_PROFILE=pytorch --build-arg INSTALL_MODEL=true \
-   --build-arg PRECACHE_HF=true -t text-similarity-hf .`
+   --build-arg HF_PRELOAD=all -t text-similarity-hf .`
 
 ### `HF_PRELOAD` build-arg
 
-How many models a container warms into RAM at startup is **baked in at build
-time** via the `HF_PRELOAD` build-arg (pushed into the image as `ENV HF_PRELOAD`),
-so a given image self-describes its warm-start behaviour — no runtime config
-needed. Values:
+`HF_PRELOAD` is the **one switch** that controls both sides of the HF models:
+which weights are **pre-downloaded onto the image disk** (build time) and which
+are **loaded into RAM** (container start). It is **baked in at build time**
+(pushed into the image as `ENV HF_PRELOAD`), so a given image self-describes its
+preload behaviour — no runtime config needed. The same selection drives the
+disk pre-cache (`src/__precache_hf.py`) and the RAM warm-start (`warm_start`),
+so what runs warm can never drift from what is on disk.
 
-| `HF_PRELOAD` | Behaviour | Boot | Idle RAM |
-|---|---|---|---|
-| `off` (default) | **cold** — no model loaded; every model is lazy-loaded on its first request | ~1 s | ~0.05 GB |
-| `all` | **warm everything** — every advertised HF model preloaded at startup | ~1–2 min | ~1.5 GB |
-| `measure:model[,measure:model...]` | **partial lazy** — only the selected models are warmed; all others stay lazy | between the two, by how many models | scales with those models |
+**Mode 1 — cold (`HF_PRELOAD=off`, default):** nothing is pre-downloaded and
+nothing is warmed. Every model is lazy-loaded (downloading if absent) on its
+first request.
+**Mode 2 — warm (`HF_PRELOAD=all`):** every advertised model pre-downloaded to
+disk **and** loaded into RAM at startup. First request served instantly, offline.
+**Partial (`HF_PRELOAD=measure:model,...`):** only the selected models are
+pre-downloaded and warmed; everything else is absent (lazy runtime download).
 
-Partial example — warm only the lightweight MiniLM and BERTScore, keep MPNet
-/cross-encoder / multilingual lazy:
+| `HF_PRELOAD` | Mode | Disk (build) | RAM (start) | Boot | Idle RAM |
+|---|---|---|---|---|---|
+| `off` (default) | **1 – cold** | empty | none; all lazy | ~1 s | ~0.05 GB |
+| `all` | **2 – warm** | all advertised | all advertised | ~1–2 min | ~7–10+ GB (sum of model RAM) |
+| `measure:model[,measure:model...]` | partial | only those | only those | between, by how many models | scales with those models |
+
+Partial example — warm only the lightweight MiniLM and BERTScore, keep MPNet,
+cross-encoder, and multilingual absent (lazy):
 
 ```sh
 docker build -f Dockerfile \
   --build-arg SIMILARITY_PROFILE=pytorch --build-arg INSTALL_MODEL=true \
-  --build-arg PRECACHE_HF=true \
   --build-arg HF_PRELOAD="sbert_cosine:all-MiniLM-L6-v2,bertscore:roberta-large" \
   -t text-similarity-hf .
 ```
@@ -230,10 +239,9 @@ docker build -f Dockerfile \
 Selectable measures: `sbert_cosine`, `semantic_search`, `cross_encoder`,
 `bertscore`; model names must be on the algorithm allow-list and large
 downloads gated as described in [Resource gate](#resource-gate)
-(unknown measures/models are logged and skipped, never fatal). `all` is the
-legacy `HF_MODELS_PRELOAD=true` behaviour. The current configured profile shows
-under `/metrics` as `"warm"` and the actually-resident models under
-`model_cache.keys`. See [Resource requirements](#resource-requirements).
+(unknown measures/models are logged and skipped, never fatal). The current
+configured profile shows under `/metrics` as `"warm"` and the actually-resident
+models under `model_cache.keys`. See [Resource requirements](#resource-requirements).
 
 The `conceptnet_numberbatch` variant's behavior no longer depends on the build: both
 images serve it through the optional ConceptNet sidecar (or return `502/503` when the

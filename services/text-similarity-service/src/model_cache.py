@@ -311,76 +311,78 @@ def _extract_nltk_zip(resource: str) -> None:
 
 ODENET_ID = "odenet:1.4"
 
-# ─── Warm-start preload (analogous to the ConceptNet sidecar) ──────────────
+# ─── HF preload: ONE switch for disk pre-cache AND RAM warm-start ──────────
 #
-# By default the service starts COLD: no model is loaded, so boot is fast
-# (~1s) and idle RAM is tiny (~0.05 GB), but the FIRST request for a model
-# pays the full load time (downloading is pre-cached in the hf image, so it's
-# disk->RAM only, ~6-21s for a transformer).
+# ``HF_PRELOAD`` is a single build-arg (baked into the image as ENV) that
+# controls BOTH how many model weights land on the IMAGE DISK at build time and
+# how many are warmed into RAM at container start:
 #
-# The set of models to warm at startup is BAKED IN at image build time via the
-# ``HF_PRELOAD`` build-arg (stored as an ENV in the image):
-#   off (default)  — nothing preloaded; a fresh container is fully lazy.
-#   all            — warm every advertised HF model (the old
-#                    ``HF_MODELS_PRELOAD=true`` behaviour): higher idle RAM,
-#                    no first-request delay.
-#   measure:model[,measure:model...] — PARTIAL lazy: only the selected models
-#                    are warmed into RAM; every other advertised model stays
-#                    lazy and loads on its first request.
-# The legacy ``HF_MODELS_PRELOAD=true`` env is still honoured as a synonym for
-# ``all`` so existing deployments keep working. This mirrors the list of HF
-# models that the runtime catalog advertises (see the build-time pre-cache,
-# __precache_hf.py) so exactly the models a warm process would otherwise
-# lazily load are warm. It is a no-op in the base ``cpu`` profile (no [model]
+#   off (default)   — MODE 1 = cold start. Nothing is pre-downloaded to the
+#                     disk and nothing is warmed into RAM; every model is
+#                     lazy-loaded (and downloaded, if absent) on its first
+#                     request. Smallest image, no idle RAM.
+#   all             — MODE 2 = warm start. Every advertised HF model is
+#                     pre-downloaded to the image disk at build time AND loaded
+#                     into RAM at startup: higher idle RAM, but the first
+#                     request is served in milliseconds with no network.
+#   measure:model[,measure:model...] — PARTIAL. Only the selected models are
+#                     pre-downloaded to disk and warmed into RAM; everything
+#                     else is not present at all (lazy download at runtime).
+#
+# The same selection drives the build-time disk pre-cache (__precache_hf.py)
+# and the runtime RAM warm-start (warm_start), so "what runs warm" and "what is
+# on disk" can never drift apart. The maps below are the single source of truth
+# for both: each advertised model is keyed by measure and knows the loader
+# strategy it needs. It is a no-op in the base ``cpu`` profile (no [model]
 # extra installed).
 HF_PRELOAD_ENV = "HF_PRELOAD"
-_LEGACY_PRELOAD_ENV = "HF_MODELS_PRELOAD"
 
-_DFLT_PRELOAD_HF = (
-    ("sbert_cosine", "all-MiniLM-L6-v2"),
-    ("sbert_cosine", "all-mpnet-base-v2"),
-    ("sbert_cosine", "paraphrase-multilingual-MiniLM-L12-v2"),
-    ("cross_encoder", "cross-encoder/stsb-roberta-base"),
-    ("bertscore", "roberta-large"),
-)
-
-
-def _normalize_measure(measure: str) -> str:
-    """Map a measure name to the allowlist key it must be validated against.
-
-    ``semantic_search`` reuses the ``sbert_cosine`` allowlist (same underlying
-    SentenceTransformer models); everything else maps 1:1. An unknown measure
-    returns itself, so it simply fails validation below instead.
-    """
-    return "sbert_cosine" if measure == "semantic_search" else measure
+# Every advertised HF model mapped to the loader it needs, as a nested dict so a
+# partial list can be validated and executed directly.
+_DFLT_PRELOAD_HF: dict[str, set[str]] = {
+    "sbert_cosine": {
+        "all-MiniLM-L6-v2",
+        "all-mpnet-base-v2",
+        "paraphrase-multilingual-MiniLM-L12-v2",
+    },
+    "cross_encoder": {
+        "cross-encoder/stsb-roberta-base",
+    },
+    "bertscore": {
+        "roberta-large",
+    },
+}
 
 
-def _parse_preload_spec() -> list[tuple[str, str]]:
-    """Resolve the ``HF_PRELOAD`` env into an ordered list of (measure, model).
+def _semantic_search_measures() -> set[str]:
+    """The measure names that load a SentenceTransformer (SBERT-family)."""
+    return {"sbert_cosine", "semantic_search"}
 
-    Accepts:
-      unset/off/none/false            -> ``[]`` (fully lazy)
-      all/true/1                      -> the whole ``_DFLT_PRELOAD_HF`` list
-      a CSV of ``measure:model`` pairs -> only those selected models
-    Unknown measures, models off the allowlist, or malformed entries are
-    logged and skipped (never fatal — warm start must not break boot). The
-    legacy ``HF_MODELS_PRELOAD=true`` env is treated as ``all``.
+
+def _preload_entries(raw: str | None) -> list[tuple[str, str]]:
+    """Parse a raw ``HF_PRELOAD`` value into an ordered list of (measure, model).
+
+    Accepts ``off``/``none``/``false``/empty (-> ``[]``), ``all``/``true``/``1``
+    (-> every advertised model), or a CSV of ``measure:model`` pairs. Unknown
+    measures, models off the allow-list, and malformed entries are logged and
+    skipped (never fatal — a warm start / pre-cache must never break boot).
+    ``raw=None`` reads the env.
     """
     import logging
     import re
 
     logger = logging.getLogger(__name__)
+    if raw is None:
+        raw = os.environ.get(HF_PRELOAD_ENV, "")
 
-    raw = os.environ.get(HF_PRELOAD_ENV, "").strip()
-    if raw.lower() in ("", "off", "none", "false", "0"):
-        if os.environ.get(_LEGACY_PRELOAD_ENV, "").lower() in ("1", "true", "yes"):
-            return list(_DFLT_PRELOAD_HF)
+    value = raw.strip()
+    if value.lower() in ("", "off", "none", "false", "0"):
         return []
-    if raw.lower() in ("all", "true", "1"):
-        return list(_DFLT_PRELOAD_HF)
+    if value.lower() in ("all", "true", "1"):
+        return [(m, n) for m, names in _DFLT_PRELOAD_HF.items() for n in names]
 
     selected: list[tuple[str, str]] = []
-    for entry in raw.split(","):
+    for entry in value.split(","):
         entry = entry.strip()
         if not entry:
             continue
@@ -389,12 +391,15 @@ def _parse_preload_spec() -> list[tuple[str, str]]:
             logger.warning("HF_PRELOAD: ignoring malformed entry %r (expected measure:model)", entry)
             continue
         measure, model = match.group(1).strip(), match.group(2).strip()
-        allowed = _ALLOWED_BASE_MODELS.get(_normalize_measure(measure))
-        if allowed is None:
+        if measure not in _ALLOWED_BASE_MODELS:
             logger.warning("HF_PRELOAD: unknown measure %r; ignoring %r", measure, entry)
             continue
+        # Map semantic_search / sbert_cosine onto the shared SBERT loader while
+        # still returning the caller's original measure name.
+        loader_key = "sbert_cosine" if measure in _semantic_search_measures() else measure
+        allowed = _ALLOWED_BASE_MODELS.get(loader_key)
         base = _normalize_hf_name(model)
-        if base not in allowed:
+        if allowed is None or base not in allowed:
             logger.warning(
                 "HF_PRELOAD: model %r not on the allow-list for measure %r; ignoring %r",
                 model,
@@ -406,38 +411,6 @@ def _parse_preload_spec() -> list[tuple[str, str]]:
     return selected
 
 
-def warm_start() -> None:
-    """Preload the selected HF models into the in-process cache at startup.
-
-    The selection comes from the ``HF_PRELOAD`` env (baked in at build time) —
-    ``off`` (default), ``all``, or a partial ``measure:model`` list. Returns
-    without doing anything when the selection is empty, when the optional
-    PyTorch stack is not installed, or when a model fails to load (a warm
-    start must never prevent the app from booting — it just relaxes to lazy
-    loading for that model). Logs each model as it is loaded so operators can
-    observe the warm-up.
-    """
-    import logging
-
-    logger = logging.getLogger(__name__)
-    for measure, model_name in _parse_preload_spec():
-        try:
-            if measure == "sbert_cosine":
-                get_sbert_model(model_name)
-            elif measure == "cross_encoder":
-                get_cross_encoder_model(model_name)
-            elif measure == "bertscore":
-                # BERTScore keeps roberta-large in its own module-level cache,
-                # not via ``_get``, so warm it by wrapping a scorer (this loads
-                # the checkpoint + tokenizer into the module-level singleton).
-                from bert_score import BERTScorer
-
-                BERTScorer(lang="en", model_type=model_name)
-            logger.info("warm-start loaded %s(%s)", measure, model_name)
-        except Exception:  # noqa: BLE001  # warm start must be non-fatal
-            logger.warning("warm-start failed for %s(%s); models stay lazy", measure, model_name)
-
-
 def is_warm() -> bool:
     """Whether the configured ``HF_PRELOAD`` profile warms any model (for /metrics).
 
@@ -445,7 +418,52 @@ def is_warm() -> bool:
     False for ``off``. Note this reports the *configured* selection, not
     whether those models actually finished loading (see ``cache_summary``).
     """
-    return bool(_parse_preload_spec())
+    return bool(_preload_entries(None))
+
+
+def load_model(measure: str, model_name: str) -> None:
+    """Load a single model into the process cache (RAM warm-start step).
+
+    Dispatches on the measure to the right loader: SBERT measures through
+    ``get_sbert_model``, cross-encoder through ``get_cross_encoder_model``, and
+    bertscore through its module-level singleton scorer. Raises on failure so
+    the caller decides how to handle it.
+    """
+    if measure in _semantic_search_measures():
+        get_sbert_model(model_name)
+    elif measure == "cross_encoder":
+        get_cross_encoder_model(model_name)
+    elif measure == "bertscore":
+        # BERTScore keeps roberta-large in its own module-level cache, not via
+        # ``_get``, so never call the lazy getter; wrap a scorer directly (this
+        # loads the checkpoint + tokenizer into the module-level singleton).
+        from bert_score import BERTScorer
+
+        BERTScorer(lang="en", model_type=model_name)
+    else:  # pragma: no cover - guarded by _preload_entries validation
+        raise ValueError(f"no loader for measure {measure!r}")
+
+
+def warm_start() -> None:
+    """Load the selected HF models into RAM at startup (``HF_PRELOAD``).
+
+    The selection comes from the ``HF_PRELOAD`` env (baked in at build time):
+    ``off`` (default = cold), ``all``, or a partial ``measure:model`` list.
+    Returns without doing anything when the selection is empty, when the
+    optional PyTorch stack is not installed, or when a model fails to load (a
+    warm start must never prevent the app from booting — it relaxes to lazy
+    loading for that model). Logs each model as it is loaded so operators can
+    observe the warm-up.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    for measure, model_name in _preload_entries(None):
+        try:
+            load_model(measure, model_name)
+            logger.info("warm-start loaded %s(%s)", measure, model_name)
+        except Exception:  # noqa: BLE001  # warm start must be non-fatal
+            logger.warning("warm-start failed for %s(%s); models stay lazy", measure, model_name)
 
 
 def cache_summary() -> dict[str, Any]:
