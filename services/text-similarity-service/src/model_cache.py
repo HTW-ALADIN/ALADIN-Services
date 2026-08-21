@@ -309,6 +309,32 @@ def _extract_nltk_zip(resource: str) -> None:
                 zf.extractall(corpora_dir)
 
 
+# Information-content corpus for the IC-based WordNet similarity variants
+# (res / jcn / lin). The caller must NOT supply the corpus itself over the wire —
+# NLTK's IC structure uses integer synset-offset keys, which JSON always coerces
+# to strings, so a JSON round-trip silently breaks the lookups. Instead the
+# canonical IC corpus is loaded server-side (cached), and ``params.ic`` merely
+# names which published ``wordnet_ic`` corpus file to use (default ``ic-brown.dat``).
+_IC_CACHE: dict[str, Any] = {}
+_DEFAULT_IC = "ic-brown.dat"
+
+
+def get_wordnet_ic(corpus: str | None = None) -> Any:
+    """Return a cached NLTK Information-Content corpus.
+
+    ``corpus`` selects the published ``wordnet_ic`` file (e.g. ``ic-brown.dat``,
+    ``ic-semcor.dat``, ``ic-shakespeare-wln.freq``). It is resolved server-side
+    only; raw IC objects cannot be provided by clients (see module docstring).
+    """
+    ensure_wordnet()
+    name = corpus or _DEFAULT_IC
+    if name not in _IC_CACHE:
+        from nltk.corpus import wordnet_ic
+
+        _IC_CACHE[name] = wordnet_ic.ic(name)
+    return _IC_CACHE[name]
+
+
 ODENET_ID = "odenet:1.4"
 
 # ─── HF preload: ONE switch for disk pre-cache AND RAM warm-start ──────────

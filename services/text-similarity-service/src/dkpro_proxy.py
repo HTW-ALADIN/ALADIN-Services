@@ -8,6 +8,7 @@ environment variable (defaults to http://localhost:8100).
 """
 
 import os
+import threading
 import time
 from typing import Any
 
@@ -25,6 +26,33 @@ DKPRO_BACKEND_EXTENSIONS = {
 }
 
 _TIMEOUT = httpx.Timeout(120.0, connect=5.0)
+
+_REACH_LOCK = threading.Lock()
+_REACH_TS = 0.0
+_REACH_CACHE = False
+_REACH_CACHE_SECONDS = 5.0
+
+
+def is_dkpro_reachable() -> bool:
+    """Best-effort live check that the DKPro sidecar is up (cached briefly).
+
+    Unlike the ConceptNet sidecar there is no ``/health/ready``; probe the
+    sidecar's own health endpoint. Used by the discovery endpoint; never raises.
+    """
+    global _REACH_TS, _REACH_CACHE
+    with _REACH_LOCK:
+        now = time.monotonic()
+        if now - _REACH_TS < _REACH_CACHE_SECONDS:
+            return _REACH_CACHE
+    try:
+        with httpx.Client(timeout=httpx.Timeout(1.0, connect=1.0)) as client:
+            ok = client.get(f"{SIDECAR_BASE_URL}/v1/dkpro/health").status_code == 200
+    except httpx.HTTPError:
+        ok = False
+    with _REACH_LOCK:
+        _REACH_TS = time.monotonic()
+        _REACH_CACHE = ok
+    return ok
 
 
 def is_dkpro_request(measure: str, backend: str | None) -> bool:

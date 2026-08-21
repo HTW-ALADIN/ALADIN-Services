@@ -177,6 +177,53 @@ def _sbert_cosine(input_data: dict[str, Any], params: dict[str, Any]) -> dict[st
     return _normalize_similarity(sim, "sbert_cosine", "sentence_transformers")
 
 
+def sbert_cosine_batch(pairs: list[dict[str, Any]], params: dict[str, Any]) -> list[dict[str, Any]]:
+    """Compute SBERT cosine similarity for a whole batch in ONE ``model.encode`` call.
+
+    ``pairs`` are ``{"id", "text_a", "text_b"}`` dicts. Encoding every text in a
+    single vectorized call (instead of one ``encode([a, b])`` per pair) is far
+    faster for large batches and matches the batched local-ConceptNet path's
+    request-level batching behaviour.
+    """
+    import time
+
+    import numpy as np
+
+    from .model_cache import get_sbert_model, require_allowed_model
+
+    model_name = params.get("model_name", "all-MiniLM-L6-v2")
+    require_allowed_model("sbert_cosine", model_name)
+    model = get_sbert_model(model_name)
+
+    # De-duplicate texts so an identical string is encoded once, not per pair.
+    texts: list[str] = []
+    index: dict[str, int] = {}
+    for p in pairs:
+        for t in (p["text_a"], p["text_b"]):
+            if t not in index:
+                index[t] = len(texts)
+                texts.append(t)
+
+    start = time.monotonic()
+    embeddings = model.encode(texts)
+    elapsed = time.monotonic() - start
+
+    results = []
+    for p in pairs:
+        va = embeddings[index[p["text_a"]]]
+        vb = embeddings[index[p["text_b"]]]
+        na = float(np.linalg.norm(va))
+        nb = float(np.linalg.norm(vb))
+        if na == 0.0 or nb == 0.0:
+            sim = 0.0
+        else:
+            sim = float(np.dot(va, vb) / (na * nb))
+        res = _normalize_similarity(sim, "sbert_cosine", "sentence_transformers")
+        res["compute_time_ms"] = round(elapsed * 1000, 2)
+        results.append({"id": p["id"], "result": res})
+    return results
+
+
 # ─── WMD ──────────────────────────────────────────────────────────────────────
 
 
@@ -212,15 +259,29 @@ def _cross_encoder(input_data: dict[str, Any], params: dict[str, Any]) -> dict[s
 # ─── WordNet similarity ───────────────────────────────────────────────────────
 
 
+_IC_VARIANTS = {"res", "jcn", "lin"}
+
+
 def _wordnet_similarity_nltk(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    from nltk.corpus import wordnet as wn
+
     from .model_cache import ensure_wordnet
 
     ensure_wordnet()
-    from nltk.corpus import wordnet as wn
 
     a = input_data.get("text_a", "")
     b = input_data.get("text_b", "")
     variant = params.get("variant", "path")
+
+    # IC-based variants (res/jcn/lin) load the Information-Content corpus server-side
+    # (cached). ``params.ic`` only selects which published wordnet_ic file to use
+    # (e.g. "ic-brown.dat"); a raw IC object cannot cross the JSON boundary because
+    # its integer synset-offset keys would be coerced to strings.
+    ic = None
+    if variant in _IC_VARIANTS:
+        from .model_cache import get_wordnet_ic
+
+        ic = get_wordnet_ic(params.get("ic"))
 
     synsets_a = wn.synsets(a)
     synsets_b = wn.synsets(b)
@@ -230,45 +291,21 @@ def _wordnet_similarity_nltk(input_data: dict[str, Any], params: dict[str, Any])
     best = -1.0
     for sa in synsets_a:
         for sb in synsets_b:
-            if variant == "wup":
-                try:
+            try:
+                if variant == "wup":
                     val = sa.wup_similarity(sb)
-                except Exception:  # noqa: BLE001
-                    val = None
-            elif variant == "lch":
-                try:
+                elif variant == "lch":
                     val = sa.lch_similarity(sb)
-                except Exception:  # noqa: BLE001
-                    val = None
-            elif variant == "res":
-                ic = params.get("ic")
-                if ic is None:
-                    raise ValueError("Information Content corpus required for 'res' variant. Use nltk.download('wordnet_ic')")
-                try:
+                elif variant == "res":
                     val = sa.res_similarity(sb, ic)
-                except Exception:  # noqa: BLE001
-                    val = None
-            elif variant == "jcn":
-                ic = params.get("ic")
-                if ic is None:
-                    raise ValueError("Information Content corpus required for 'jcn' variant. Use nltk.download('wordnet_ic')")
-                try:
+                elif variant == "jcn":
                     val = sa.jcn_similarity(sb, ic)
-                except Exception:  # noqa: BLE001
-                    val = None
-            elif variant == "lin":
-                ic = params.get("ic")
-                if ic is None:
-                    raise ValueError("Information Content corpus required for 'lin' variant. Use nltk.download('wordnet_ic')")
-                try:
+                elif variant == "lin":
                     val = sa.lin_similarity(sb, ic)
-                except Exception:  # noqa: BLE001
-                    val = None
-            else:  # path
-                try:
+                else:  # path
                     val = sa.path_similarity(sb)
-                except Exception:  # noqa: BLE001
-                    val = None
+            except Exception:  # noqa: BLE001
+                val = None
             if val is not None and val > best:
                 best = val
 

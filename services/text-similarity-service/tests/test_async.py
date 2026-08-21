@@ -19,7 +19,13 @@ class TestModelCache:
 
 
 class TestWordNetIC:
-    """WordNet Information Content dependency documentation."""
+    """WordNet Information Content handling.
+
+    The IC-based variants (res/jcn/lin) load the Information-Content corpus
+    server-side (cached), so a caller never has to supply it (a raw IC object
+    cannot cross the JSON boundary — its integer synset-offset keys are coerced
+    to strings). ``params.ic`` is an optional published-corpus-filename override.
+    """
 
     @pytest.fixture(autouse=True)
     def _require_wordnet(self):
@@ -32,33 +38,34 @@ class TestWordNetIC:
         except LookupError:
             pytest.skip("NLTK wordnet data not downloaded")
 
-    def test_ic_required_error(self):
-        """res/jcn/lin variants should fail with a clear message if IC not provided."""
+    @pytest.mark.parametrize("variant", ["res", "jcn", "lin"])
+    def test_ic_variants_work_without_explicit_corpus(self, variant):
+        """res/jcn/lin compute a real value out of the box; no corpus supplied."""
         from src.similarity import compute_similarity
 
-        with pytest.raises(ValueError, match="Information Content corpus"):
-            compute_similarity("wordnet_similarity", "nltk", {"text_a": "dog", "text_b": "cat"}, {"variant": "res"})
+        result = compute_similarity(
+            "wordnet_similarity",
+            "nltk",
+            {"text_a": "dog", "text_b": "cat"},
+            {"variant": variant},
+        )
+        assert result["raw"] is not None, f"{variant} should compute server-side"
 
-    def test_ic_required_error_jcn(self):
+    @pytest.mark.parametrize("variant", ["res", "jcn", "lin"])
+    def test_ic_variants_accept_corpus_name_override(self, variant):
+        """An explicit published corpus filename via params.ic is honoured."""
         from src.similarity import compute_similarity
 
-        with pytest.raises(ValueError, match="Information Content corpus"):
-            compute_similarity("wordnet_similarity", "nltk", {"text_a": "dog", "text_b": "cat"}, {"variant": "jcn"})
-
-    def test_ic_required_error_lin(self):
-        from src.similarity import compute_similarity
-
-        with pytest.raises(ValueError, match="Information Content corpus"):
-            compute_similarity("wordnet_similarity", "nltk", {"text_a": "dog", "text_b": "cat"}, {"variant": "lin"})
+        result = compute_similarity(
+            "wordnet_similarity",
+            "nltk",
+            {"text_a": "dog", "text_b": "cat"},
+            {"variant": variant, "ic": "ic-brown.dat"},
+        )
+        assert result["raw"] is not None
 
     def test_path_works_without_ic(self):
         """path variant should work without IC corpus."""
-        try:
-            from nltk.corpus import wordnet as wn
-
-            _ = wn.synsets("dog")
-        except LookupError:
-            pytest.skip("NLTK wordnet data not downloaded")
         from src.similarity import compute_similarity
 
         result = compute_similarity("wordnet_similarity", "nltk", {"text_a": "dog", "text_b": "cat"}, {"variant": "path"})

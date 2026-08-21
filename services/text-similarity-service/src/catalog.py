@@ -86,6 +86,8 @@ def _entry(
     requires_model: bool = False,
     requires_gpu: bool = False,
     requires_sidecar: bool = False,
+    sidecar: str | None = None,
+    is_placeholder: bool = False,
     variants: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Expand one algorithm into one catalog entry per backend."""
@@ -108,7 +110,9 @@ def _entry(
             "category": category,
             "requires_model": b.get("requires_model", requires_model),
             "requires_gpu": b.get("requires_gpu", requires_gpu),
-            "requires_sidecar": requires_sidecar,
+            "requires_sidecar": b.get("requires_sidecar", requires_sidecar),
+            "sidecar": b.get("sidecar", sidecar),
+            "is_placeholder": b.get("is_placeholder", is_placeholder),
         }
         for key in ("language", "extra", "variants", "alias_of", "fixed_variant"):
             if key in b:
@@ -135,6 +139,7 @@ CATALOG: list[dict[str, Any]] = [
         # ``conceptnet_numberbatch`` (local default) is served by the optional
         # ConceptNet sidecar and is independent of the build profile.
         requires_sidecar=True,
+        sidecar="conceptnet",
         variants=["glove", "fasttext", "conceptnet_numberbatch"],
     ),
     *_entry(
@@ -175,7 +180,11 @@ CATALOG: list[dict[str, Any]] = [
         "wordnet_similarity",
         _backends(
             ("nltk", "NLTK synset path/wup/lch/res/jcn/lin similarity"),
-            ("dkpro", "DKPro WordNetComparator (Java sidecar)", {"extra": "dkpro"}),
+            (
+                "dkpro",
+                "DKPro WordNetComparator (Java sidecar) — placeholder, always returns 0.5",
+                {"requires_sidecar": True, "sidecar": "dkpro", "is_placeholder": True},
+            ),
         ),
         "WordNet path/IC similarity — Path/WUP/LCH/Resnik/JCN/Lin",
         score_range="[0,inf)",
@@ -188,7 +197,11 @@ CATALOG: list[dict[str, Any]] = [
         "tfidf_cosine",
         _backends(
             ("sklearn", "sklearn TfidfVectorizer + cosine_similarity"),
-            ("dkpro", "DKPro CosineSimilarity (Java sidecar)", {"extra": "dkpro"}),
+            (
+                "dkpro",
+                "DKPro CosineSimilarity (Java sidecar) — placeholder, always returns 0.5",
+                {"requires_sidecar": True, "sidecar": "dkpro", "is_placeholder": True},
+            ),
         ),
         "TF-IDF vector-space cosine similarity",
         granularity="document",
@@ -237,20 +250,38 @@ CATALOG: list[dict[str, Any]] = [
     *_entry(
         "similarity",
         "topic_model",
-        _backends(("dkpro", "DKPro LSA/ESA (Java sidecar)", {"extra": "dkpro"})),
+        _backends(
+            (
+                "dkpro",
+                "DKPro LSA/ESA (Java sidecar) — placeholder, always returns 0.5",
+                {"requires_sidecar": True, "sidecar": "dkpro", "is_placeholder": True},
+            ),
+        ),
         "Topic-model-based similarity — LSA/ESA",
         granularity="document",
         stateful=True,
         category="topic",
+        requires_sidecar=True,
+        sidecar="dkpro",
+        is_placeholder=True,
     ),
     *_entry(
         "similarity",
         "structural_stylistic",
-        _backends(("dkpro", "DKPro n-gram containment/TTR/greedy string tiling (Java sidecar)", {"extra": "dkpro"})),
+        _backends(
+            (
+                "dkpro",
+                "DKPro n-gram containment/TTR/greedy string tiling (Java sidecar) — placeholder, always returns 0.5",
+                {"requires_sidecar": True, "sidecar": "dkpro", "is_placeholder": True},
+            ),
+        ),
         "Structural/stylistic text similarity — n-gram containment/TTR/greedy string tiling",
         granularity="document",
         stateful=True,
         category="structural",
+        requires_sidecar=True,
+        sidecar="dkpro",
+        is_placeholder=True,
     ),
     # ── retrieval ──────────────────────────────────────────────────────────
     # semantic_search is sentence-transformers only ([model]-only) — the former

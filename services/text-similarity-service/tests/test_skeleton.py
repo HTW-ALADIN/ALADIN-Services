@@ -42,6 +42,10 @@ def test_algorithms_catalog(profile_client):
         assert "category" in entry
         assert "requires_model" in entry
         assert "requires_gpu" in entry
+        # Sidecar / placeholder metadata is always present (defaults off)
+        assert "requires_sidecar" in entry
+        assert "sidecar" in entry
+        assert "is_placeholder" in entry
     # Verify semantic algorithms exist
     assert "wordnet_similarity" in algorithms
     assert "embedding_cosine" in algorithms
@@ -191,3 +195,35 @@ def test_compute_synonym():
     assert resp.status_code == 200
     body = resp.json()
     assert body["results"][0]["result"]["count"] > 0
+
+
+def test_dkpro_backends_flagged_as_placeholders(profile_client):
+    """Backends served solely by the (not yet implemented) DKPro sidecar must be
+    advertised as placeholders so consumers never mistake a constant 0.5 for a
+    real similarity score."""
+    catalog = profile_client("pytorch").get("/v1/similarity/text/algorithms").json()
+    dkpro_entries = [e for e in catalog if e.get("sidecar") == "dkpro"]
+    assert dkpro_entries, "expected at least one dkpro-sidecar entry"
+    # topic_model, structural_stylistic, tfidf_cosine/dkpro, wordnet_similarity/dkpro
+    expected = {
+        ("topic_model", "dkpro"),
+        ("structural_stylistic", "dkpro"),
+        ("tfidf_cosine", "dkpro"),
+        ("wordnet_similarity", "dkpro"),
+    }
+    actual = {(e["algorithm"], e["backend"]) for e in dkpro_entries}
+    assert expected.issubset(actual)
+    for e in dkpro_entries:
+        assert e["is_placeholder"] is True
+        assert e["requires_sidecar"] is True
+        assert "sidecar_reachable" in e  # live flag injected by the discovery endpoint
+
+
+def test_conceptnet_backend_marked_and_reachable_flag(profile_client):
+    """embedding_cosine relies on the ConceptNet sidecar and exposes a live
+    reachability flag from discovery."""
+    catalog = profile_client().get("/v1/similarity/text/algorithms").json()
+    emb = [e for e in catalog if e["algorithm"] == "embedding_cosine"][0]
+    assert emb["requires_sidecar"] is True
+    assert emb["sidecar"] == "conceptnet"
+    assert "sidecar_reachable" in emb

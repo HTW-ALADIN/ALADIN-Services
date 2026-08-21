@@ -34,8 +34,8 @@ class TestIsDkproRequest:
 
 
 class TestSidecarFailure:
-    def test_sidecar_unreachable_returns_502(self, monkeypatch):
-        """Simulated sidecar failure: connection refused -> clean problem+json 502."""
+    def test_sidecar_unreachable_returns_503(self, monkeypatch):
+        """Connection failure (ConnectError) -> clean problem+json 503 (soft degradation)."""
         monkeypatch.setattr("src.dkpro_proxy.SIDECAR_BASE_URL", "http://127.0.0.1:59999")
 
         resp = client.post(
@@ -46,13 +46,13 @@ class TestSidecarFailure:
                 "inputs": [{"id": "p1", "a": "The cat sat on the mat.", "b": "A dog sat on the rug."}],
             },
         )
-        assert resp.status_code in (502, 503)
+        assert resp.status_code == 503
         body = resp.json()
         assert "title" in body
         assert "detail" in body
 
     def test_optional_backend_sidecar_unreachable(self, monkeypatch):
-        """Optional DKPro backends should also return clean 502/503 on failure."""
+        """Optional DKPro backends should also return clean 503 on connection failure."""
         monkeypatch.setattr("src.dkpro_proxy.SIDECAR_BASE_URL", "http://127.0.0.1:59999")
 
         for algorithm in ("tfidf_cosine", "wordnet_similarity"):
@@ -65,10 +65,58 @@ class TestSidecarFailure:
                     "inputs": [{"id": "p1", "a": "test a", "b": "test b"}],
                 },
             )
-            assert resp.status_code in (502, 503), f"Algorithm {algorithm} did not return 502/503 on sidecar failure: {resp.status_code}"
+            assert resp.status_code == 503, f"Algorithm {algorithm} did not return 503 on connection failure: {resp.status_code}"
             body = resp.json()
             assert "title" in body
             assert "detail" in body
+
+    def test_sidecar_upstream_error_returns_502(self, monkeypatch):
+        """An upstream error from the sidecar (HTTP >= 400) -> 502, not 503."""
+        from unittest.mock import MagicMock
+
+        import httpx
+        import src.dkpro_proxy as dkpro_proxy
+
+        class FakeErrorResp:
+            status_code = 500
+
+            def json(self):
+                return {"error": "boom"}
+
+            @property
+            def text(self):
+                return "boom"
+
+        class FakeClient:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def post(self, url, json):
+                resp = FakeErrorResp()
+                raise httpx.HTTPStatusError(
+                    "sidecar error",
+                    request=MagicMock(),
+                    response=resp,
+                )
+
+        original = dkpro_proxy.httpx.Client
+        dkpro_proxy.httpx.Client = lambda timeout=None: FakeClient()
+        try:
+            resp = client.post(
+                "/v1/similarity/text/distance",
+                json={
+                    "algorithm": "topic_model",
+                    "params": {"variant": "lsa"},
+                    "inputs": [{"id": "p1", "a": "a", "b": "b"}],
+                },
+            )
+        finally:
+            dkpro_proxy.httpx.Client = original
+        assert resp.status_code == 502
+        assert "DKPro sidecar" in resp.json()["detail"]
 
 
 class TestProxyNormalization:

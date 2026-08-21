@@ -21,7 +21,7 @@ Before using this service, understand **three independent decisions**. Everythin
 - `text-similarity-hf` is the recommended light "everything-else" deployment: built with [`HF_PRELOAD=all`](#hf_preload-build-arg) it pre-caches all HuggingFace models (`all-MiniLM-L6-v2`, `all-mpnet-base-v2`, `paraphrase-multilingual-MiniLM-L12-v2`, `stsb-roberta-base`, `roberta-large`) to disk at build time (and warms them into RAM at start), so SBERT/cross-encoder/BERTScore serve instantly from a fresh container — offline. It is the **only** full-feature build; ConceptNet Numberbatch is served by the optional sidecar, never pre-cached into the image.
 - `embedding_cosine` / `conceptnet_numberbatch` with `params.backend=local` is served by the ConceptNet sidecar; with no sidecar configured it returns `502/503` (see below), never a local in-process computation or download.
 
-**2. Is the optional Java DKPro sidecar running?** If yes, you also get `topic_model`, `structural_stylistic`, and `dkpro` backends for two base algorithms. If no, those requests fail with `502/503`.
+**2. Is the optional Java DKPro sidecar running?** If yes, you also get `topic_model`, `structural_stylistic`, and `dkpro` backends for two base algorithms. If no, those requests fail with `502/503`. **Caution:** the DKPro sidecar is currently a scaffold — those backends return a constant placeholder score of `0.5` and are flagged `"is_placeholder": true` in the catalog (see the table notes below).
 
 **3. Is the optional ConceptNet sidecar running?** If yes, `embedding_cosine` / `conceptnet_numberbatch` / `params.backend: local` is served by the separate `conceptnet-sidecar` process. If no, those requests fail with `502/503`. See [ConceptNet sidecar](#conceptnet-sidecar).
 
@@ -36,7 +36,7 @@ Before using this service, understand **three independent decisions**. Everythin
 
 | Endpoint | Algorithm | Backend | Runs in | Variants / notes |
 |---|---|---|---|---|
-| `/distance` | `wordnet_similarity` | `nltk`, `dkpro`\* | **cpu** + pytorch | `path` (default), `wup`, `lch`, `res`, `jcn`, `lin` |
+| `/distance` | `wordnet_similarity` | `nltk`, `dkpro`\* | **cpu** + pytorch | `path` (default), `wup`, `lch`, `res`, `jcn`, `lin` — IC variants load the corpus server-side |
 | `/distance` | `tfidf_cosine` | `sklearn`, `dkpro`\* | **cpu** + pytorch | vector-space cosine |
 | `/distance` | `token_set_overlap` | `builtin` | **cpu** + pytorch | `jaccard` (default) / `dice` |
 | `/distance` | `jaccard` / `dice` | `builtin` | **cpu** + pytorch | legacy aliases of `token_set_overlap` |
@@ -51,7 +51,7 @@ Before using this service, understand **three independent decisions**. Everythin
 | `/retrieval` | `semantic_search` | `sentence_transformers` | **hf** | nearest-neighbor retrieval |
 | `/lexical` | `synonym` / `antonym` / `hypernym` / `hyponym` | `nltk`, `odenet` | **cpu** + pytorch | `odenet` = German (needs `[de]` extra) |
 
-\* `dkpro` backend requires the Java sidecar — works with **either** image.
+\* `dkpro` backend requires the Java sidecar — works with **either** image. **Note:** the Java sidecar is currently a *scaffold*: `topic_model`, `structural_stylistic`, and the `dkpro` backends of `tfidf_cosine`/`wordnet_similarity` return a constant placeholder score of `0.5`. They are flagged `"is_placeholder": true` in `GET /v1/similarity/text/algorithms` until DKPro Similarity is built from source (see `dkpro-sidecar/README.md`).
 † Large download — gated (see [Resource gate](#resource-gate-for-large-downloads)).
 
 ### Notable algorithms
