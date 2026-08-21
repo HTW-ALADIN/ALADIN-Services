@@ -47,7 +47,7 @@ describe('LLMTaskDescriptionGenerationEngine', () => {
 	});
 
 	describe('generateTaskFromQuery (default)', () => {
-		it('issues a single gateway call at temperature 0 with the four system messages', async () => {
+		it('issues a single gateway call at temperature 0 with one system message and one user message', async () => {
 			stubClient.generate.mockResolvedValue('default description');
 			const result = await engine.generateTaskFromQuery({
 				query: 'SELECT name FROM products',
@@ -63,14 +63,16 @@ describe('LLMTaskDescriptionGenerationEngine', () => {
 			expect(config).toEqual(GATEWAY);
 			expect(request.temperature).toBe(0);
 			const roles = request.messages.map((m: any) => m.role);
-			expect(roles).toEqual(['system', 'system', 'system', 'system']);
+			expect(roles).toEqual(['system', 'user']);
 			expect(request.messages[0].parts[0].text).toContain(
 				'You are a helpful assistant',
 			);
-			expect(request.messages[1].parts[0].text).toBe(
+			expect(request.messages[1].parts[0].text).toContain(
 				'This is the query: SELECT name FROM products',
 			);
-			expect(request.messages[3].parts[0].text).toBe('Respond in English.');
+			expect(request.messages[1].parts[0].text).toContain(
+				'Respond in English.',
+			);
 			// every message is a valid UIMessage (id + parts)
 			for (const message of request.messages) {
 				expect(typeof message.id).toBe('string');
@@ -88,7 +90,7 @@ describe('LLMTaskDescriptionGenerationEngine', () => {
 				llmGateway: GATEWAY,
 			});
 			const request = stubClient.generate.mock.calls[0][1];
-			expect(request.messages[3].parts[0].text).toBe(
+			expect(request.messages[1].parts[0].text).toContain(
 				'Antworte auf Deutsch.',
 			);
 		});
@@ -154,7 +156,7 @@ describe('LLMTaskDescriptionGenerationEngine', () => {
 				expect(request.temperature).toBe(0);
 			}
 			// step 2 receives the entity description from step 1
-			expect(calls[1][1].messages[2].parts[0].text).toContain('entity desc');
+			expect(calls[1][1].messages[1].parts[0].text).toContain('entity desc');
 			// intermediate results flow into the final prompt
 			expect(calls[5][1].messages[1].parts[0].text).toContain(
 				'part description for Given the following query part: SELECT',
@@ -177,7 +179,7 @@ describe('LLMTaskDescriptionGenerationEngine', () => {
 	});
 
 	describe('generateNLGTaskFromTemplateTask', () => {
-		it('post-processes a template description with five system messages at temperature 0', async () => {
+		it('post-processes a template description with one system message and one user message at temperature 0', async () => {
 			stubClient.generate.mockResolvedValue('improved description');
 			const result = await engine.generateNLGTaskFromTemplateTask(
 				'SELECT name FROM products',
@@ -191,8 +193,8 @@ describe('LLMTaskDescriptionGenerationEngine', () => {
 			const [config, request] = stubClient.generate.mock.calls[0];
 			expect(config).toEqual(GATEWAY);
 			expect(request.temperature).toBe(0);
-			expect(request.messages).toHaveLength(5);
-			expect(request.messages[3].parts[0].text).toBe(
+			expect(request.messages).toHaveLength(2);
+			expect(request.messages[1].parts[0].text).toContain(
 				'This is the task description that you should improve: Retrieve all names.',
 			);
 		});

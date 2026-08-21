@@ -259,6 +259,16 @@ import path from 'path';
  *             type: string
  *           description: Predicate operation types to use (e.g. "=", ">", "LIKE").
  *
+ *     DescriptionStrategy:
+ *       type: string
+ *       enum: [template, entityRelationship, schemaBased, creative, hybrid]
+ *       description: >
+ *         A task-description variant. Maps 1:1 to a TaskResponse description
+ *         field: template → templateBasedDescription, entityRelationship →
+ *         gptEntityRelationshipDescription, schemaBased →
+ *         gptSchemaBasedDescription, creative → gptCreativeDescription,
+ *         hybrid → hybridDescription.
+ *
  *     GenerateTaskRequest:
  *       type: object
  *       required:
@@ -274,15 +284,26 @@ import path from 'path';
  *           example: en
  *         llmGateway:
  *           $ref: '#/components/schemas/LlmGatewayConfig'
+ *         descriptionStrategy:
+ *           $ref: '#/components/schemas/DescriptionStrategy'
+ *           description: >
+ *             Single description variant to generate. Convenience alternative
+ *             to descriptionStrategies.
+ *         descriptionStrategies:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/DescriptionStrategy'
+ *           description: >
+ *             Description variants to generate. When neither this nor
+ *             descriptionStrategy is supplied, all variants are generated
+ *             (backward compatible); otherwise only the requested variants
+ *             are generated and the remaining response description fields are
+ *             omitted. Unrecognised values are ignored.
  *
  *     TaskResponse:
  *       type: object
  *       required:
  *         - query
- *         - templateBasedDescription
- *         - gptEntityRelationshipDescription
- *         - gptSchemaBasedDescription
- *         - hybridDescription
  *       properties:
  *         query:
  *           type: string
@@ -290,19 +311,34 @@ import path from 'path';
  *           example: SELECT name FROM customers WHERE age > 30
  *         templateBasedDescription:
  *           type: string
- *           description: AST-template-generated natural-language description.
+ *           description: >
+ *             AST-template-generated natural-language description. Present
+ *             when the template strategy was requested (or no strategies were
+ *             supplied).
  *         gptEntityRelationshipDescription:
  *           type: string
- *           description: LLM-generated description using entity-relationship context (multi-step).
+ *           description: >
+ *             LLM-generated description using entity-relationship context
+ *             (multi-step). Present when the entityRelationship strategy was
+ *             requested (or no strategies were supplied).
  *         gptSchemaBasedDescription:
  *           type: string
- *           description: LLM-generated description using the raw schema (default GPT option).
+ *           description: >
+ *             LLM-generated description using the raw schema (default GPT
+ *             option). Present when the schemaBased strategy was requested
+ *             (or no strategies were supplied).
  *         hybridDescription:
  *           type: string
- *           description: Hybrid (template + LLM) natural-language description.
+ *           description: >
+ *             Hybrid (template + LLM) natural-language description. Present
+ *             when the hybrid strategy was requested (or no strategies were
+ *             supplied).
  *         gptCreativeDescription:
  *           type: string
- *           description: LLM-generated creative description (temperature 0.7). May be absent.
+ *           description: >
+ *             LLM-generated creative description (temperature 0.7). Present
+ *             when the creative strategy was requested (or no strategies were
+ *             supplied).
  *
  *     # -----------------------------------------------------------------------
  *     # Description endpoint schemas
