@@ -340,7 +340,7 @@
     "/api/generation/generate": {
       "get": {
         "summary": "Generate a random SQL task",
-        "description": "Generates a random SQL SELECT query based on the supplied task configuration (join depth, aggregation, predicates, etc.) and produces up to five natural-language descriptions of the task using different generation strategies (template, LLM entity-relationship, LLM schema-based, LLM creative, hybrid). The database must have been previously registered via POST /api/database/analyze-database.\n",
+        "description": "Generates a random SQL SELECT query based on the supplied task configuration (join depth, aggregation, predicates, etc.) and produces natural-language descriptions of the task. By default all five description strategies (template, LLM entity-relationship, LLM schema-based, LLM creative, hybrid) are generated; supply `descriptionStrategy` or `descriptionStrategies` to generate only the requested variants (the remaining response fields are then omitted). The database must have been previously registered via POST /api/database/analyze-database.\n",
         "tags": [
           "Generation"
         ],
@@ -931,6 +931,17 @@
           }
         }
       },
+      "DescriptionStrategy": {
+        "type": "string",
+        "enum": [
+          "template",
+          "entityRelationship",
+          "schemaBased",
+          "creative",
+          "hybrid"
+        ],
+        "description": "A task-description variant. Maps 1:1 to a TaskResponse description field: template → templateBasedDescription, entityRelationship → gptEntityRelationshipDescription, schemaBased → gptSchemaBasedDescription, creative → gptCreativeDescription, hybrid → hybridDescription.\n"
+      },
       "GenerateTaskRequest": {
         "type": "object",
         "required": [
@@ -950,17 +961,24 @@
           },
           "llmGateway": {
             "$ref": "#/components/schemas/LlmGatewayConfig"
+          },
+          "descriptionStrategy": {
+            "$ref": "#/components/schemas/DescriptionStrategy",
+            "description": "Single description variant to generate. Convenience alternative to descriptionStrategies.\n"
+          },
+          "descriptionStrategies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DescriptionStrategy"
+            },
+            "description": "Description variants to generate. When neither this nor descriptionStrategy is supplied, all variants are generated (backward compatible); otherwise only the requested variants are generated and the remaining response description fields are omitted. Unrecognised values are ignored.\n"
           }
         }
       },
       "TaskResponse": {
         "type": "object",
         "required": [
-          "query",
-          "templateBasedDescription",
-          "gptEntityRelationshipDescription",
-          "gptSchemaBasedDescription",
-          "hybridDescription"
+          "query"
         ],
         "properties": {
           "query": {
@@ -970,23 +988,23 @@
           },
           "templateBasedDescription": {
             "type": "string",
-            "description": "AST-template-generated natural-language description."
+            "description": "AST-template-generated natural-language description. Present when the template strategy was requested (or no strategies were supplied).\n"
           },
           "gptEntityRelationshipDescription": {
             "type": "string",
-            "description": "LLM-generated description using entity-relationship context (multi-step)."
+            "description": "LLM-generated description using entity-relationship context (multi-step). Present when the entityRelationship strategy was requested (or no strategies were supplied).\n"
           },
           "gptSchemaBasedDescription": {
             "type": "string",
-            "description": "LLM-generated description using the raw schema (default GPT option)."
+            "description": "LLM-generated description using the raw schema (default GPT option). Present when the schemaBased strategy was requested (or no strategies were supplied).\n"
           },
           "hybridDescription": {
             "type": "string",
-            "description": "Hybrid (template + LLM) natural-language description."
+            "description": "Hybrid (template + LLM) natural-language description. Present when the hybrid strategy was requested (or no strategies were supplied).\n"
           },
           "gptCreativeDescription": {
             "type": "string",
-            "description": "LLM-generated creative description (temperature 0.7). May be absent."
+            "description": "LLM-generated creative description (temperature 0.7). Present when the creative strategy was requested (or no strategies were supplied).\n"
           }
         }
       },

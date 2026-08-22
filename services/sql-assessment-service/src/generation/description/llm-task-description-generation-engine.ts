@@ -5,7 +5,6 @@ import {
 import { GptOptions, IParsedTable } from '../../shared/interfaces/domain';
 import { LlmGatewayConfig } from '../../shared/interfaces/llm-gateway';
 import {
-	GatewayChatMessage,
 	LlmGatewayClient,
 	toGatewayChatMessage,
 } from '../../shared/llm-gateway/llm-gateway-client';
@@ -127,12 +126,13 @@ export class LLMTaskDescriptionGenerationEngine {
 		return tables;
 	}
 
-	/** Returns the language directive system message for the given language. */
-	private languageMessage(lang: SupportedLanguage): GatewayChatMessage {
-		return toGatewayChatMessage(
-			'system',
-			LANGUAGE_DIRECTIVES[lang] ?? LANGUAGE_DIRECTIVES['en'],
-		);
+	/**
+	 * Returns the language directive for the given language. Chat backends
+	 * accept a single leading system message only, so directives are folded
+	 * into the user turn of every prompt.
+	 */
+	private languageDirective(lang: SupportedLanguage): string {
+		return LANGUAGE_DIRECTIVES[lang] ?? LANGUAGE_DIRECTIVES['en'];
 	}
 
 	private async generateTaskFromQueryMultiStep(
@@ -154,12 +154,8 @@ export class LLMTaskDescriptionGenerationEngine {
 				messages: [
 					toGatewayChatMessage('system', 'You are a database expert.'),
 					toGatewayChatMessage(
-						'system',
-						`Given the following database schema: ${schemaString}.`,
-					),
-					toGatewayChatMessage(
-						'system',
-						'Describe entity relationships based on an entity relationship diagram.',
+						'user',
+						`Given the following database schema: ${schemaString}. Describe entity relationships based on an entity relationship diagram.`,
 					),
 				],
 				temperature: DEFAULT_TEMPERATURE,
@@ -175,12 +171,8 @@ export class LLMTaskDescriptionGenerationEngine {
 							'You are a database and PostgreSQL expert.',
 						),
 						toGatewayChatMessage(
-							'system',
-							`Given the following query part: ${part}`,
-						),
-						toGatewayChatMessage(
-							'system',
-							`Describe the semantic meaning of that query part based on the provided entity relationships: ${entityDescription}.`,
+							'user',
+							`Given the following query part: ${part}. Describe the semantic meaning of that query part based on the provided entity relationships: ${entityDescription}.`,
 						),
 					],
 					temperature: DEFAULT_TEMPERATURE,
@@ -192,12 +184,11 @@ export class LLMTaskDescriptionGenerationEngine {
 				messages: [
 					toGatewayChatMessage('system', 'You are a SQL expert.'),
 					toGatewayChatMessage(
-						'system',
+						'user',
 						`Based on the following semantic descriptions of query parts: ${queryPartResults.join(
 							'\n',
-						)}, create natural-language question that describes the requested data. The question should include all required information to formulate a query that returns the requested data. Return only the question.`,
+						)}, create natural-language question that describes the requested data. The question should include all required information to formulate a query that returns the requested data. Return only the question. ${langDirective}`,
 					),
-					toGatewayChatMessage('system', langDirective),
 				],
 				temperature: DEFAULT_TEMPERATURE,
 			});
@@ -224,12 +215,10 @@ export class LLMTaskDescriptionGenerationEngine {
 				'system',
 				`${this.instructions} As additional information you can find the parsed tables that describe the schema of the database.`,
 			),
-			toGatewayChatMessage('system', `This is the query: ${query}`),
 			toGatewayChatMessage(
-				'system',
-				`This is the schema: ${this.serializeSchemaForPrompt(tables)}`,
+				'user',
+				`This is the query: ${query}\nThis is the schema: ${this.serializeSchemaForPrompt(tables)}\n${this.languageDirective(lang)}`,
 			),
-			this.languageMessage(lang),
 		];
 
 		try {
@@ -257,12 +246,10 @@ export class LLMTaskDescriptionGenerationEngine {
 				'system',
 				`${this.instructions} As additional information you can find the parsed tables that describe the schema of the database.`,
 			),
-			toGatewayChatMessage('system', `This is the query: ${query}`),
 			toGatewayChatMessage(
-				'system',
-				`This is the schema: ${this.serializeSchemaForPrompt(tables)}`,
+				'user',
+				`This is the query: ${query}\nThis is the schema: ${this.serializeSchemaForPrompt(tables)}\n${this.languageDirective(lang)}`,
 			),
-			this.languageMessage(lang),
 		];
 
 		try {
@@ -291,16 +278,10 @@ export class LLMTaskDescriptionGenerationEngine {
 				'system',
 				"You are a helpful assistant specializing in making PostgreSQL tasks more human-readable. Your goal is to rewrite the given task description into clear, continuous text that captures the core intent and semantic meaning of the SQL query. Maintain a direct, action-oriented style while preserving all original details. Ensure the improved task remains accurate, concise, and easy to understand, avoiding overly technical jargon. If values are null or not null, describe it in a human readable way (i.e. absent, undefined, any). When table aliases are used, describe them in a human-readable way based on their relationships, rather than mentioning the alias names. Describe aggregation functions (MIN, MAX, COUNT, etc.) in natural language, e.g. instead of saying 'MIN(Country)', describe it as 'the country that comes first alphabetically'. Do not leave out or summarize any of the expression values used in the Where and Having conditions, even if they are long values like paths or urls. You will be provided with the database schema and the query that solves the task for context.",
 			),
-			toGatewayChatMessage('system', `This is the query: ${query}`),
 			toGatewayChatMessage(
-				'system',
-				`This is the schema: ${this.serializeSchemaForPrompt(tables)}`,
+				'user',
+				`This is the query: ${query}\nThis is the schema: ${this.serializeSchemaForPrompt(tables)}\nThis is the task description that you should improve: ${taskDescription}\n${this.languageDirective(lang)}`,
 			),
-			toGatewayChatMessage(
-				'system',
-				`This is the task description that you should improve: ${taskDescription}`,
-			),
-			this.languageMessage(lang),
 		];
 
 		try {

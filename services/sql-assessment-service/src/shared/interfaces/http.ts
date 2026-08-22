@@ -94,7 +94,35 @@ export interface IRequestTaskOptions {
 	 * they fall back to the template engine.
 	 */
 	llmGateway?: LlmGatewayConfig;
+	/**
+	 * Single description variant to generate. Convenience alternative to
+	 * `descriptionStrategies`; when both are supplied the union of both is
+	 * generated.
+	 */
+	descriptionStrategy?: DescriptionStrategy;
+	/**
+	 * Description variants to generate. When neither this nor
+	 * `descriptionStrategy` is supplied, all variants are generated (backward
+	 * compatible). Otherwise only the requested variants are generated and the
+	 * remaining `TaskResponse` description fields are omitted. Unrecognised
+	 * values are ignored.
+	 */
+	descriptionStrategies?: DescriptionStrategy[];
 }
+
+/**
+ * User-facing description variants for generated tasks. Each value maps 1:1
+ * to a `TaskResponse` description field: template →
+ * templateBasedDescription, entityRelationship →
+ * gptEntityRelationshipDescription, schemaBased → gptSchemaBasedDescription,
+ * creative → gptCreativeDescription, hybrid → hybridDescription.
+ */
+export type DescriptionStrategy =
+	| 'template'
+	| 'entityRelationship'
+	| 'schemaBased'
+	| 'creative'
+	| 'hybrid';
 
 export interface IRequestGradingOptions {
 	connectionInfo: ConnectionInfo;
@@ -121,11 +149,17 @@ export interface IRequestGradingOptions {
 }
 
 export interface TaskResponse {
-	templateBasedDescription: string;
-	gptEntityRelationshipDescription: string;
-	gptSchemaBasedDescription: string;
-	hybridDescription: string;
 	query: string;
+	/**
+	 * The description fields below are only present when the corresponding
+	 * variant was requested via `descriptionStrategy`/`descriptionStrategies`
+	 * (or when no strategies were supplied, in which case all variants are
+	 * generated for backward compatibility).
+	 */
+	templateBasedDescription?: string;
+	gptEntityRelationshipDescription?: string;
+	gptSchemaBasedDescription?: string;
+	hybridDescription?: string;
 	gptCreativeDescription?: string;
 }
 
