@@ -15,6 +15,8 @@ def _semantic_search_sbert(input_data: dict[str, Any], params: dict[str, Any]) -
 
     query = input_data.get("query", "")
     candidates = input_data.get("candidates", [])
+    if not candidates:
+        return {"matches": [], "count": 0, "error": "no candidates provided"}
     model_name = params.get("model_name", "all-MiniLM-L6-v2")
     top_k = params.get("top_k", 10)
 

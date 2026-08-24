@@ -118,6 +118,7 @@ async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONR
     """Return an RFC 9457 application/problem+json body for every HTTP error."""
     return JSONResponse(
         status_code=exc.status_code,
+        media_type="application/problem+json",
         content={
             "type": "about:blank",
             "title": exc.detail or str(exc.status_code),
@@ -134,13 +135,19 @@ async def validation_exception_handler(_request: Request, exc: RequestValidation
     Without this, Pydantic 422s fall through to FastAPI's default handler and
     produce a structurally different body than the deliberate 400/500 errors.
     """
+    # RFC 9457 wants a human-readable string in ``detail``; Pydantic returns a
+    # structured list of error dicts, which is more useful for clients. Keep it
+    # as the machine-readable ``errors`` field and give ``detail`` a concise string.
+    errors = exc.errors()
     return JSONResponse(
         status_code=422,
+        media_type="application/problem+json",
         content={
             "type": "about:blank",
             "title": "Request validation failed",
             "status": 422,
-            "detail": exc.errors(),
+            "detail": "The request body failed schema validation",
+            "errors": errors,
         },
     )
 
@@ -227,6 +234,51 @@ def _resolve_backend(defaults: dict[str, str], algorithm: str, backend: str | No
     return backend or defaults.get(algorithm, "")
 
 
+def _map_compute_error(exc: Exception, algorithm: str, backend: str, input_id: str) -> HTTPException:
+    """Map any compute exception to the matching HTTP error (problem+json).
+
+    Single source of truth for error semantics, reused by the per-item batch loop
+    and the dedicated fast paths (batched SBERT): validation errors -> 400,
+    ConceptNet sidecar/API failures -> 502/503, missing optional extra -> 501,
+    everything else -> 500 (logged server-side, generic body so internals never
+    leak into the response).
+    """
+    if isinstance(exc, HTTPException):
+        return exc
+    if isinstance(exc, ValueError):
+        return HTTPException(status_code=400, detail=str(exc))
+    if isinstance(exc, LargeModelDownloadBlocked):
+        # Cost gate: a >500 MB runtime model download was requested without an
+        # explicit opt-in (params.confirm_large_download / env var). The message
+        # names size, opt-in and how to enable it.
+        return HTTPException(status_code=400, detail=str(exc))
+    if isinstance(exc, ConceptNetSidecarError):
+        # ConceptNet sidecar unavailable (optional process). Soft degradation:
+        # 503 when unreachable/timed out, 502 on an upstream error — never a 500.
+        return HTTPException(
+            status_code=exc.status,
+            detail=str(exc) + " (hint: set TEXT_SIMILARITY_CONCEPTNET_URL or start the conceptnet-sidecar service)",
+        )
+    if isinstance(exc, ConceptNetError):
+        # External ConceptNet API failure (explicit backend: remote) -> clean
+        # 502/503. No cross-backend fallback is ever performed.
+        return HTTPException(status_code=exc.status, detail=f"ConceptNet API request failed: {exc}")
+    if isinstance(exc, ModuleNotFoundError):
+        module_name = exc.name or "unknown"
+        extra = _MODULE_EXTRA.get(module_name, "model")
+        return HTTPException(
+            status_code=501,
+            detail=(
+                f"Algorithm '{algorithm}' requires the optional '{extra}' extra "
+                f"(missing module '{module_name}'). Install it with: pip install -e '.[{extra}]'"
+            ),
+        )
+    # Log the full traceback server-side (no logging existed before); the client
+    # gets a generic message so internal details/stack paths never leak.
+    logger.exception("Unhandled error computing %s/%s for input %s", algorithm, backend, input_id)
+    return HTTPException(status_code=500, detail="Internal computation error")
+
+
 def _run_batch(
     algorithm: str,
     backend: str,
@@ -237,8 +289,9 @@ def _run_batch(
 ) -> tuple[list[TextResult], float]:
     """Compute a batch of inputs, mapping each item to a TextResult.
 
-    Errors map to problem+json: validation errors -> 400, ConceptNet sidecar
-    failures -> 502/503, everything else -> 500.
+    Errors map to problem+json via ``_map_compute_error``: validation errors ->
+    400, ConceptNet sidecar failures -> 502/503, missing optional extras -> 501,
+    everything else -> 500.
     """
     results: list[TextResult] = []
     total_ms = 0.0
@@ -246,39 +299,8 @@ def _run_batch(
         input_data = make_input(item)
         try:
             res = compute_fn(algorithm, backend, input_data, params)
-        except HTTPException:
-            raise
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from None
-        except LargeModelDownloadBlocked as e:
-            # Cost gate: a >500 MB runtime model download was requested without
-            # an explicit opt-in (params.confirm_large_download / env var). The
-            # exception message names size, opt-in and how to enable it.
-            raise HTTPException(status_code=400, detail=str(e)) from None
-        except ConceptNetSidecarError as e:
-            # ConceptNet sidecar unavailable (optional process). Soft degradation:
-            # 503 when unreachable/timed out, 502 on an upstream error — never a
-            # 500. The message points operators at the sidecar URL / service.
-            raise HTTPException(
-                status_code=e.status,
-                detail=str(e) + " (hint: set TEXT_SIMILARITY_CONCEPTNET_URL or start the conceptnet-sidecar service)",
-            ) from None
-        except ModuleNotFoundError as e:
-            module_name = e.name or "unknown"
-            extra = _MODULE_EXTRA.get(module_name, "model")
-            raise HTTPException(
-                status_code=501,
-                detail=(
-                    f"Algorithm '{algorithm}' requires the optional '{extra}' extra "
-                    f"(missing module '{module_name}'). Install it with: pip install -e '.[{extra}]'"
-                ),
-            ) from None
-        except Exception:  # noqa: BLE001
-            # Log the full traceback server-side (no logging existed before);
-            # the client gets a generic message so internal details/stack paths
-            # never leak into the response body.
-            logger.exception("Unhandled error computing %s/%s for input %s", algorithm, backend, getattr(item, "id", "<unknown>"))
-            raise HTTPException(status_code=500, detail="Internal computation error") from None
+        except Exception as e:  # noqa: BLE001 - mapped to problem+json by the helper
+            raise _map_compute_error(e, algorithm, backend, getattr(item, "id", "<unknown>")) from None
         total_ms += res.get("compute_time_ms", 0)
         results.append(TextResult(id=item.id, result=res))
     return results, round(total_ms, 2)
@@ -370,35 +392,18 @@ def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
         pairs = [{"id": item.id, "text_a": item.a, "text_b": item.b} for item in request.inputs]
         try:
             results = sbert_cosine_batch(pairs, request.params)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from None
-        except ModuleNotFoundError as e:
-            module_name = e.name or "unknown"
-            extra = _MODULE_EXTRA.get(module_name, "model")
-            raise HTTPException(
-                status_code=501,
-                detail=(
-                    f"Algorithm '{algorithm}' requires the optional '{extra}' extra "
-                    f"(missing module '{module_name}'). Install it with: pip install -e '.[{extra}]'"
-                ),
-            ) from None
-        except ConceptNetError as e:
-            raise HTTPException(status_code=e.status, detail=f"ConceptNet API request failed: {e}") from None
-        except Exception as e:  # noqa: BLE001
-            logger.exception("Unhandled error computing %s/%s for batch", algorithm, backend)
-            raise HTTPException(status_code=500, detail="Internal computation error") from e
+        except Exception as e:  # noqa: BLE001 - mapped to problem+json by the helper
+            raise _map_compute_error(e, algorithm, backend, "<batch>") from None
         total_ms = round(sum(r["result"].get("compute_time_ms", 0) for r in results), 2)
         return TextComputeResponse(algorithm=algorithm, backend=backend, results=results, meta={"compute_time_ms": total_ms})
 
     def _compute(alg: str, bck: str, input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
-        try:
-            return compute_similarity(alg, bck, input_data, params)
-        except ConceptNetError as e:
-            # External ConceptNet API failure (explicit backend: remote)
-            # -> clean 502/503 problem+json. No cross-backend fallback: the
-            # local Numberbatch model is only used through backend: local
-            # (the default), never swapped in under the API path.
-            raise HTTPException(status_code=e.status, detail=f"ConceptNet API request failed: {e}") from None
+        # ConceptNet API failures (explicit backend: remote) surface as
+        # ConceptNetError and are mapped to a clean 502/503 by
+        # ``_map_compute_error``. No cross-backend fallback: the local Numberbatch
+        # model is only used through backend: local (the default), never swapped
+        # in under the API path.
+        return compute_similarity(alg, bck, input_data, params)
 
     results, total_ms = _run_batch(
         algorithm,

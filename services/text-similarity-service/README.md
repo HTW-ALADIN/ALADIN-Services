@@ -241,6 +241,30 @@ sidecar is down). The legacy `SIMILARITY_DISABLE_LOCAL_CONCEPTNET` switch no lon
 exists — there is no in-process Numberbatch model to hide.
 
 
+## Security
+
+**This service provides no authentication or authorization.** It is designed to run
+behind an authenticating boundary (API gateway, reverse proxy, mTLS, OAuth2/OIDC, or a
+service mesh), like the other services in this repo. Do not expose it directly to an
+untrusted network; front it with whatever enforces authentication and network policy.
+
+In addition to the boundary, the service protects itself at the request level:
+
+- **HuggingFace allow-list** — model-backed measures only accept a short, curated model
+  list (see [src/model_cache.py](src/model_cache.py)); anything else is rejected with `400`
+  so a caller cannot pull an arbitrary multi-GB checkpoint server-side.
+- **Large-download cost gate** — runtime gensim downloads above ~500 MB require an explicit
+  opt-in (`params.confirm_large_download` / `ALLOW_LARGE_MODEL_DOWNLOADS`), see
+  [Resource gate](#resource-gate).
+- **Request size limits** — per-field `MAX_TEXT_LENGTH` (100k chars), per-request
+  `MAX_BATCH_SIZE` (500), and per-input candidate totals, enforced by the Pydantic models.
+- **Per-algorithm cost bounds** — inherently O(n·m) measures (notably
+  `structural_stylistic` / `greedy_string_tiling`) cap input length and are still bounded;
+  oversized inputs are rejected with `400` rather than consuming unbounded CPU.
+
+Errors are returned as RFC 9457 `application/problem+json` (`GET`-friendly, generic `500`
+bodies so internal paths never leak).
+
 ## License
 
 MIT

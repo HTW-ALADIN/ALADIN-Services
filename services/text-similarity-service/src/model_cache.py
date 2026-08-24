@@ -175,11 +175,16 @@ def _resolve_download_size_mb(model_name: str) -> int:
 def _gensim_info_size_mb(model_name: str) -> int:
     """Look up a model's download size (MB) via gensim's downloader metadata (cached).
 
-    Three outcomes, so a transient failure can never let a large model slip
-    past the cost gate:
+    Outcomes, chosen so a transient failure can never let a large model slip past
+    the cost gate:
 
     - **Known** name -> its real ``file_size`` (Bytes; the metadata field is
       ``file_size``, not ``filesize``).
+    - **Known but unsized** (metadata says the model exists but carries no
+      usable ``file_size``) -> treated as *above* the threshold (block). Unlike the
+      unknown-name case, such a model IS downloadable, so we must not leave it
+      ungated just because we can't size it — that would be a bypass for a real
+      (possibly multi-GB) download.
     - **Unknown** name -> gensim raises ``ValueError("Incorrect model/corpus
       name")``; treated as ``0``. That is not a bypass, because a model gensim
       cannot locate cannot be downloaded at all (``api.load`` fails on its own).
@@ -205,9 +210,10 @@ def _gensim_info_size_mb(model_name: str) -> int:
         if isinstance(size_bytes, (int, float)) and size_bytes > 0:
             size_mb = int(round(size_bytes / (1024 * 1024)))
         else:
-            size_mb = 0  # known but unsized -> leave ungated (not quantifiable)
+            # Known but unsized -> downloadable -> block (see docstring), never ungated.
+            size_mb = LARGE_DOWNLOAD_THRESHOLD_MB + 1
     else:
-        size_mb = 0
+        size_mb = LARGE_DOWNLOAD_THRESHOLD_MB + 1
     _GENSIM_INFO_SIZES_MB[model_name] = size_mb
     return size_mb
 

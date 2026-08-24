@@ -10,6 +10,7 @@ external DKPro Java sidecar anymore — it was removed in favour of lean,
 stateless Python equivalents.
 """
 
+import array
 import time
 from functools import partial
 from typing import Any
@@ -139,7 +140,12 @@ def _embedding_cosine_gensim(input_data: dict[str, Any], params: dict[str, Any])
     require_large_download_ok(model_name, params)
     kv = get_gensim_model(model_name)
 
-    raw = _gensim_word_similarity(kv, a, b)
+    try:
+        raw = _gensim_word_similarity(kv, a, b)
+    except _WordOutOfVocabulary as e:
+        # Unknown word(s) -> graceful message result (mirrors wordnet/ConceptNet
+        # OOV handling) instead of surfacing gensim's raw KeyError as a 500.
+        return {"raw": None, "similarity": None, "distance": None, "error": str(e)}
     return _normalize_similarity(raw, "embedding_cosine", "gensim")
 
 
@@ -156,13 +162,30 @@ def _conceptnet_sidecar_result(item: dict[str, Any], params: dict[str, Any]) -> 
     return _normalize_similarity(float(item["score"]), "embedding_cosine", "gensim")
 
 
+class _WordOutOfVocabulary(Exception):
+    """One of the words is not in the loaded embedding vocabulary.
+
+    ``embedding_cosine``/``wmd`` share this: a common, expected outcome (a word
+    simply isn't in the model), which should surface as a graceful result (like
+    the WordNet/ConceptNet paths) rather than an opaque 500.
+    """
+
+
 def _gensim_word_similarity(kv, a: str, b: str) -> float:
-    """Word-level similarity for glove/fasttext; multi-word falls back to n_similarity."""
+    """Word-level similarity for glove/fasttext; multi-word falls back to n_similarity.
+
+    Raises ``_WordOutOfVocabulary`` for words missing from the model's vocabulary
+    (gensim raises ``KeyError``), so callers can map it to a graceful response.
+    """
     words_a = a.split()
     words_b = b.split()
-    if len(words_a) == 1 and len(words_b) == 1:
-        return float(kv.similarity(words_a[0], words_b[0]))
-    return float(kv.n_similarity(words_a, words_b))
+    try:
+        if len(words_a) == 1 and len(words_b) == 1:
+            return float(kv.similarity(words_a[0], words_b[0]))
+        return float(kv.n_similarity(words_a, words_b))
+    except KeyError as e:
+        missing = str(e).strip("'\"")
+        raise _WordOutOfVocabulary(f"word(s) not in embedding vocabulary: {missing}") from None
 
 
 # ─── SBERT cosine ─────────────────────────────────────────────────────────────
@@ -243,7 +266,12 @@ def _wmd_gensim(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str,
     # fasttext) must not silently trigger the download either.
     require_large_download_ok(model_name, params)
     kv = get_gensim_model(model_name)
-    raw = float(kv.wmdistance(a.split(), b.split()))
+    try:
+        raw = float(kv.wmdistance(a.split(), b.split()))
+    except (KeyError, ValueError) as e:
+        # OOV word(s) or an empty/invalid input: graceful message result instead
+        # of a raw KeyError/ValueError surfacing as a 500.
+        return {"raw": None, "similarity": None, "distance": None, "error": f"wmd could not be computed: {e}"}
     return _normalize_similarity(raw, "wmd", "gensim")
 
 
@@ -517,65 +545,110 @@ def _ngram_containment_similarity(a: str, b: str, n: int) -> float:
     return (left + right) / 2.0
 
 
+# Greedy string tiling is an inherently pairwise (time and space O(n*m)) measure.
+# To keep a single request bounded against the API's per-field maximum (100k chars),
+# inputs beyond this cap are rejected with a clear 400 instead of risking an
+# unboundedly slow computation. The cap is generous enough for any realistic
+# "stylistic fingerprint" use; above it the request should be split or served by
+# another variant (e.g. ngram_containment, which is O(n+m)).
+_GST_MAX_LEN = 4096
+
+
 def _greedy_string_tiling_similarity(a: str, b: str, min_match: int) -> float:
     """Greedy string tiling similarity — fraction of matched characters.
 
-    Implements the classic Greedy-String-Tiling algorithm (Zhang/Shasha style)
-    over character tokens: repeatedly find the longest common substring between
-    the still-unmatched regions and mark those pairs, then score = matched / total.
+    Greedy-String-Tiling over character tokens: repeatedly take the longest
+    common substring between the still-unmatched regions and mark those characters
+    matched, then score = matched / total.
+
+    Implementation note (this rewrite fixes a quadratic-in-iterations DoS): the
+    classic loop rescans the whole ``n*m`` matrix on every pass, so adversarial
+    inputs degrade to O((n*m) * (n/min_match)) or worse. Instead this computes a
+    single longest-common-prefix table (one O(n*m) pass) and then does a greedy
+    claim pass over cells sorted by match length descending, so the whole measure
+    costs exactly one O(n*m) pass. Combined with ``_GST_MAX_LEN``, the cost of any
+    single request is bounded.
     """
     if not a or not b:
         return 1.0 if (not a and not b) else 0.0
-    chars_a, chars_b = list(a.lower()), list(b.lower())
-    n, m = len(chars_a), len(chars_b)
-    matched_a = [False] * n
-    matched_b = [False] * m
+    # Hard bound: greedy string tiling is O(n*m); cap pathological CPU cost per request.
+    if max(len(a), len(b)) > _GST_MAX_LEN:
+        raise ValueError(
+            f"greedy_string_tiling supports at most {_GST_MAX_LEN} characters per text "
+            f"(got {len(a)} and {len(b)}) to bound the O(n*m) matching cost. Split the input "
+            f"or use another structural_stylistic variant."
+        )
+
+    a = a.lower()
+    b = b.lower()
+    n, m = len(a), len(b)
     min_len = max(1, min_match)
-    changed = True
-    min_ab = min(n, m)
-
-    while changed and min_len <= min_ab:
-        changed = False
-        max_len = -1
-        best: list[tuple[int, int]] = []
-        # Find the longest common run of unmatched characters.
-        for i in range(n):
-            if matched_a[i]:
-                continue
-            for j in range(m):
-                if matched_b[j]:
-                    continue
-                run = 0
-                while (
-                    i + run < n
-                    and j + run < m
-                    and not matched_a[i + run]
-                    and not matched_b[j + run]
-                    and chars_a[i + run] == chars_b[j + run]
-                ):
-                    run += 1
-                if run > max_len:
-                    max_len = run
-                    best = [(i, j)]
-                elif run == max_len:
-                    best.append((i, j))
-        if max_len == -1:
-            break
-        if max_len >= min_len:
-            for i, j in best:
-                for k in range(max_len):
-                    matched_a[i + k] = True
-                    matched_b[j + k] = True
-            changed = True
-        else:
-            break
-
-    matched = sum(matched_a)
+    if min_len > min(n, m):
+        return 0.0
     total = n + m
+    max_len = min(n, m)
+    N = n * m
+
+    # Longest-common-prefix table: lcp[i][j] = length of the longest common prefix
+    # of a[i:] and b[j:] (0 where the characters differ). Flat unsigned-short array.
+    lcp = array.array("H", [0]) * N
+    for i in range(n - 1, -1, -1):
+        base = i * m
+        base_down = base + m
+        ai = a[i]
+        for j in range(m - 1, -1, -1):
+            if ai == b[j]:
+                lcp[base + j] = (lcp[base_down + j + 1] if (i + 1 < n and j + 1 < m) else 0) + 1
+
+    # Counting-sort of every cell by its LCP length (descending), so the greedy
+    # claim pass visits the longest matches first and each is considered once.
+    counts = [0] * (max_len + 1)
+    for k in range(N):
+        v = lcp[k]
+        if v >= min_len:
+            counts[v] += 1
+    offsets = [0] * (max_len + 1)
+    running = 0
+    for length in range(max_len, min_len - 1, -1):
+        offsets[length] = running
+        running += counts[length]
+    order = array.array("I", [0]) * running
+    for k in range(N):
+        v = lcp[k]
+        if v >= min_len:
+            pos = offsets[v]
+            offsets[v] = pos + 1
+            order[pos] = k
+
+    matched_a = bytearray(n)
+    matched_b = bytearray(m)
+    matched = 0
+
+    for cell in order:
+        if matched >= total:
+            break
+        i = cell // m
+        j = cell % m
+        # Start characters must not already be claimed.
+        if matched_a[i] or matched_b[j]:
+            continue
+        # Greedy match: take the LCP, but only the contiguous still-unmatched run
+        # on each side counts (the tail may already be claimed by an earlier, longer match).
+        end_a = matched_a.find(b"\x01", i + 1)
+        end_a = n if end_a < 0 else end_a
+        end_b = matched_b.find(b"\x01", j + 1)
+        end_b = m if end_b < 0 else end_b
+        run = min(lcp[cell], end_a - i, end_b - j)
+        if run < min_len:
+            continue
+        matched_a[i : i + run] = b"\x01" * run
+        matched_b[j : j + run] = b"\x01" * run
+        matched += run * 2
+
     if total == 0:
         return 1.0
     # Normalize by the sum of lengths (classic GST scoring); both-empty handled above.
-    return (2 * matched) / total
+    return matched / total
 
 
 def _structural_stylistic(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
