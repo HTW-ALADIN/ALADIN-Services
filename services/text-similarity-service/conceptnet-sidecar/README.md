@@ -8,8 +8,8 @@
 
 **Why a separate process?** The ~1.2 GB / ~3-6 GB RAM model used to be loaded
 in-process, pinning RAM in every full-feature container even when nobody asked for
-it. Moving it to an isolated process (like the DKPro sidecar) decouples its life and
-memory from the main service, and lets it work with **either** main image (`cpu`/`hf`).
+it. Moving it to an isolated process decouples its life and memory from the main
+service, and lets it work with **either** main image (`cpu`/`hf`).
 See [ADR-0001](../text-similarity-service/docs/adr/0001-conceptnet-as-sidecar.md).
 
 ## Purpose

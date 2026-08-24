@@ -6,7 +6,7 @@ so the main service never loads the ~3-6 GB gensim model in-process.
 
 The sidecar's base URL is configurable via the TEXT_SIMILARITY_CONCEPTNET_URL
 environment variable (defaults to http://localhost:8200). It works with either
-main image (cpu/hf), exactly like the DKPro sidecar.
+main image (cpu/hf).
 """
 
 import os

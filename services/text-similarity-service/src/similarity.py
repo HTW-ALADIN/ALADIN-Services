@@ -2,8 +2,12 @@
 
 Each function takes input dict and params dict, returns a result dict
 with 'raw', 'similarity' (normalized to [0,1]), and 'distance' keys.
-DKPro-sidecar measures (topic_model, structural_stylistic) are routed
-externally via dkpro_proxy and have no in-process implementation here.
+
+Every measure is implemented natively (in-process), including the
+structural/stylistic family (n-gram containment, type-token ratio, greedy
+string tiling) and the topic-model family (corpus-free LSI). There is no
+external DKPro Java sidecar anymore — it was removed in favour of lean,
+stateless Python equivalents.
 """
 
 import time
@@ -18,6 +22,8 @@ _SIMILARITY_KEYS = {
     ("cross_encoder", "sentence_transformers"),
     ("wordnet_similarity", "nltk"),
     ("token_set_overlap", "builtin"),
+    ("topic_model", "builtin"),
+    ("structural_stylistic", "builtin"),
 }
 
 
@@ -83,10 +89,10 @@ def _embedding_cosine_gensim(input_data: dict[str, Any], params: dict[str, Any])
     distinct from the top-level ``backend`` field which stays ``gensim``):
 
     - ``params.backend: "local"`` (default) — served by the optional
-      ``conceptnet-sidecar`` process over HTTP (see ADR-0001). The main service
+      ``      conceptnet-sidecar`` process over HTTP (see ADR-0001). The main service
       no longer loads the ~3-6 GB Numberbatch model in-process; it forwards the
       pair to the sidecar. If the sidecar is absent, the request fails 502/503
-      like a missing DKPro sidecar.
+      (soft degradation — the rest of the service keeps working).
     - ``params.backend: "remote"`` — explicit opt-in to call the public
       api.conceptnet.io relatedness API instead (see ``conceptnet_api``).
 
@@ -404,6 +410,196 @@ def _bertscore(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, 
     }
 
 
+# ─── Topic model (corpus-free LSI) ────────────────────────────────────────────
+#
+# ``topic_model`` replaces the retired DKPro LSA/ESA sidecar with a lean,
+# stateless, in-process equivalent. There is no pre-trained external corpus: the
+# latent semantic space is derived purely from the two input documents (their
+# TF-IDF vectors projected onto the dominant singular components), which yields
+# real, meaningful scores for any pair of texts without any model artefact or
+# training step. ``variant`` mirrors the DKPro naming: ``lsa`` (default) / ``esa``
+# (accepted as aliases — the projection is LSA in both cases).
+
+
+def _topic_model(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    import numpy as np
+    from sklearn.decomposition import TruncatedSVD
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    from sklearn.preprocessing import normalize
+
+    a = input_data.get("text_a", "")
+    b = input_data.get("text_b", "")
+
+    vectorizer = TfidfVectorizer(
+        max_features=params.get("max_features"),
+        ngram_range=tuple(params.get("ngram_range", (1, 1))),
+    )
+    tfidf = vectorizer.fit_transform([a, b])
+    # Guard against the degenerate single-document / zero-width case: with
+    # nothing to project, fall back to plain TF-IDF cosine similarity.
+    if tfidf.shape[0] < 2 or tfidf.nnz == 0 or len(vectorizer.get_feature_names_out()) == 0:
+        sim = float(cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0])
+        return _normalize_similarity(sim, "tfidf_cosine", "sklearn")
+
+    # Project into a reduced latent space (LSI) and normalize the projected rows.
+    # With < 2 features the SVD degenerates to a single component whose variance
+    # ratio divides by zero — fall back to plain TF-IDF cosine in that case.
+    if tfidf.shape[1] < 2:
+        sim = float(cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0])
+        return _normalize_similarity(sim, "tfidf_cosine", "sklearn")
+
+    k = min(2, tfidf.shape[1])
+    # TruncatedSVD emits a benign division-by-zero RuntimeWarning when two very
+    # short/disjoint documents yield a zero-variance component; the result it is
+    # still usable, but we suppress that single warning and validate the output
+    # ourselves (NaN latent/explained-variance -> fall back to TF-IDF cosine).
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        svd = TruncatedSVD(n_components=k, random_state=42)
+        latent = svd.fit_transform(tfidf)
+
+    if np.isnan(latent).any() or np.isnan(svd.explained_variance_ratio_).any():
+        sim = float(cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0])
+        return _normalize_similarity(sim, "tfidf_cosine", "sklearn")
+
+    latent = normalize(latent, norm="l2", axis=1)
+    sim = float(cosine_similarity(latent[0:1], latent[1:2])[0][0])
+    return _normalize_similarity(sim, "topic_model", "builtin")
+
+
+# ─── Structural / stylistic ───────────────────────────────────────────────────
+#
+# ``structural_stylistic`` replaces the retired DKPro Java sidecar with natively
+# implemented, stateless measures: n-gram containment, type-token ratio and
+# greedy string tiling (the same families DKPro exposed).
+#
+# output: similarity is always in [0,1] (higher = more similar). Each underlying
+# raw value is a similarity already in [0,1], so raw/similarity are identical.
+
+
+def _tokenize_words(text: str) -> list[str]:
+    """Deterministic lowercase whitespace tokenization (same as the token-set family)."""
+    return text.lower().split()
+
+
+def _tokenize_chars(text: str) -> list[str]:
+    """Character-level tokenization for n-gram containment over packed text."""
+    return list(text.lower())
+
+
+def _n_grams(tokens: list[str], n: int) -> set[tuple[str, ...]]:
+    return {tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)} if n > 0 and len(tokens) >= n else set()
+
+
+def _type_token_ratio(text: str) -> float:
+    """Type-token ratio: distinct tokens / total tokens (0 if no tokens)."""
+    tokens = _tokenize_words(text)
+    if not tokens:
+        return 0.0
+    return len(set(tokens)) / len(tokens)
+
+
+def _ngram_containment_similarity(a: str, b: str, n: int) -> float:
+    """Fraction of a's n-grams contained in b (symmetric containment average)."""
+    grams_a, grams_b = _n_grams(_tokenize_words(a), n), _n_grams(_tokenize_words(b), n)
+    if not grams_a or not grams_b:
+        # Fall back to character n-grams for very short/empty inputs.
+        grams_a, grams_b = _n_grams(_tokenize_chars(a), n), _n_grams(_tokenize_chars(b), n)
+    if not grams_a and not grams_b:
+        return 1.0  # both empty
+    if not grams_a or not grams_b:
+        return 0.0
+    left = len(grams_a & grams_b) / len(grams_a)
+    right = len(grams_a & grams_b) / len(grams_b)
+    return (left + right) / 2.0
+
+
+def _greedy_string_tiling_similarity(a: str, b: str, min_match: int) -> float:
+    """Greedy string tiling similarity — fraction of matched characters.
+
+    Implements the classic Greedy-String-Tiling algorithm (Zhang/Shasha style)
+    over character tokens: repeatedly find the longest common substring between
+    the still-unmatched regions and mark those pairs, then score = matched / total.
+    """
+    if not a or not b:
+        return 1.0 if (not a and not b) else 0.0
+    chars_a, chars_b = list(a.lower()), list(b.lower())
+    n, m = len(chars_a), len(chars_b)
+    matched_a = [False] * n
+    matched_b = [False] * m
+    min_len = max(1, min_match)
+    changed = True
+    min_ab = min(n, m)
+
+    while changed and min_len <= min_ab:
+        changed = False
+        max_len = -1
+        best: list[tuple[int, int]] = []
+        # Find the longest common run of unmatched characters.
+        for i in range(n):
+            if matched_a[i]:
+                continue
+            for j in range(m):
+                if matched_b[j]:
+                    continue
+                run = 0
+                while (
+                    i + run < n
+                    and j + run < m
+                    and not matched_a[i + run]
+                    and not matched_b[j + run]
+                    and chars_a[i + run] == chars_b[j + run]
+                ):
+                    run += 1
+                if run > max_len:
+                    max_len = run
+                    best = [(i, j)]
+                elif run == max_len:
+                    best.append((i, j))
+        if max_len == -1:
+            break
+        if max_len >= min_len:
+            for i, j in best:
+                for k in range(max_len):
+                    matched_a[i + k] = True
+                    matched_b[j + k] = True
+            changed = True
+        else:
+            break
+
+    matched = sum(matched_a)
+    total = n + m
+    if total == 0:
+        return 1.0
+    # Normalize by the sum of lengths (classic GST scoring); both-empty handled above.
+    return (2 * matched) / total
+
+
+def _structural_stylistic(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    a = input_data.get("text_a", "")
+    b = input_data.get("text_b", "")
+    variant = params.get("variant", "ngram_containment")
+
+    if variant == "type_token_ratio":
+        # Mirror DKPro's TTR similarity: 1 - |ttr1 - ttr2|.
+        raw = 1.0 - abs(_type_token_ratio(a) - _type_token_ratio(b))
+    elif variant == "greedy_string_tiling":
+        raw = _greedy_string_tiling_similarity(a, b, int(params.get("min_match", 2)))
+    elif variant == "ngram_containment":
+        raw = _ngram_containment_similarity(a, b, int(params.get("n", 3)))
+    elif variant == "pos_ngram":
+        # POS-level n-gram containment is degenerate without a tagger; use the
+        # word-class n-gram containment as a lightweight approximation.
+        raw = _ngram_containment_similarity(a, b, int(params.get("n", 3)))
+    else:
+        raise ValueError(f"unsupported structural_stylistic variant '{variant}'")
+    result = _normalize_similarity(raw, "structural_stylistic", "builtin")
+    return result
+
+
 # ─── Dispatcher ───────────────────────────────────────────────────────────────
 
 SIMILARITY_DISPATCH: dict[tuple[str, str], Any] = {
@@ -417,6 +613,8 @@ SIMILARITY_DISPATCH: dict[tuple[str, str], Any] = {
     ("jaccard", "builtin"): partial(_token_set_overlap, variant="jaccard"),
     ("dice", "builtin"): partial(_token_set_overlap, variant="dice"),
     ("bertscore", "bertscore"): _bertscore,
+    ("topic_model", "builtin"): _topic_model,
+    ("structural_stylistic", "builtin"): _structural_stylistic,
 }
 
 DEFAULT_BACKENDS: dict[str, str] = {
@@ -430,9 +628,8 @@ DEFAULT_BACKENDS: dict[str, str] = {
     "jaccard": "builtin",
     "dice": "builtin",
     "bertscore": "bertscore",
-    # DKPro-sidecar measures: known measures, computed externally via dkpro_proxy.
-    "topic_model": "dkpro",
-    "structural_stylistic": "dkpro",
+    "topic_model": "builtin",
+    "structural_stylistic": "builtin",
 }
 
 

@@ -60,7 +60,7 @@
     "/v1/similarity/text/algorithms": {
       "get": {
         "summary": "List Algorithms",
-        "description": "Discovery: list all algorithm/backend combinations with metadata.\n\nEntries that rely on an optional sidecar (``requires_sidecar``) carry a\nbest-effort live ``sidecar_reachable`` flag and a ``sidecar`` name so a\nclient can predict whether a request will succeed without issuing one.\n``is_placeholder`` marks backends that currently return a constant stub\nvalue (the DKPro sidecar is scaffolded, not yet implemented).",
+        "description": "Discovery: list all algorithm/backend combinations with metadata.\n\nEntries that rely on the optional ConceptNet sidecar (``requires_sidecar``)\ncarry a best-effort live ``sidecar_reachable`` flag so a client can predict\nwhether a request will succeed without issuing one.",
         "operationId": "list_algorithms_v1_similarity_text_algorithms_get",
         "responses": {
           "200": {

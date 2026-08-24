@@ -13,8 +13,8 @@ measure they get without knowing the backing library:
   base backends (incl. gensim) omit it
 - ``requires_gpu``: always false — the whole service is CPU-capable
 - ``language``: language the backend serves (e.g. ``de`` for Odenet)
-- ``extra``: pip extra needed to enable the backend (``model``, ``de``,
-  ``dkpro``) — base backends omit it
+- ``extra``: pip extra needed to enable the backend (``model``, ``de``) — base
+  backends omit it
 - ``variants``: selectable via ``params.variant`` / ``params.model_name``
 
 Build/run profiles — the same repo builds two images that differ only in the
@@ -178,14 +178,7 @@ CATALOG: list[dict[str, Any]] = [
     *_entry(
         "similarity",
         "wordnet_similarity",
-        _backends(
-            ("nltk", "NLTK synset path/wup/lch/res/jcn/lin similarity"),
-            (
-                "dkpro",
-                "DKPro WordNetComparator (Java sidecar) — placeholder, always returns 0.5",
-                {"requires_sidecar": True, "sidecar": "dkpro", "is_placeholder": True},
-            ),
-        ),
+        _backends(("nltk", "NLTK synset path/wup/lch/res/jcn/lin similarity")),
         "WordNet path/IC similarity — Path/WUP/LCH/Resnik/JCN/Lin",
         score_range="[0,inf)",
         granularity="word",
@@ -195,14 +188,7 @@ CATALOG: list[dict[str, Any]] = [
     *_entry(
         "similarity",
         "tfidf_cosine",
-        _backends(
-            ("sklearn", "sklearn TfidfVectorizer + cosine_similarity"),
-            (
-                "dkpro",
-                "DKPro CosineSimilarity (Java sidecar) — placeholder, always returns 0.5",
-                {"requires_sidecar": True, "sidecar": "dkpro", "is_placeholder": True},
-            ),
-        ),
+        _backends(("sklearn", "sklearn TfidfVectorizer + cosine_similarity")),
         "TF-IDF vector-space cosine similarity",
         granularity="document",
         stateful=True,
@@ -250,38 +236,27 @@ CATALOG: list[dict[str, Any]] = [
     *_entry(
         "similarity",
         "topic_model",
-        _backends(
-            (
-                "dkpro",
-                "DKPro LSA/ESA (Java sidecar) — placeholder, always returns 0.5",
-                {"requires_sidecar": True, "sidecar": "dkpro", "is_placeholder": True},
-            ),
-        ),
-        "Topic-model-based similarity — LSA/ESA",
+        _backends(("builtin", "Corpus-free LSI — TF-IDF + truncated SVD (params.variant lsa/esa)")),
+        "Topic-model-based similarity — corpus-free LSI",
         granularity="document",
         stateful=True,
         category="topic",
-        requires_sidecar=True,
-        sidecar="dkpro",
-        is_placeholder=True,
+        variants=["lsa", "esa"],
     ),
     *_entry(
         "similarity",
         "structural_stylistic",
         _backends(
             (
-                "dkpro",
-                "DKPro n-gram containment/TTR/greedy string tiling (Java sidecar) — placeholder, always returns 0.5",
-                {"requires_sidecar": True, "sidecar": "dkpro", "is_placeholder": True},
-            ),
+                "builtin",
+                "Pure-Python structural/stylistic — n-gram containment / type-token ratio / greedy string tiling (params.variant)",
+            )
         ),
         "Structural/stylistic text similarity — n-gram containment/TTR/greedy string tiling",
         granularity="document",
         stateful=True,
         category="structural",
-        requires_sidecar=True,
-        sidecar="dkpro",
-        is_placeholder=True,
+        variants=["ngram_containment", "type_token_ratio", "greedy_string_tiling", "pos_ngram"],
     ),
     # ── retrieval ──────────────────────────────────────────────────────────
     # semantic_search is sentence-transformers only ([model]-only) — the former

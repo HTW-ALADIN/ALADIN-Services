@@ -13,7 +13,6 @@ from collections.abc import Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
-import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -22,7 +21,6 @@ from . import conceptnet_client
 from .catalog import CATALOG, PROFILE, get_catalog
 from .conceptnet_api import MAX_REMOTE_INPUTS, ConceptNetError
 from .conceptnet_client import ConceptNetSidecarError, is_sidecar_reachable
-from .dkpro_proxy import compute_via_sidecar, is_dkpro_reachable, is_dkpro_request
 from .lexical import DEFAULT_LEXICAL_BACKENDS, compute_lexical
 from .model_cache import LargeModelDownloadBlocked, cache_summary, is_warm, warm_start
 from .models import (
@@ -209,18 +207,15 @@ def _safe_cache_summary() -> dict:
 def list_algorithms() -> list[dict]:
     """Discovery: list all algorithm/backend combinations with metadata.
 
-    Entries that rely on an optional sidecar (``requires_sidecar``) carry a
-    best-effort live ``sidecar_reachable`` flag and a ``sidecar`` name so a
-    client can predict whether a request will succeed without issuing one.
-    ``is_placeholder`` marks backends that currently return a constant stub
-    value (the DKPro sidecar is scaffolded, not yet implemented).
+    Entries that rely on the optional ConceptNet sidecar (``requires_sidecar``)
+    carry a best-effort live ``sidecar_reachable`` flag so a client can predict
+    whether a request will succeed without issuing one.
     """
     catalog = get_catalog()
     conceptnet_ok = is_sidecar_reachable()
-    dkpro_ok = is_dkpro_reachable()
     for entry in catalog:
         if entry.get("requires_sidecar"):
-            entry["sidecar_reachable"] = dkpro_ok if entry.get("sidecar") == "dkpro" else conceptnet_ok
+            entry["sidecar_reachable"] = conceptnet_ok
     return catalog
 
 
@@ -242,7 +237,7 @@ def _run_batch(
 ) -> tuple[list[TextResult], float]:
     """Compute a batch of inputs, mapping each item to a TextResult.
 
-    Errors map to problem+json: validation errors -> 400, DKPro sidecar
+    Errors map to problem+json: validation errors -> 400, ConceptNet sidecar
     failures -> 502/503, everything else -> 500.
     """
     results: list[TextResult] = []
@@ -303,7 +298,7 @@ def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
 
     _require_enabled(algorithm)
 
-    if (algorithm, backend) not in SIMILARITY_DISPATCH and not is_dkpro_request(algorithm, backend):
+    if (algorithm, backend) not in SIMILARITY_DISPATCH:
         supported = [b for (m, b) in SIMILARITY_DISPATCH if m == algorithm]
         raise HTTPException(
             status_code=400,
@@ -372,10 +367,7 @@ def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
     # mirrors the batched local-ConceptNet path and is far faster for large
     # batches, especially on GPU.
     if algorithm == "sbert_cosine" and backend == "sentence_transformers":
-        pairs = [
-            {"id": item.id, "text_a": item.a, "text_b": item.b}
-            for item in request.inputs
-        ]
+        pairs = [{"id": item.id, "text_a": item.a, "text_b": item.b} for item in request.inputs]
         try:
             results = sbert_cosine_batch(pairs, request.params)
         except ValueError as e:
@@ -399,30 +391,14 @@ def text_distance(request: TextDistanceRequest) -> TextComputeResponse:
         return TextComputeResponse(algorithm=algorithm, backend=backend, results=results, meta={"compute_time_ms": total_ms})
 
     def _compute(alg: str, bck: str, input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
-        if (alg, bck) in SIMILARITY_DISPATCH:
-            try:
-                return compute_similarity(alg, bck, input_data, params)
-            except ConceptNetError as e:
-                # External ConceptNet API failure (explicit backend: remote)
-                # -> clean 502/503 problem+json. No cross-backend fallback: the
-                # local Numberbatch model is only used through backend: local
-                # (the default), never swapped in under the API path.
-                raise HTTPException(status_code=e.status, detail=f"ConceptNet API request failed: {e}") from None
         try:
-            return compute_via_sidecar(alg, params.get("variant"), input_data, params)
-        except httpx.TransportError as e:
-            # Connection refused / timeout / DNS — the sidecar process is simply
-            # unreachable (optional component): soft degradation to 503.
-            logger.exception("DKPro sidecar unreachable for %s/%s (input %s)", alg, bck, input_data.get("id", "<unknown>"))
-            raise HTTPException(status_code=503, detail="DKPro sidecar unreachable") from e
-        except httpx.HTTPStatusError as e:
-            # The sidecar responded with an upstream error status.
-            logger.exception("DKPro sidecar returned an error for %s/%s (input %s)", alg, bck, input_data.get("id", "<unknown>"))
-            raise HTTPException(status_code=502, detail="DKPro sidecar request failed") from e
-        except Exception as e:  # noqa: BLE001
-            # Fallback wording/mapping errors produce a response that cannot be parsed.
-            logger.exception("DKPro sidecar request failed for %s/%s (input %s)", alg, bck, input_data.get("id", "<unknown>"))
-            raise HTTPException(status_code=502, detail="DKPro sidecar request failed") from e
+            return compute_similarity(alg, bck, input_data, params)
+        except ConceptNetError as e:
+            # External ConceptNet API failure (explicit backend: remote)
+            # -> clean 502/503 problem+json. No cross-backend fallback: the
+            # local Numberbatch model is only used through backend: local
+            # (the default), never swapped in under the API path.
+            raise HTTPException(status_code=e.status, detail=f"ConceptNet API request failed: {e}") from None
 
     results, total_ms = _run_batch(
         algorithm,

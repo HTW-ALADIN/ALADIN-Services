@@ -676,3 +676,113 @@ class TestDiscoveryMetadata:
         semantic_search_backends = {e["backend"] for e in catalog if e["algorithm"] == "semantic_search"}
         assert semantic_search_backends == {"sentence_transformers"}
         assert ("semantic_search", "gensim") not in by_key
+
+
+class TestTopicModel:
+    """Native corpus-free LSI (replaces the retired DKPro LSA/ESA sidecar)."""
+
+    def test_identical_texts_score_high(self):
+        r = compute_similarity(
+            "topic_model",
+            "builtin",
+            {"text_a": "the quick brown fox jumps", "text_b": "the quick brown fox jumps"},
+            {"variant": "lsa"},
+        )
+        assert r["similarity"] == pytest.approx(1.0)
+
+    def test_disjoint_texts_score_low(self):
+        r = compute_similarity(
+            "topic_model",
+            "builtin",
+            {"text_a": "the quick brown fox jumps", "text_b": "quantum entanglement particle physics"},
+            {"variant": "lsa"},
+        )
+        assert r["similarity"] < 0.1
+
+    def test_partial_overlap_between_extremes(self):
+        r = compute_similarity(
+            "topic_model",
+            "builtin",
+            {"text_a": "the cat sat here", "text_b": "the cat sat there"},
+            {"variant": "lsa"},
+        )
+        assert 0.0 < r["similarity"] <= 1.0
+
+    def test_esa_variant_is_accepted(self):
+        r = compute_similarity(
+            "topic_model",
+            "builtin",
+            {"text_a": "the cat sat here", "text_b": "the cat sat there"},
+            {"variant": "esa"},
+        )
+        assert 0.0 <= r["similarity"] <= 1.0
+
+    def test_identical_via_api(self):
+        resp = client.post(
+            "/v1/similarity/text/distance",
+            json={
+                "algorithm": "topic_model",
+                "params": {"variant": "lsa"},
+                "inputs": [{"id": "p1", "a": "hello world foo bar", "b": "hello world foo bar"}],
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["backend"] == "builtin"
+        assert resp.json()["results"][0]["result"]["similarity"] == pytest.approx(1.0)
+
+
+class TestStructuralStylistic:
+    """Native structural/stylistic measures (replaces the retired DKPro sidecar)."""
+
+    def test_ngram_containment_identical(self):
+        r = compute_similarity(
+            "structural_stylistic",
+            "builtin",
+            {"text_a": "the cat sat here", "text_b": "the cat sat here"},
+            {"variant": "ngram_containment", "n": 2},
+        )
+        assert r["similarity"] == pytest.approx(1.0)
+
+    def test_ngram_containment_disjoint(self):
+        r = compute_similarity(
+            "structural_stylistic",
+            "builtin",
+            {"text_a": "the cat sat here", "text_b": "banana yellow fruit"},
+            {"variant": "ngram_containment", "n": 2},
+        )
+        assert r["similarity"] == pytest.approx(0.0)
+
+    def test_type_token_ratio_identical(self):
+        r = compute_similarity(
+            "structural_stylistic",
+            "builtin",
+            {"text_a": "cat cat cat", "text_b": "cat cat cat"},
+            {"variant": "type_token_ratio"},
+        )
+        assert r["similarity"] == pytest.approx(1.0)
+
+    def test_greedy_string_tiling_identical(self):
+        r = compute_similarity(
+            "structural_stylistic",
+            "builtin",
+            {"text_a": "a b c d", "text_b": "a b c d"},
+            {"variant": "greedy_string_tiling"},
+        )
+        assert r["similarity"] == pytest.approx(1.0)
+
+    def test_unknown_variant_raises(self):
+        with pytest.raises(ValueError, match="unsupported structural_stylistic variant"):
+            compute_similarity("structural_stylistic", "builtin", {"text_a": "a", "text_b": "b"}, {"variant": "nope"})
+
+    def test_via_api(self):
+        resp = client.post(
+            "/v1/similarity/text/distance",
+            json={
+                "algorithm": "structural_stylistic",
+                "params": {"variant": "ngram_containment", "n": 2},
+                "inputs": [{"id": "p1", "a": "the cat sat here", "b": "the cat sat here"}],
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["backend"] == "builtin"
+        assert resp.json()["results"][0]["result"]["similarity"] == pytest.approx(1.0)

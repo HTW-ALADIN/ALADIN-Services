@@ -13,23 +13,10 @@ on:
       - ".github/workflows/service-text-similarity-service.yml"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DKPro sidecar (dkpro-sidecar/) is OPTIONAL:
-#
-#   COST    — DKPro Similarity is a Java/Apache UIMA stack. The artifacts are
-#             not on Maven Central, so building it requires cloning
-#             https://github.com/dkpro/dkpro-similarity and building from
-#             source. It needs JDK 21 + Maven + the UIMA runtime, and is
-#             ~8 years stale upstream.
-#
-#   BENEFIT — It adds exactly 2 families (topic_model, structural_stylistic)
-#             out of the 17 semantic families. The optional dkpro backend
-#             variants (tfidf_cosine, wordnet_similarity) add NO new family
-#             coverage — only alternative implementations of already-covered
-#             tags, and are also skippable.
-#
-#   The Python service runs and is tested WITHOUT the sidecar; the sidecar
-#   job below only runs when files under dkpro-sidecar/ changed, and even
-#   then it's non-blocking for the Python path.
+# The former DKPro Java sidecar (dkpro-sidecar/) has been removed entirely.
+# Its two measure families (topic_model and structural_stylistic) are now
+# implemented natively in the Python service, so there is no Java component to
+# build or test here.
 # ─────────────────────────────────────────────────────────────────────────────
 
 defaults:
@@ -240,17 +227,21 @@ jobs:
         # One repo builds images that differ in what they ship:
         #   text-similarity-cpu  — (default) no PyTorch, no pre-cached models
         #   text-similarity-hf   — full PyTorch stack + all HF models pre-cached
-        # The local ConceptNet Numberbatch model is NOT in any main image — it is
-        # served by the optional conceptnet-sidecar (built in its own job below).
+        # HF_PRELOAD is the single build-arg that controls BOTH the disk
+        # pre-cache and the RAM warm-start: "off" = cold (default), "all" =
+        # every advertised model pre-downloaded to disk + loaded into RAM (see
+        # the Dockerfile). The local ConceptNet Numberbatch model is NOT in any
+        # main image — it is served by the optional conceptnet-sidecar (built
+        # in its own job below).
         include:
           - image: text-similarity-cpu
             profile: cpu
             install_model: "false"
-            precache_hf: "false"
+            hf_preload: "off"
           - image: text-similarity-hf
             profile: pytorch
             install_model: "true"
-            precache_hf: "true"
+            hf_preload: "all"
     steps:
       - uses: actions/checkout@v4
       - name: Log in to GitHub Container Registry
@@ -277,7 +268,7 @@ jobs:
           build-args: |
             SIMILARITY_PROFILE=${{ matrix.profile }}
             INSTALL_MODEL=${{ matrix.install_model }}
-            PRECACHE_HF=${{ matrix.precache_hf }}
+            HF_PRELOAD=${{ matrix.hf_preload }}
           # Reuse layers across CI runs: without this, the ~2.5 GB PyTorch layer
           # is re-downloaded on every push to master. `type=gha` uses the GitHub
           # Actions cache backend scoped to this project/branch.
@@ -341,48 +332,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-  # ── OPTIONAL: DKPro Java sidecar ─────────────────────────────────────────
-  # Only runs when dkpro-sidecar/** actually changed (either in a PR or in a
-  # push). The previous `contains(github.event.pull_request.changed_files, ...)`
-  # check was wrong: GitHub Actions does not expose such an array on the event,
-  # so the job never ran for PRs. We detect changed paths reliably with
-  # dorny/paths-filter. Non-blocking for the Python path (nothing depends on it);
-  # if you never need topic_model / structural_stylistic, delete this job and
-  # the dkpro-sidecar/ directory — the Python service passes all tests without it.
-  dkpro-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      dkpro: ${{ steps.filter.outputs.dkpro }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # Needed by dorny/paths-filter to diff against the base branch.
-          fetch-depth: 0
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            dkpro:
-              - 'services/text-similarity-service/dkpro-sidecar/**'
-
-  dkpro-sidecar:
-    name: DKPro sidecar (optional, Java)
-    runs-on: ubuntu-latest
-    needs: dkpro-changes
-    # Only build the sidecar when its files actually changed (PR or push);
-    # paths-filter diffs against the base ref / previous commit for both.
-    if: needs.dkpro-changes.outputs.dkpro == 'true'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          java-version: "21"
-          distribution: "temurin"
-          cache: "maven"
-      - name: Build and test sidecar
-        working-directory: services/text-similarity-service/dkpro-sidecar
-        run: |
-          mvn test
-          mvn package -DskipTests

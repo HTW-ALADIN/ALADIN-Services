@@ -21,11 +21,9 @@ Before using this service, understand **three independent decisions**. Everythin
 - `text-similarity-hf` is the recommended light "everything-else" deployment: built with [`HF_PRELOAD=all`](#hf_preload-build-arg) it pre-caches all HuggingFace models (`all-MiniLM-L6-v2`, `all-mpnet-base-v2`, `paraphrase-multilingual-MiniLM-L12-v2`, `stsb-roberta-base`, `roberta-large`) to disk at build time (and warms them into RAM at start), so SBERT/cross-encoder/BERTScore serve instantly from a fresh container — offline. It is the **only** full-feature build; ConceptNet Numberbatch is served by the optional sidecar, never pre-cached into the image.
 - `embedding_cosine` / `conceptnet_numberbatch` with `params.backend=local` is served by the ConceptNet sidecar; with no sidecar configured it returns `502/503` (see below), never a local in-process computation or download.
 
-**2. Is the optional Java DKPro sidecar running?** If yes, you also get `topic_model`, `structural_stylistic`, and `dkpro` backends for two base algorithms. If no, those requests fail with `502/503`. **Caution:** the DKPro sidecar is currently a scaffold — those backends return a constant placeholder score of `0.5` and are flagged `"is_placeholder": true` in the catalog (see the table notes below).
+**2. Is the optional ConceptNet sidecar running?** If yes, `embedding_cosine` / `conceptnet_numberbatch` / `params.backend: local` is served by the separate `conceptnet-sidecar` process. If no, those requests fail with `502/503`. See [ConceptNet sidecar](#conceptnet-sidecar).
 
-**3. Is the optional ConceptNet sidecar running?** If yes, `embedding_cosine` / `conceptnet_numberbatch` / `params.backend: local` is served by the separate `conceptnet-sidecar` process. If no, those requests fail with `502/503`. See [ConceptNet sidecar](#conceptnet-sidecar).
-
-**4. Do you allow the external ConceptNet API?** Only one algorithm variant (`embedding_cosine` / `conceptnet_numberbatch` / `backend: remote`) calls a third-party API — and only when you ask for it explicitly. Everything else is fully self-contained. See [External API](#external-api).
+**3. Do you allow the external ConceptNet API?** Only one algorithm variant (`embedding_cosine` / `conceptnet_numberbatch` / `backend: remote`) calls a third-party API — and only when you ask for it explicitly. Everything else is fully self-contained. See [External API](#external-api).
 
 
 ---
@@ -36,8 +34,8 @@ Before using this service, understand **three independent decisions**. Everythin
 
 | Endpoint | Algorithm | Backend | Runs in | Variants / notes |
 |---|---|---|---|---|
-| `/distance` | `wordnet_similarity` | `nltk`, `dkpro`\* | **cpu** + pytorch | `path` (default), `wup`, `lch`, `res`, `jcn`, `lin` — IC variants load the corpus server-side |
-| `/distance` | `tfidf_cosine` | `sklearn`, `dkpro`\* | **cpu** + pytorch | vector-space cosine |
+| `/distance` | `wordnet_similarity` | `nltk` | **cpu** + pytorch | `path` (default), `wup`, `lch`, `res`, `jcn`, `lin` — IC variants load the corpus server-side |
+| `/distance` | `tfidf_cosine` | `sklearn` | **cpu** + pytorch | vector-space cosine |
 | `/distance` | `token_set_overlap` | `builtin` | **cpu** + pytorch | `jaccard` (default) / `dice` |
 | `/distance` | `jaccard` / `dice` | `builtin` | **cpu** + pytorch | legacy aliases of `token_set_overlap` |
 | `/distance` | `embedding_cosine` | `gensim` | **cpu** + pytorch | `glove` (default), `fasttext`†, `conceptnet_numberbatch` (sidecar default / remote opt-in) |
@@ -45,13 +43,12 @@ Before using this service, understand **three independent decisions**. Everythin
 | `/distance` | `sbert_cosine` | `sentence_transformers` | **hf** | `params.model_name` restricted to allow-list |
 | `/distance` | `cross_encoder` | `sentence_transformers` | **hf** | pairwise reranking |
 | `/distance` | `bertscore` | `bertscore` | **hf** | P/R/F1; `lang`-based default = `roberta-large` |
-| `/distance` | `topic_model` | `dkpro`\* | **sidecar required** | LSA / ESA |
-| `/distance` | `structural_stylistic` | `dkpro`\* | **sidecar required** | n-gram containment / TTR / greedy string tiling |
+| `/distance` | `topic_model` | `builtin` | **cpu** + pytorch | corpus-free LSI (`lsa`/`esa` aliases) |
+| `/distance` | `structural_stylistic` | `builtin` | **cpu** + pytorch | n-gram containment / type-token ratio / greedy string tiling |
 | `/retrieval` | `bm25` | `builtin` | **cpu** + pytorch | `k1` (1.5), `b` (0.75), `top_k` (10) |
 | `/retrieval` | `semantic_search` | `sentence_transformers` | **hf** | nearest-neighbor retrieval |
 | `/lexical` | `synonym` / `antonym` / `hypernym` / `hyponym` | `nltk`, `odenet` | **cpu** + pytorch | `odenet` = German (needs `[de]` extra) |
 
-\* `dkpro` backend requires the Java sidecar — works with **either** image. **Note:** the Java sidecar is currently a *scaffold*: `topic_model`, `structural_stylistic`, and the `dkpro` backends of `tfidf_cosine`/`wordnet_similarity` return a constant placeholder score of `0.5`. They are flagged `"is_placeholder": true` in `GET /v1/similarity/text/algorithms` until DKPro Similarity is built from source (see `dkpro-sidecar/README.md`).
 † Large download — gated (see [Resource gate](#resource-gate-for-large-downloads)).
 
 ### Notable algorithms
@@ -87,10 +84,9 @@ Safeguards: ~5 s timeout, batch cap `CONCEPTNET_MAX_REMOTE_INPUTS` (60), throttl
 > in-process. If no, those requests fail with `502/503` — the main service process
 > stays healthy, it never crashes and never falls back to a local download.
 
-The sidecar lives in `conceptnet-sidecar/` beside the DKPro sidecar (see its [README](conceptnet-sidecar/README.md)),
+The sidecar lives in `conceptnet-sidecar/` (see its [README](conceptnet-sidecar/README.md)),
 with its URL configured via `TEXT_SIMILARITY_CONCEPTNET_URL` (default
-`http://localhost:8200`). It works with **either** main image (`cpu`/`hf`), exactly
-like the DKPro sidecar. Run it locally with:
+`http://localhost:8200`). It works with **either** main image (`cpu`/`hf`). Run it locally with:
 
 ```sh
 cd conceptnet-sidecar
@@ -139,9 +135,6 @@ inactivity TTL:
 | Active (model loaded) | ~3–6 GB (CPU only) |
 | Idle (`CONCEPTNET_IDLE_TTL_SECONDS` elapsed, model evicted) | **< 200 MB** |
 
-### DKPro sidecar
-Extra Java process: ~2 cores, 1–2 GB RAM alongside the Python service.
-
 ---
 
 ## Resource gate
@@ -167,7 +160,6 @@ Synchronous & stateless: `{"algorithm", "params", "inputs":[...]}` → result pe
 | Variable | Default | Description |
 |---|---|---|
 | `SIMILARITY_PROFILE` | `cpu` | image/run profile (`cpu` / `pytorch`), baked in at build |
-| `TEXT_SIMILARITY_DKPRO_URL` | `http://localhost:8100` | DKPro Java sidecar URL |
 | `TEXT_SIMILARITY_CONCEPTNET_URL` | `http://localhost:8200` | ConceptNet sidecar URL for `embedding_cosine` / `conceptnet_numberbatch` / `params.backend: local` |
 | `CONCEPTNET_API_URL` | `https://api.conceptnet.io` | ConceptNet relatedness API base |
 | `CONCEPTNET_MAX_REMOTE_INPUTS` | `60` | max inputs/request for `remote` backend |

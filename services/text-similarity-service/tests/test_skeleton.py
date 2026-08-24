@@ -197,26 +197,18 @@ def test_compute_synonym():
     assert body["results"][0]["result"]["count"] > 0
 
 
-def test_dkpro_backends_flagged_as_placeholders(profile_client):
-    """Backends served solely by the (not yet implemented) DKPro sidecar must be
-    advertised as placeholders so consumers never mistake a constant 0.5 for a
-    real similarity score."""
+def test_builtin_measures_are_not_sidecars(profile_client):
+    """topic_model/structural_stylistic are now native in-process measures, not
+    external sidecar placeholders: no sidecar flag, no placeholder marker."""
     catalog = profile_client("pytorch").get("/v1/similarity/text/algorithms").json()
-    dkpro_entries = [e for e in catalog if e.get("sidecar") == "dkpro"]
-    assert dkpro_entries, "expected at least one dkpro-sidecar entry"
-    # topic_model, structural_stylistic, tfidf_cosine/dkpro, wordnet_similarity/dkpro
-    expected = {
-        ("topic_model", "dkpro"),
-        ("structural_stylistic", "dkpro"),
-        ("tfidf_cosine", "dkpro"),
-        ("wordnet_similarity", "dkpro"),
-    }
-    actual = {(e["algorithm"], e["backend"]) for e in dkpro_entries}
-    assert expected.issubset(actual)
-    for e in dkpro_entries:
-        assert e["is_placeholder"] is True
-        assert e["requires_sidecar"] is True
-        assert "sidecar_reachable" in e  # live flag injected by the discovery endpoint
+    by_alg = {e["algorithm"]: e for e in catalog}
+    for alg in ("topic_model", "structural_stylistic"):
+        entry = by_alg[alg]
+        assert entry["backend"] == "builtin"
+        assert entry.get("is_placeholder") is False
+        assert entry.get("requires_sidecar") is False
+        assert not entry.get("sidecar")  # no sidecar dependency anymore
+        assert "variants" in entry
 
 
 def test_conceptnet_backend_marked_and_reachable_flag(profile_client):
