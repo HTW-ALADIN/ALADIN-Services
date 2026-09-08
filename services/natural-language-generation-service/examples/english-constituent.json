@@ -1,0 +1,33 @@
+{
+	"mode": "surface_realization",
+	"backend": "jsrealb",
+	"language": "en",
+	"input": {
+		"representation": "constituent",
+		"structure": {
+			"phrase": "S",
+			"elements": [
+				{
+					"phrase": "NP",
+					"elements": [
+						{ "terminal": "D", "lemma": "the" },
+						{ "terminal": "N", "lemma": "cat" }
+					]
+				},
+				{
+					"phrase": "VP",
+					"elements": [
+						{ "terminal": "V", "lemma": "chase" },
+						{
+							"phrase": "NP",
+							"elements": [
+								{ "terminal": "D", "lemma": "the" },
+								{ "terminal": "N", "lemma": "mouse" }
+							]
+						}
+					]
+				}
+			]
+		}
+	}
+}
