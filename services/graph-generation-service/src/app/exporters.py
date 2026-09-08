@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Hashable, Iterable, Sequence
 from dataclasses import dataclass
 from io import BytesIO
-from typing import TypeAlias, cast
+from typing import Any, TypeAlias, cast
 from uuid import NAMESPACE_URL, uuid5
 
 import networkx as nx
@@ -64,7 +64,11 @@ def _graph_data(
     if isinstance(graph, (nx.MultiGraph, nx.MultiDiGraph)):
         return list(graph.nodes), [(source, target) for source, target, _key in graph.edges(keys=True)]
     if isinstance(graph, nx.Graph):
-        return list(graph.nodes), list(graph.edges)
+        if graph.is_multigraph():
+            multiedges = cast(Iterable[tuple[Hashable, Hashable, Any]], graph.edges)
+            flat_edges: list[tuple[Hashable, Hashable]] = [(u, v) for u, v, _key in multiedges]
+            return list(graph.nodes), flat_edges
+        return list(graph.nodes), list(cast(Iterable[tuple[Hashable, Hashable]], graph.edges))
     if isinstance(graph, IgraphGraph):
         nodes = list(range(graph.vcount()))
         edges = cast(list[tuple[int, int]], graph.get_edgelist())

@@ -30,6 +30,7 @@ from app.schemas import (
     GraphLinks,
     GraphMetadata,
     GraphResource,
+    LabelMode,
     OutputFormat,
     ProblemDetails,
     RequestParameterError,
@@ -39,6 +40,7 @@ from app.storage import StoredGraph
 
 GRAPH_STORE: dict[str, StoredGraph] = {}
 MAX_STORED_GRAPHS = 100
+MAX_STORED_EDGES = 5_000_000
 
 app = FastAPI(
     title="Unified Graph Generation Service",
@@ -154,14 +156,24 @@ def create_graph(
     generation_time_ms = int((perf_counter() - started_at) * 1000)
 
     resource = _graph_resource(request, generated, generation_time_ms)
-    if len(GRAPH_STORE) >= MAX_STORED_GRAPHS:
+    _store_graph(resource, generated, request.output.labels)
+    return resource
+
+
+def _stored_edge_count() -> int:
+    return sum(stored.resource.metadata.numEdges or 0 for stored in GRAPH_STORE.values())
+
+
+def _store_graph(resource: GraphResource, generated: GeneratedGraph, labels: LabelMode) -> None:
+    while GRAPH_STORE and (
+        len(GRAPH_STORE) >= MAX_STORED_GRAPHS or _stored_edge_count() + generated.num_edges > MAX_STORED_EDGES
+    ):
         GRAPH_STORE.pop(next(iter(GRAPH_STORE)))
     GRAPH_STORE[resource.id] = StoredGraph(
         resource=resource,
         generated=generated,
-        labels=request.output.labels,
+        labels=labels,
     )
-    return resource
 
 
 def _graph_not_found(graph_id: str) -> JSONResponse:

@@ -941,3 +941,227 @@ def test_spec_b_parameter_validation_uses_problem_details(payload: dict[str, obj
 
     assert response.status_code == 400
     assert response.headers["content-type"] == "application/problem+json"
+
+
+def test_rejects_dense_graphs_over_edge_budget() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={"algorithm": "erdos_renyi_gnm", "backend": "networkx", "params": {"n": 10_000, "m": 3_000_000}},
+    )
+
+    assert response.status_code == 400
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["invalidParams"][0]["name"] == "params"
+
+
+def test_rejects_dense_probabilistic_graphs_over_edge_budget() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={"algorithm": "erdos_renyi_gnp", "backend": "networkx", "params": {"n": 10_000, "p": 1.0}},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["invalidParams"][0]["name"] == "params"
+
+
+def test_rejects_unbounded_kronecker_edge_factor() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={
+            "algorithm": "kronecker_rmat",
+            "backend": "networkit",
+            "params": {"scale": 13, "edgeFactor": 1_000_000, "a": 0.57, "b": 0.19, "c": 0.19, "d": 0.05},
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_rejects_huge_degree_sequence_budget() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={"algorithm": "chung_lu", "backend": "networkx", "params": {"degreeSequence": [10**12] * 100}},
+    )
+
+    assert response.status_code == 400
+
+
+def test_rejects_cpu_bound_kleinberg_size() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={"algorithm": "kleinberg_small_world", "backend": "networkx", "params": {"n": 100}},
+    )
+
+    assert response.status_code == 400
+
+
+def test_rejects_undirected_barabasi_albert_backends() -> None:
+    for backend, params in (
+        ("networkx", {"n": 500, "m": 3}),
+        ("networkit", {"k": 3, "nMax": 500, "n0": 4}),
+    ):
+        response = client.post(
+            "/v1/graphs",
+            json={
+                "algorithm": "barabasi_albert",
+                "backend": backend,
+                "params": params,
+                "output": {"directed": True},
+            },
+        )
+
+        assert response.status_code == 400
+        assert any(error["name"] == "output.directed" for error in response.json()["invalidParams"])
+
+
+def test_accepts_directed_igraph_barabasi_albert() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={
+            "algorithm": "barabasi_albert",
+            "backend": "igraph",
+            "params": {"n": 50, "m": 3},
+            "output": {"directed": True},
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["metadata"]["directed"] is True
+
+
+def test_rejects_directed_networkx_random_tree() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={"algorithm": "random_tree", "backend": "networkx", "params": {"n": 10}, "output": {"directed": True}},
+    )
+
+    assert response.status_code == 400
+    assert any(error["name"] == "output.directed" for error in response.json()["invalidParams"])
+
+
+def test_rejects_ungraphical_havel_hakimi_sequence() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={
+            "algorithm": "configuration_model",
+            "backend": "networkx",
+            "params": {"sequence": [4, 4, 4, 4], "variant": "havel_hakimi"},
+        },
+    )
+
+    assert response.status_code == 400
+    assert any(error["name"] == "params.sequence" for error in response.json()["invalidParams"])
+
+
+def test_exports_configuration_model_graph() -> None:
+    create_response = client.post(
+        "/v1/graphs",
+        json={"algorithm": "configuration_model", "backend": "networkx", "params": {"sequence": [2, 2, 2, 2]}},
+    )
+
+    assert create_response.status_code == 201
+    export_response = client.get(create_response.json()["_links"]["export"])
+    assert export_response.status_code == 200
+    assert len(export_response.json()["edges"]) == create_response.json()["metadata"]["numEdges"]
+
+
+def test_store_evicts_by_edge_budget() -> None:
+    payload = {"algorithm": "barabasi_albert", "backend": "networkx", "params": {"n": 5, "m": 1}}
+
+    with patch("app.main.MAX_STORED_EDGES", 3):
+        first = client.post("/v1/graphs", json=payload).json()
+        second = client.post("/v1/graphs", json=payload).json()
+
+    assert client.get(first["_links"]["self"]).status_code == 404
+    assert client.get(second["_links"]["self"]).status_code == 200
+
+
+def test_rejects_kleinberg_oversized_dimension() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={"algorithm": "kleinberg_small_world", "backend": "networkx", "params": {"n": 1, "dim": 1_000_000}},
+    )
+
+    assert response.status_code == 400
+    assert any(error["name"] == "params.dim" for error in response.json()["invalidParams"])
+
+
+def test_accepts_sparse_kleinberg_with_small_n_and_high_dim() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={"algorithm": "kleinberg_small_world", "backend": "networkx", "params": {"n": 2, "dim": 11, "p": 1}},
+    )
+
+    assert response.status_code == 201
+
+
+def test_rejects_dense_igraph_watts_strogatz() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={
+            "algorithm": "watts_strogatz",
+            "backend": "igraph",
+            "params": {"dim": 2, "size": 100, "nei": 20, "p": 0.1},
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_rejects_dense_networkit_watts_strogatz() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={
+            "algorithm": "watts_strogatz",
+            "backend": "networkit",
+            "params": {"n": 10_000, "nNeighbors": 400, "p": 0.1},
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_rejects_dense_random_geometric_by_ball_volume() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={"algorithm": "random_geometric", "backend": "networkx", "params": {"n": 10_000, "radius": 0.2}},
+    )
+
+    assert response.status_code == 400
+
+
+def test_rejects_random_geometric_oversized_dimension() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={
+            "algorithm": "random_geometric",
+            "backend": "networkx",
+            "params": {"n": 5, "radius": 0.4, "dim": 1_000_000},
+        },
+    )
+
+    assert response.status_code == 400
+    assert any(error["name"] == "params.dim" for error in response.json()["invalidParams"])
+
+
+def test_accepts_sparse_forest_fire() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={"algorithm": "forest_fire", "backend": "igraph", "params": {"n": 10_000, "fw_prob": 0.04}},
+    )
+
+    assert response.status_code == 201
+
+
+def test_rejects_directed_igraph_configuration_model_over_budget() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={
+            "algorithm": "configuration_model",
+            "backend": "igraph",
+            "params": {"out": [600] * 10_000, "in": [600] * 10_000},
+            "output": {"directed": True},
+        },
+    )
+
+    assert response.status_code == 400

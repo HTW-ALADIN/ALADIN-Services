@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import math
 from math import isfinite
 from typing import Annotated, Any, ClassVar, Literal, Self, TypeAlias
 
+import networkx as nx
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt, model_validator
 
 
@@ -22,6 +24,10 @@ Probability: TypeAlias = Annotated[float, Field(ge=0.0, le=1.0)]
 PositiveFloat: TypeAlias = Annotated[float, Field(gt=0.0)]
 NonNegativeFloat: TypeAlias = Annotated[float, Field(ge=0.0)]
 MAX_GRAPH_NODES = 10_000
+MAX_GRAPH_EDGES = 2_000_000
+MAX_KLEINBERG_NODES = 2_500
+MAX_KLEINBERG_DIM = 11
+MAX_GEOMETRIC_DIM_WORK = 1_000_000
 
 
 class OutputOptions(StrictBaseModel):
@@ -102,6 +108,15 @@ class BarabasiAlbertRequest(BackendDiscriminatedRequest):
     backend: Literal["networkx", "igraph", "networkit"] = "networkx"
     params: BarabasiAlbertParams
     output: OutputOptions = Field(default_factory=OutputOptions)
+
+    @model_validator(mode="after")
+    def validate_directedness(self) -> Self:
+        if self.output.directed and self.backend != "igraph":
+            raise RequestParameterError(
+                "output.directed", "only the igraph backend supports directed Barabasi-Albert graphs"
+            )
+
+        return self
 
 
 class ForestFireParams(StrictBaseModel):
@@ -272,6 +287,8 @@ class NetworkXConfigurationModelParams(StrictBaseModel):
             raise RequestParameterError("params.sequence", "sequence must not be empty")
         if self.variant != "expected_degree" and sum(self.sequence) % 2:
             raise RequestParameterError("params.sequence", "degree sum must be even")
+        if self.variant == "havel_hakimi" and not nx.is_graphical(self.sequence):
+            raise RequestParameterError("params.sequence", "sequence is not a graphical degree sequence")
         return self
 
 
@@ -293,6 +310,8 @@ class IgraphConfigurationModelParams(StrictBaseModel):
             raise RequestParameterError("params.out", "out must not be empty")
         if self.in_ is None and sum(self.out) % 2:
             raise RequestParameterError("params.out", "degree sum must be even")
+        if self.in_ is None and self.method != "configuration" and not nx.is_graphical(self.out):
+            raise RequestParameterError("params.out", "out is not a graphical degree sequence")
         if self.in_ is not None:
             if len(self.in_) != len(self.out):
                 raise RequestParameterError("params.in", "in and out must have the same length")
@@ -711,6 +730,8 @@ class RandomTreeRequest(BackendDiscriminatedRequest):
 
     @model_validator(mode="after")
     def validate_method(self) -> Self:
+        if self.output.directed and isinstance(self.params, NetworkXRandomTreeParams):
+            raise RequestParameterError("output.directed", "only the igraph backend supports directed random trees")
         if isinstance(self.params, IgraphRandomTreeParams) and self.output.directed and self.params.method == "prufer":
             raise RequestParameterError("params.method", "the prufer method does not support directed trees")
         return self
@@ -1257,6 +1278,129 @@ def _bounded_power(base: int, exponent: int) -> int:
     return int(base**exponent)
 
 
+def _lattice_ball_size(dim: int, radius: int) -> int:
+    """Number of integer lattice points within L1 distance `radius` in `dim` dimensions (incl. center)."""
+    return sum(2**k * math.comb(dim, k) * math.comb(radius, k) for k in range(min(dim, radius) + 1))
+
+
+def _estimate_expected_edges(algorithm: str, params: dict[str, Any], directed: bool, node_count: int) -> float:
+    pairs = node_count * (node_count - 1) if directed else node_count * (node_count - 1) // 2
+    n = node_count
+
+    if algorithm == "erdos_renyi_gnp":
+        return pairs * float(params["p"])
+    if algorithm == "erdos_renyi_gnm":
+        return float(params["m"])
+    if algorithm == "watts_strogatz":
+        if "dim" in params:
+            ball = _lattice_ball_size(int(params["dim"]), int(params["nei"]))
+            return n * (ball - 1) / 2
+        if "nNeighbors" in params:
+            return n * int(params["nNeighbors"])
+        return n * int(params["k"]) / 2
+    if algorithm == "barabasi_albert":
+        return int(params.get("nMax") or n) * int(params.get("k") or params["m"])
+    if algorithm == "forest_fire":
+        growth = float(params["fw_prob"]) * (1 + float(params["bw_factor"]))
+        if growth >= 0.5:
+            return pairs
+        return n * (int(params["ambs"]) / (1 - 2 * growth))
+    if algorithm == "configuration_model":
+        degree_sum = float(sum(params.get("sequence") or params.get("out") or ()))
+        return degree_sum if directed else degree_sum / 2
+    if algorithm == "stochastic_block_model":
+        sizes = params.get("sizes") or params.get("block_sizes") or []
+        matrix = params.get("p") or params.get("pref_matrix") or []
+        total = sum(
+            float(matrix[i][j]) * int(sizes[i]) * int(sizes[j]) for i in range(len(sizes)) for j in range(len(sizes))
+        )
+        return total if directed else 0.5 * total
+    if algorithm == "random_regular":
+        degree = float(params.get("d") or params["k"])
+        return degree * n / 2 * (2 if directed else 1)
+    if algorithm == "random_geometric":
+        dim = int(params.get("dim", 2))
+        p_norm = max(1.0, float(params.get("p", 2.0)))
+        log_volume = dim * (
+            math.log(2) + math.lgamma(1 + 1 / p_norm) + math.log(float(params["radius"]))
+        ) - math.lgamma(1 + dim / p_norm)
+        return pairs * math.exp(min(0.0, log_volume))
+    if algorithm == "kronecker_rmat":
+        return float(params["edgeFactor"]) * n
+    if algorithm == "classic_deterministic":
+        shape = params["shape"]
+        if shape == "complete":
+            return n * (n - 1) / 2
+        if shape == "wheel":
+            return 2 * (n - 1)
+        if shape in {"grid", "lattice"}:
+            return 2 * int(params["rows"]) * int(params["cols"]) - int(params["rows"]) - int(params["cols"])
+        if shape == "hypercube":
+            return n * int(params["n"]) / 2
+        return n
+    if algorithm in {"named_graph", "random_tree"}:
+        return n
+    if algorithm == "random_bipartite":
+        return (
+            float(params["m"])
+            if params.get("m") is not None
+            else float(params["p"]) * int(params["n1"]) * int(params["n2"])
+        )
+    if algorithm == "community_clustered":
+        variant = params["variant"]
+        if variant == "planted_partition":
+            blocks, size = int(params["l"]), int(params["k"])
+            intra = blocks * size * (size - 1) * float(params["pIntra"])
+            inter = blocks * (blocks - 1) * size * size * float(params["pInter"])
+            return (intra + inter) if directed else 0.5 * (intra + inter)
+        if variant == "gaussian_random_partition":
+            intra = n * float(params["s"]) * float(params["pIntra"])
+            inter = n * n * float(params["pInter"])
+            return (intra + inter) if directed else 0.5 * (intra + inter)
+        if variant == "relaxed_caveman":
+            return int(params["l"]) * int(params["k"]) * (int(params["k"]) - 1) / 2
+        if variant == "clustered_random":
+            return 0.5 * (n * n / int(params["k"]) * float(params["pIntra"]) + n * n * float(params["pInter"]))
+        degree = float(params.get("averageDegree") or params["minDegree"])
+        return n * degree / 2
+    if algorithm == "hyperbolic":
+        return n * float(params["k"]) / 2
+    if algorithm == "chung_lu":
+        return float(sum(params["degreeSequence"])) / 2
+    if algorithm == "static_fitness":
+        return float(params["m"])
+    if algorithm == "growing_attachment":
+        variant = params["variant"]
+        if variant in {"growing_random", "recent_degree"}:
+            return int(params["m"]) * n
+        if variant == "establishment":
+            return int(params["k"]) * n
+        matrix = params["pref_matrix"] or []
+        type_sum = sum(float(value) for value in (params.get("type_dist") or ())) or sum(
+            sum(float(value) for value in row) for row in (params.get("type_dist_matrix") or ())
+        )
+        max_pref = max((max(float(value) for value in row) for row in matrix), default=0.0)
+        scale = 1.0 if directed else 0.5
+        return scale * n * n * max_pref * type_sum**2
+    if algorithm == "kleinberg_small_world":
+        if node_count <= 1:
+            return 0.0
+        local_contacts = _lattice_ball_size(int(params["dim"]), int(params["p"])) - 1
+        return float(node_count * (local_contacts + int(params["q"])))
+    if algorithm == "powerlaw_cluster":
+        return int(params["m"]) * n
+    if algorithm == "geometric_threshold":
+        return (
+            pairs * float(params["beta"])
+            if params["variant"] == "waxman"
+            else pairs * min(1.0, 1.0 / float(params["theta"]))
+        )
+    if algorithm == "duplication_divergence":
+        return 10 * n
+
+    return n * n
+
+
 def validate_graph_size(request: GraphGenerationRequestValue) -> None:
     params = request.params.model_dump(by_alias=True)
     algorithm = request.algorithm
@@ -1294,6 +1438,21 @@ def validate_graph_size(request: GraphGenerationRequestValue) -> None:
 
     if node_count > MAX_GRAPH_NODES:
         raise RequestParameterError("params", f"graph must not exceed {MAX_GRAPH_NODES} nodes")
+
+    if algorithm == "kleinberg_small_world":
+        if int(params["dim"]) > MAX_KLEINBERG_DIM:
+            raise RequestParameterError("params.dim", f"kleinberg_small_world dim must not exceed {MAX_KLEINBERG_DIM}")
+        if node_count > MAX_KLEINBERG_NODES:
+            raise RequestParameterError(
+                "params", f"kleinberg_small_world is O(n^2); n^dim must not exceed {MAX_KLEINBERG_NODES}"
+            )
+
+    if algorithm == "random_geometric" and node_count * int(params.get("dim", 2)) > MAX_GEOMETRIC_DIM_WORK:
+        raise RequestParameterError("params.dim", "random_geometric dim is too large for the requested node count")
+
+    expected_edges = _estimate_expected_edges(algorithm, params, request.output.directed, node_count)
+    if expected_edges > MAX_GRAPH_EDGES:
+        raise RequestParameterError("params", f"graph must not exceed {MAX_GRAPH_EDGES} expected edges")
 
 
 GraphGenerationRequest: TypeAlias = Annotated[
