@@ -3,8 +3,12 @@ services:
     build:
       context: .
     image: graph-generation-service
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 128
     environment:
       GRAPH_TOOL_SIDECAR_URL: http://graph-tool-sidecar:8003
+      GRAPH_CONCURRENCY: "1"
     ports:
       - "8002:8002"
     depends_on:
@@ -16,3 +20,8 @@ services:
       context: .
       dockerfile: sidecar/Dockerfile
     image: graph-tool-sidecar
+    mem_limit: 3g
+    cpus: 2
+    pids_limit: 128
+    environment:
+      GRAPH_CONCURRENCY: "1"

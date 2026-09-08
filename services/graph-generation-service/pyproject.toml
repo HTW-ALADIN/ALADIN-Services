@@ -34,6 +34,7 @@ build-backend = "hatchling.build"
 exclude = [
     "/.bootstrap-venv",
     "/.coverage",
+    "/.coverage.*",
     "/.mypy_cache",
     "/.pytest_cache",
     "/.ruff_cache",
@@ -44,10 +45,14 @@ exclude = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/app"]
+packages = ["src/app", "src/graph_safety"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "sidecar/src"]
+
+[tool.coverage.run]
+patch = ["subprocess"]
+parallel = true
 
 [tool.mypy]
 python_version = "3.12"

@@ -99,10 +99,12 @@ def generate_classic_deterministic(
     cols: int | None = None,
 ) -> GeneratedGraph:
     if shape in {"grid", "lattice"}:
-        assert rows is not None and cols is not None
+        if not (rows is not None and cols is not None):
+            raise ValueError("required graph parameters are missing")
         graph = Graph.Lattice(dim=[rows, cols], circular=shape == "lattice")
     else:
-        assert n is not None
+        if not (n is not None):
+            raise ValueError("required graph parameters are missing")
         if shape == "complete":
             graph = Graph.Full(n=n)
         elif shape == "star":
@@ -153,10 +155,12 @@ def generate_static_fitness(
     exponent_in: float | None = None,
 ) -> GeneratedGraph:
     if variant == "static_fitness":
-        assert fitness_out is not None
+        if not (fitness_out is not None):
+            raise ValueError("required graph parameters are missing")
         graph = Graph.Static_Fitness(m=m, fitness_out=fitness_out, fitness_in=fitness_in)
     else:
-        assert n is not None and exponent_out is not None
+        if not (n is not None and exponent_out is not None):
+            raise ValueError("required graph parameters are missing")
         graph = Graph.Static_Power_Law(
             n=n,
             m=m,
@@ -183,17 +187,21 @@ def generate_growing_attachment(
     loops: bool = False,
 ) -> GeneratedGraph:
     if variant == "growing_random":
-        assert m is not None
+        if not (m is not None):
+            raise ValueError("required graph parameters are missing")
         graph = Graph.Growing_Random(n=n, m=m, directed=directed, citation=citation)
     elif variant == "establishment":
-        assert k is not None and type_dist is not None and pref_matrix is not None
+        if not (k is not None and type_dist is not None and pref_matrix is not None):
+            raise ValueError("required graph parameters are missing")
         type_weights = [max(1, round(weight * 1_000_000)) for weight in type_dist]
         graph = Graph.Establishment(n=n, k=k, type_dist=type_weights, pref_matrix=pref_matrix, directed=directed)
     elif variant == "preference":
-        assert type_dist is not None and pref_matrix is not None
+        if not (type_dist is not None and pref_matrix is not None):
+            raise ValueError("required graph parameters are missing")
         graph = Graph.Preference(n=n, type_dist=type_dist, pref_matrix=pref_matrix, directed=directed, loops=loops)
     elif variant == "asymmetric_preference":
-        assert type_dist_matrix is not None and pref_matrix is not None
+        if not (type_dist_matrix is not None and pref_matrix is not None):
+            raise ValueError("required graph parameters are missing")
         graph = Graph.Asymmetric_Preference(
             n=n,
             type_dist_matrix=type_dist_matrix,
@@ -201,7 +209,8 @@ def generate_growing_attachment(
             loops=loops,
         )
     else:
-        assert m is not None and window is not None
+        if not (m is not None and window is not None):
+            raise ValueError("required graph parameters are missing")
         graph = Graph.Recent_Degree(
             n=n,
             m=m,

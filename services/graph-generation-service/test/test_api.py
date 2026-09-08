@@ -7,10 +7,18 @@ from fastapi.testclient import TestClient
 
 from app.domain import GeneratedGraph
 from app.exceptions import GraphBackendError
+from app.exporters import export_graph
 from app.main import GRAPH_STORE, app
-from app.routing import ADAPTERS
+from app.routing import ADAPTERS, execute_request
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def adapter_contracts_in_process() -> object:
+    # These tests inspect mocked native calls. Actual process isolation is tested separately.
+    with patch("app.main.execute_request", execute_request), patch("app.main.export_graph", export_graph):
+        yield
 
 
 def setup_function() -> None:
@@ -1068,7 +1076,7 @@ def test_exports_configuration_model_graph() -> None:
 def test_store_evicts_by_edge_budget() -> None:
     payload = {"algorithm": "barabasi_albert", "backend": "networkx", "params": {"n": 5, "m": 1}}
 
-    with patch("app.main.MAX_STORED_EDGES", 3):
+    with patch("app.main.MAX_STORED_EDGES", 7):
         first = client.post("/v1/graphs", json=payload).json()
         second = client.post("/v1/graphs", json=payload).json()
 

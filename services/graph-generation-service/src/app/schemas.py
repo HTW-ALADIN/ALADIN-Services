@@ -7,6 +7,9 @@ from typing import Annotated, Any, ClassVar, Literal, Self, TypeAlias
 import networkx as nx
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt, model_validator
 
+from graph_safety.budget import validate_budget
+from graph_safety.limits import LIMITS
+
 
 class RequestParameterError(ValueError):
     def __init__(self, parameter_name: str, reason: str) -> None:
@@ -15,7 +18,7 @@ class RequestParameterError(ValueError):
 
 
 class StrictBaseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    model_config = ConfigDict(extra="forbid", populate_by_name=True, allow_inf_nan=False)
 
 
 OutputFormat: TypeAlias = Literal["edge_list", "adjacency", "graphml", "gml", "graph6"]
@@ -23,7 +26,7 @@ LabelMode: TypeAlias = Literal["index", "uuid"]
 Probability: TypeAlias = Annotated[float, Field(ge=0.0, le=1.0)]
 PositiveFloat: TypeAlias = Annotated[float, Field(gt=0.0)]
 NonNegativeFloat: TypeAlias = Annotated[float, Field(ge=0.0)]
-MAX_GRAPH_NODES = 10_000
+MAX_GRAPH_NODES = LIMITS.nodes
 MAX_GRAPH_EDGES = 2_000_000
 MAX_KLEINBERG_NODES = 2_500
 MAX_KLEINBERG_DIM = 11
@@ -1147,7 +1150,8 @@ def _point_shape(
     if point_generator is not None:
         return point_generator.n, point_generator.dimensions
 
-    assert points is not None
+    if not (points is not None):
+        raise ValueError("required graph parameters are missing")
     if not points or not points[0]:
         raise RequestParameterError("params.points", "points must not be empty")
     dimensions = len(points[0])
@@ -1415,8 +1419,10 @@ def validate_graph_size(request: GraphGenerationRequestValue) -> None:
         node_count = _bounded_power(2, params["n"])
     elif algorithm == "random_bipartite":
         node_count = params["n1"] + params["n2"]
-    elif algorithm == "community_clustered" and params.get("n") is None:
+    elif algorithm == "community_clustered" and params.get("variant") in {"planted_partition", "relaxed_caveman"}:
         node_count = params["l"] * params["k"]
+    elif algorithm == "static_fitness" and params.get("variant") == "static_fitness":
+        node_count = max(len(params["fitness_out"]), len(params.get("fitness_in") or []))
     elif isinstance(params.get("points"), list):
         node_count = len(params["points"])
     elif isinstance(params.get("pointGenerator"), dict):
@@ -1450,9 +1456,14 @@ def validate_graph_size(request: GraphGenerationRequestValue) -> None:
     if algorithm == "random_geometric" and node_count * int(params.get("dim", 2)) > MAX_GEOMETRIC_DIM_WORK:
         raise RequestParameterError("params.dim", "random_geometric dim is too large for the requested node count")
 
+    # Bound the combinatorial estimator itself before computing lattice sizes.
+    if int(params.get("dim", 1)) > 64:
+        raise RequestParameterError("params.dim", "dimensions must not exceed 64")
+
     expected_edges = _estimate_expected_edges(algorithm, params, request.output.directed, node_count)
     if expected_edges > MAX_GRAPH_EDGES:
         raise RequestParameterError("params", f"graph must not exceed {MAX_GRAPH_EDGES} expected edges")
+    validate_budget(algorithm, params, node_count, request.output.directed, expected_edges=expected_edges)
 
 
 GraphGenerationRequest: TypeAlias = Annotated[

@@ -7,7 +7,32 @@ from typing import Any, Protocol, cast
 import numpy as np
 from numpy.typing import NDArray
 
+from graph_safety.limits import LIMITS, ResourceLimitError
+from graph_safety.process import run_worker
 from graph_tool_sidecar.models import SidecarGraph, SidecarRequest
+
+
+def generate_isolated(request: SidecarRequest) -> SidecarGraph:
+    return SidecarGraph.model_validate(run_worker("sidecar", request.model_dump()))
+
+
+def worker_generate(payload: dict[str, Any]) -> dict[str, Any]:
+    from pydantic import TypeAdapter
+
+    from app.schemas import GraphGenerationRequest, validate_graph_size
+
+    request = SidecarRequest.model_validate(payload)
+    public: GraphGenerationRequest = TypeAdapter(GraphGenerationRequest).validate_python(
+        {
+            "algorithm": request.algorithm,
+            "backend": "graph_tool",
+            "params": request.params,
+            "output": {"directed": request.directed},
+        }
+    )
+    validate_graph_size(public)
+    request.params = public.params.model_dump(by_alias=True, exclude={"backend"})
+    return generate(request).model_dump()
 
 
 class _Vertex(Protocol):
@@ -105,7 +130,8 @@ def _stochastic_block_model(generation: Any, params: dict[str, Any], *, directed
     out_degrees = _optional_array(params.get("outDegrees"))
     in_degrees = _optional_array(params.get("inDegrees"))
     if params.get("variant", "poisson") == "maxent":
-        assert out_degrees is not None
+        if not (out_degrees is not None):
+            raise ValueError("required graph parameters are missing")
         return generation.generate_maxent_sbm(
             membership,
             matrix,
@@ -147,6 +173,12 @@ def _optional_array(value: object) -> NDArray[np.float64] | None:
 
 
 def _normalize(graph: _Graph) -> SidecarGraph:
+    if graph.num_vertices() > LIMITS.nodes:
+        raise ResourceLimitError("generated graph exceeds the node limit")
     nodes = list(range(graph.num_vertices()))
-    edges = [(int(cast(_Edge, edge).source()), int(cast(_Edge, edge).target())) for edge in cast(Any, graph.edges())]
+    edges: list[tuple[int, int]] = []
+    for edge in cast(Any, graph.edges()):
+        if len(edges) >= LIMITS.edges:
+            raise ResourceLimitError("generated graph exceeds the edge limit")
+        edges.append((int(cast(_Edge, edge).source()), int(cast(_Edge, edge).target())))
     return SidecarGraph(nodes=nodes, edges=edges, directed=graph.is_directed())

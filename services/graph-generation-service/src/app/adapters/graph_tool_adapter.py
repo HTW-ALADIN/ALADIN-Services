@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+from math import isfinite
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 import networkx as nx
@@ -11,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from app.domain import GeneratedGraph
 from app.exceptions import GraphBackendError
+from graph_safety.limits import LIMITS, ResourceLimitError, check_result
 
 
 class _SidecarGraph(BaseModel):
@@ -22,6 +25,7 @@ class _SidecarGraph(BaseModel):
 
     @model_validator(mode="after")
     def validate_edges(self) -> _SidecarGraph:
+        check_result(len(self.nodes), len(self.edges))
         known_nodes = set(self.nodes)
         if len(known_nodes) != len(self.nodes):
             raise ValueError("sidecar returned duplicate node identifiers")
@@ -167,9 +171,13 @@ def _generate(algorithm: str, params: dict[str, Any], *, directed: bool) -> Gene
 
     try:
         with urlopen(request, timeout=_sidecar_timeout()) as response:  # noqa: S310 - configured internal URL
-            body = response.read()
+            body = response.read(LIMITS.result_bytes + 1)
+            if len(body) > LIMITS.result_bytes:
+                raise ResourceLimitError("sidecar response exceeds the byte limit")
     except HTTPError as exc:
         detail = _http_error_detail(exc)
+        if exc.code in {400, 413, 503, 504}:
+            raise ResourceLimitError(detail, exc.code) from exc
         raise GraphBackendError("graph_tool", detail, status_code=502) from exc
     except (TimeoutError, URLError, OSError) as exc:
         raise GraphBackendError("graph_tool", "graph-tool sidecar is unavailable", status_code=503) from exc
@@ -182,6 +190,8 @@ def _generate(algorithm: str, params: dict[str, Any], *, directed: bool) -> Gene
         ) from exc
 
     graph: nx.Graph[int]
+    if normalized.directed != directed:
+        raise GraphBackendError("graph_tool", "sidecar returned inconsistent directedness", status_code=502)
     graph = nx.MultiDiGraph() if normalized.directed else nx.MultiGraph()
     graph.add_nodes_from(normalized.nodes)
     graph.add_edges_from(normalized.edges)
@@ -194,16 +204,22 @@ def _generate(algorithm: str, params: dict[str, Any], *, directed: bool) -> Gene
 
 
 def _sidecar_url() -> str:
-    return os.environ.get("GRAPH_TOOL_SIDECAR_URL", "http://graph-tool-sidecar:8003").rstrip("/")
+    url = os.environ.get("GRAPH_TOOL_SIDECAR_URL", "http://graph-tool-sidecar:8003").rstrip("/")
+    if urlsplit(url).scheme not in {"http", "https"} or not urlsplit(url).hostname:
+        raise ValueError("GRAPH_TOOL_SIDECAR_URL must be an HTTP(S) URL")
+    return url
 
 
 def _sidecar_timeout() -> float:
-    return float(os.environ.get("GRAPH_TOOL_SIDECAR_TIMEOUT_SECONDS", "30"))
+    timeout = float(os.environ.get("GRAPH_TOOL_SIDECAR_TIMEOUT_SECONDS", str(LIMITS.seconds + 10)))
+    if not isfinite(timeout) or timeout <= 0:
+        raise ValueError("GRAPH_TOOL_SIDECAR_TIMEOUT_SECONDS must be finite and positive")
+    return timeout
 
 
 def _http_error_detail(exc: HTTPError) -> str:
     try:
-        payload = json.loads(exc.read())
+        payload = json.loads(exc.read(LIMITS.result_bytes + 1))
     except (json.JSONDecodeError, OSError):
         return f"graph-tool sidecar failed with HTTP {exc.code}"
     detail = payload.get("detail") if isinstance(payload, dict) else None

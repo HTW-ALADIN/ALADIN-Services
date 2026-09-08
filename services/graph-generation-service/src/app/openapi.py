@@ -39,6 +39,22 @@ def _patch_graph_generation_operation(schema: Schema) -> None:
                 operation.get("responses", {}).pop("422", None)
 
     operation = schema["paths"]["/v1/graphs"]["post"]
+    for path_item in schema["paths"].values():
+        for endpoint in path_item.values():
+            if not isinstance(endpoint, dict) or "responses" not in endpoint:
+                continue
+            for code, description in {
+                413: "Resource budget exceeded.",
+                503: "Workers busy or backend unavailable.",
+                504: "Execution deadline exceeded.",
+                502: "Invalid backend response.",
+            }.items():
+                endpoint["responses"][str(code)] = {
+                    "description": description,
+                    "content": {
+                        "application/problem+json": {"schema": {"$ref": "#/components/schemas/ProblemDetails"}}
+                    },
+                }
     operation["requestBody"]["content"]["application/json"]["schema"] = {
         "$ref": "#/components/schemas/GraphGenerationRequest"
     }

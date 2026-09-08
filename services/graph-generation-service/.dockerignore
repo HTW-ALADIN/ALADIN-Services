@@ -1,5 +1,6 @@
 .bootstrap-venv
 .coverage
+.coverage.*
 .mypy_cache
 .pytest_cache
 .ruff_cache

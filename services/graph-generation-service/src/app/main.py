@@ -6,7 +6,7 @@ from time import perf_counter
 from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import Body, FastAPI, Query, Response, status
+from fastapi import Body, FastAPI, Query, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -21,9 +21,10 @@ from app.exceptions import (
     graph_export_exception_handler,
     request_validation_exception_handler,
 )
-from app.exporters import ExportedGraph, export_graph
+from app.exporters import ExportedGraph
+from app.exporters import export_isolated as export_graph
 from app.openapi import install_openapi_schema
-from app.routing import execute_request
+from app.routing import execute_isolated as execute_request
 from app.schemas import (
     AlgorithmCatalogResponse,
     GraphGenerationRequest,
@@ -36,10 +37,12 @@ from app.schemas import (
     RequestParameterError,
     validate_graph_size,
 )
-from app.storage import StoredGraph
+from app.storage import GraphStore, StoredGraph
+from graph_safety.http import BodyLimitMiddleware, problem
+from graph_safety.limits import LIMITS, ResourceLimitError
 
-GRAPH_STORE: dict[str, StoredGraph] = {}
-MAX_STORED_GRAPHS = 100
+GRAPH_STORE = GraphStore()
+MAX_STORED_GRAPHS = LIMITS.stored_graphs
 MAX_STORED_EDGES = 5_000_000
 
 app = FastAPI(
@@ -50,6 +53,16 @@ app = FastAPI(
 app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
 app.add_exception_handler(GraphExportError, graph_export_exception_handler)
 app.add_exception_handler(GraphBackendError, graph_backend_exception_handler)
+app.add_middleware(BodyLimitMiddleware)
+
+
+async def resource_error_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, ResourceLimitError):
+        raise exc
+    return problem(exc, request.url.path)
+
+
+app.add_exception_handler(ResourceLimitError, resource_error_handler)
 install_openapi_schema(app)
 
 
@@ -160,19 +173,16 @@ def create_graph(
     return resource
 
 
-def _stored_edge_count() -> int:
-    return sum(stored.resource.metadata.numEdges or 0 for stored in GRAPH_STORE.values())
-
-
 def _store_graph(resource: GraphResource, generated: GeneratedGraph, labels: LabelMode) -> None:
-    while GRAPH_STORE and (
-        len(GRAPH_STORE) >= MAX_STORED_GRAPHS or _stored_edge_count() + generated.num_edges > MAX_STORED_EDGES
-    ):
-        GRAPH_STORE.pop(next(iter(GRAPH_STORE)))
-    GRAPH_STORE[resource.id] = StoredGraph(
-        resource=resource,
-        generated=generated,
-        labels=labels,
+    GRAPH_STORE.put(
+        resource.id,
+        StoredGraph(
+            resource=resource,
+            generated=generated,
+            labels=labels,
+        ),
+        capacity=MAX_STORED_GRAPHS,
+        edge_capacity=MAX_STORED_EDGES,
     )
 
 
@@ -247,6 +257,8 @@ def get_graph(
 
 
 def _export_response(exported: ExportedGraph) -> Response:
+    if isinstance(exported.content, bytes):
+        return Response(content=exported.content, media_type=exported.media_type)
     if exported.media_type == "application/json":
         return JSONResponse(content=exported.content)
 
@@ -281,8 +293,6 @@ def _content_chunks(content: bytes | str, chunk_size: int = 64 * 1024) -> Iterat
     summary="Release a generated graph resource",
 )
 def delete_graph(graphId: str) -> Response:
-    if graphId not in GRAPH_STORE:
+    if not GRAPH_STORE.delete(graphId):
         return _graph_not_found(graphId)
-
-    del GRAPH_STORE[graphId]
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -12,7 +12,7 @@ build:
 	uv build
 
 test:
-	uv run pytest --cov=src/app --cov=sidecar/src/graph_tool_sidecar --cov-report=xml --cov-report=term-missing
+	uv run pytest --cov=src/app --cov=src/graph_safety --cov=sidecar/src/graph_tool_sidecar --cov-report=xml --cov-report=term-missing
 
 lint:
 	uv run ruff check src/ sidecar/src/ test/

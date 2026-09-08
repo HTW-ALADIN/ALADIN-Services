@@ -6,12 +6,13 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from pydantic import TypeAdapter, ValidationError
+from pydantic import TypeAdapter
 
 from app.exceptions import GraphBackendError, GraphExportError
-from app.exporters import export_graph
-from app.routing import execute_request
-from app.schemas import GraphGenerationRequest, RequestParameterError, validate_graph_size
+from app.exporters import export_isolated as export_graph
+from app.routing import execute_isolated as execute_request
+from app.schemas import GraphGenerationRequest, validate_graph_size
+from graph_safety.limits import LIMITS, ResourceLimitError
 
 REQUEST_ADAPTER: TypeAdapter[GraphGenerationRequest] = TypeAdapter(GraphGenerationRequest)
 
@@ -26,11 +27,22 @@ def _parser() -> argparse.ArgumentParser:
 
 def _read_request(source: str) -> str:
     if source == "-":
-        return sys.stdin.read()
+        raw = sys.stdin.buffer.read(LIMITS.request_bytes + 1)
+        if len(raw) > LIMITS.request_bytes:
+            raise ResourceLimitError("request body exceeds the byte limit")
+        return raw.decode()
     if source.lstrip().startswith(("{", "[")):
+        if len(source.encode()) > LIMITS.request_bytes:
+            raise ResourceLimitError("request body exceeds the byte limit")
         return source
     path = Path(source)
-    return path.read_text() if path.is_file() else source
+    if path.is_file():
+        with path.open("rb") as file:
+            raw = file.read(LIMITS.request_bytes + 1)
+        if len(raw) > LIMITS.request_bytes:
+            raise ResourceLimitError("request body exceeds the byte limit")
+        return raw.decode()
+    return source
 
 
 def run(argv: Sequence[str] | None = None) -> int:
@@ -45,13 +57,14 @@ def run(argv: Sequence[str] | None = None) -> int:
             labels=request.output.labels,
             resource_id="cli",
         )
-    except (GraphBackendError, GraphExportError, OSError, RequestParameterError, ValidationError) as exc:
+    except (GraphBackendError, GraphExportError, OSError, ValueError) as exc:
         print(json.dumps({"error": str(exc)}), file=sys.stderr)
         return 2
 
-    if exported.media_type == "application/json":
-        print(json.dumps(exported.content))
-    elif isinstance(exported.content, bytes):
+    if isinstance(exported.content, bytes):
+        if exported.media_type == "application/json":
+            print(exported.content.decode())
+            return 0
         sys.stdout.buffer.write(exported.content)
     elif isinstance(exported.content, str):
         sys.stdout.write(exported.content)

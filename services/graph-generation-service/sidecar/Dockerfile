@@ -4,12 +4,15 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python3-fastapi \
         python3-graph-tool \
+        python3-networkx \
         python3-numpy \
         uvicorn \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY sidecar/src ./src
+COPY src/graph_safety ./src/graph_safety
+COPY src/app/schemas.py ./src/app/schemas.py
 
 ENV PYTHONPATH="/app/src"
 
