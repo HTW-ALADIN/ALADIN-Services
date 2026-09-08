@@ -1,0 +1,362 @@
+openapi: 3.1.0
+info:
+  title: Text Template Service
+  description: Stateless MiniJinja text rendering through a REST and CLI contract
+  license:
+    name: MIT
+    identifier: MIT
+  version: 0.1.0
+paths:
+  /healthz:
+    get:
+      tags:
+      - api
+      operationId: health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /v1/capabilities:
+    get:
+      tags:
+      - api
+      operationId: capabilities
+      responses:
+        '200':
+          description: Renderer capabilities and active limits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilitiesResponse'
+  /v1/render:
+    post:
+      tags:
+      - api
+      operationId: render_template
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderRequest'
+        required: true
+      responses:
+        '200':
+          description: Rendered text
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderResponse'
+            text/plain:
+              schema:
+                type: string
+        '400':
+          description: Invalid request or template
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '406':
+          description: Unsupported Accept header
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '413':
+          description: Request or template input is too large
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '415':
+          description: Request body is not JSON
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Execution or output limit exceeded
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal wrapper error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: All render workers are busy
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+components:
+  schemas:
+    Autoescape:
+      type: string
+      enum:
+      - none
+      - html
+    CapabilitiesResponse:
+      type: object
+      required:
+      - engine
+      - sourceKinds
+      - contextMediaType
+      - responseMediaTypes
+      - features
+      - limits
+      properties:
+        contextMediaType:
+          type: string
+        engine:
+          $ref: '#/components/schemas/EngineInfo'
+        features:
+          $ref: '#/components/schemas/FeatureInfo'
+        limits:
+          $ref: '#/components/schemas/LimitInfo'
+        responseMediaTypes:
+          type: array
+          items:
+            type: string
+        sourceKinds:
+          type: array
+          items:
+            type: string
+    EngineInfo:
+      type: object
+      required:
+      - name
+      - version
+      - language
+      properties:
+        language:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+    FeatureInfo:
+      type: object
+      required:
+      - variables
+      - expressions
+      - conditions
+      - loops
+      - filters
+      - tests
+      - includes
+      - inheritance
+      - macros
+      - strictUndefined
+      properties:
+        conditions:
+          type: boolean
+        expressions:
+          type: boolean
+        filters:
+          type: boolean
+        includes:
+          type: boolean
+        inheritance:
+          type: boolean
+        loops:
+          type: boolean
+        macros:
+          type: boolean
+        strictUndefined:
+          type: boolean
+        tests:
+          type: boolean
+        variables:
+          type: boolean
+    HealthResponse:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+    LimitInfo:
+      type: object
+      required:
+      - maxBodyBytes
+      - maxContextBytes
+      - maxTemplateBytes
+      - maxBundleTemplates
+      - maxTemplateNameBytes
+      - maxConcurrentRenders
+      - maxOutputBytes
+      - fuel
+      - recursionLimit
+      - timeoutMs
+      properties:
+        fuel:
+          type: integer
+          format: int64
+          minimum: 0
+        maxBodyBytes:
+          type: integer
+          minimum: 0
+        maxBundleTemplates:
+          type: integer
+          minimum: 0
+        maxConcurrentRenders:
+          type: integer
+          minimum: 0
+        maxContextBytes:
+          type: integer
+          minimum: 0
+        maxOutputBytes:
+          type: integer
+          minimum: 0
+        maxTemplateBytes:
+          type: integer
+          minimum: 0
+        maxTemplateNameBytes:
+          type: integer
+          minimum: 0
+        recursionLimit:
+          type: integer
+          minimum: 0
+        timeoutMs:
+          type: integer
+          format: int64
+          minimum: 0
+    ProblemDetails:
+      type: object
+      required:
+      - type
+      - title
+      - status
+      - detail
+      properties:
+        detail:
+          type: string
+        line:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+        status:
+          type: integer
+          format: int32
+          minimum: 0
+        template:
+          type:
+          - string
+          - 'null'
+        title:
+          type: string
+        type:
+          type: string
+    RenderMetadata:
+      type: object
+      required:
+      - engine
+      - engineVersion
+      - sourceKind
+      - outputBytes
+      properties:
+        engine:
+          type: string
+        engineVersion:
+          type: string
+        outputBytes:
+          type: integer
+          minimum: 0
+        sourceKind:
+          type: string
+    RenderOptions:
+      type: object
+      properties:
+        autoescape:
+          oneOf:
+          - $ref: '#/components/schemas/Autoescape'
+          default: none
+        keepTrailingNewline:
+          type: boolean
+          default: true
+        undefined:
+          oneOf:
+          - $ref: '#/components/schemas/UndefinedBehavior'
+          default: strict
+      additionalProperties: false
+    RenderRequest:
+      type: object
+      required:
+      - source
+      - context
+      properties:
+        context:
+          type: object
+          additionalProperties: {}
+          propertyNames:
+            type: string
+        options:
+          $ref: '#/components/schemas/RenderOptions'
+        source:
+          $ref: '#/components/schemas/TemplateSource'
+      additionalProperties: false
+    RenderResponse:
+      type: object
+      required:
+      - output
+      - metadata
+      properties:
+        metadata:
+          $ref: '#/components/schemas/RenderMetadata'
+        output:
+          type: string
+    TemplateSource:
+      oneOf:
+      - type: object
+        required:
+        - template
+        - kind
+        properties:
+          kind:
+            type: string
+            enum:
+            - inline
+          name:
+            type:
+            - string
+            - 'null'
+          template:
+            type: string
+        additionalProperties: false
+      - type: object
+        required:
+        - entrypoint
+        - templates
+        - kind
+        properties:
+          entrypoint:
+            type: string
+          kind:
+            type: string
+            enum:
+            - bundle
+          templates:
+            type: object
+            additionalProperties:
+              type: string
+            propertyNames:
+              type: string
+            minProperties: 1
+        additionalProperties: false
+      discriminator:
+        propertyName: kind
+    UndefinedBehavior:
+      type: string
+      enum:
+      - strict
+      - lenient
+tags:
+- name: rendering
+  description: Text template rendering
