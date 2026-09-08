@@ -11,10 +11,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
+from app.adapters.graph_tool_adapter import sidecar_health
 from app.catalog import ALGORITHM_CATALOG
 from app.domain import GeneratedGraph
 from app.exceptions import (
+    GraphBackendError,
     GraphExportError,
+    graph_backend_exception_handler,
     graph_export_exception_handler,
     request_validation_exception_handler,
 )
@@ -40,11 +43,30 @@ MAX_STORED_GRAPHS = 100
 app = FastAPI(
     title="Unified Graph Generation Service",
     description="Strictly validated graph-generation API with backend-specific adapter routing.",
-    version="0.1.0",
+    version="0.2.0",
 )
 app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
 app.add_exception_handler(GraphExportError, graph_export_exception_handler)
+app.add_exception_handler(GraphBackendError, graph_backend_exception_handler)
 install_openapi_schema(app)
+
+
+@app.get("/healthz", include_in_schema=False)
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get(
+    "/readyz",
+    include_in_schema=False,
+    responses={503: {"description": "The graph-tool sidecar is unavailable."}},
+)
+def readiness() -> Response:
+    ready = sidecar_health()
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"status": "ready" if ready else "not-ready", "graphToolSidecar": ready},
+    )
 
 
 @app.get(

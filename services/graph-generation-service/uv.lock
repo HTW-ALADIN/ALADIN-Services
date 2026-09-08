@@ -186,7 +186,7 @@ wheels = [
 
 [[package]]
 name = "graph-generation-service"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -211,7 +211,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "igraph", specifier = ">=0.11.8" },
-    { name = "networkit", specifier = ">=11.1.0" },
+    { name = "networkit", specifier = "==11.2" },
     { name = "networkx", specifier = ">=3.4.2" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0" },
@@ -467,21 +467,25 @@ wheels = [
 
 [[package]]
 name = "networkit"
-version = "11.2.1"
+version = "11.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "scipy" },
     { name = "tabulate" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/99/91/70896ebe40b64646e6fc1b3a91842fab97debfbea76188066e010b80bd7b/networkit-11.2.1.tar.gz", hash = "sha256:3e4766c8e32e83f676fe61358af1bd195ecd3ab996fda803a9a1a7a9af40b725", size = 7330479, upload-time = "2026-01-09T11:11:22.551Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ab/9b/9237fe5e53bd88e5f797d12fe80c4d0154c5202634873b0a4b042f7d3970/networkit-11.2.tar.gz", hash = "sha256:6dad0625bd795591ad46820a69c927b749c9ac34368b8100dbfb818d2d20b08d", size = 7043208, upload-time = "2025-11-05T13:20:05.146Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fc/f9/f13ec4f34f995ec97ad6f129ebb9b605d4014a4584ffc3c628abe3b896a0/networkit-11.2.1-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:d0e7c280f46a22787453239000895d07a41ab4e8db56aa30f204185d7f8d495f", size = 9478314, upload-time = "2026-01-09T11:10:04.29Z" },
-    { url = "https://files.pythonhosted.org/packages/ad/eb/1442c1dc936e3fded65092d1e7b108448cb72764dbd849ffa3bfcc83e903/networkit-11.2.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:986113605c472eaf09a453b062a465a2966772be9864244d75baac95a90c6212", size = 10952954, upload-time = "2026-01-09T11:10:13.209Z" },
-    { url = "https://files.pythonhosted.org/packages/3f/2b/5658c2bd38e5056a0b7219193768182671fc5647ca20134ae560b42b8400/networkit-11.2.1-cp312-cp312-win_amd64.whl", hash = "sha256:7ac666766bffc5428b3992f09c01619a1661d37634ab91ae523776ec0c412698", size = 29897203, upload-time = "2026-01-09T11:10:38.273Z" },
-    { url = "https://files.pythonhosted.org/packages/1b/c8/56fd8a462d3812bf9766b328ec1edadb154cd12058da6f8d2f30d914b84b/networkit-11.2.1-cp313-cp313-macosx_15_0_arm64.whl", hash = "sha256:bc9ce028a0d9dd19feeea8881aa172940ca8e668a35da3e04c3a46ee6ccc0d27", size = 9460186, upload-time = "2026-01-09T11:10:44.135Z" },
-    { url = "https://files.pythonhosted.org/packages/a0/66/73cd49833c0b1f410d09751d535133aeae249b9e58e697a7d5d8558833d4/networkit-11.2.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:7586fb2038609c6335d8061ca586a70572c310c018dbd93150761d39b7741ddb", size = 10947041, upload-time = "2026-01-09T11:10:52.82Z" },
-    { url = "https://files.pythonhosted.org/packages/c9/cc/545bb57126753d10ac4dd069667304c2b17fd896334995e11589758f796e/networkit-11.2.1-cp313-cp313-win_amd64.whl", hash = "sha256:3bb19d0745686f5d1db8baf6f2540237841f004d278a0b03653e37fd3b0865a8", size = 29888472, upload-time = "2026-01-09T11:11:16.204Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/68/8c66340ec8baf5405827c364d5ccdf5a97c044583a4f04578f36a1b09598/networkit-11.2-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:b7bb7e034a087f0749b404ae7b9af2b125e00091adb33808e0f22cd6e6dcd6ef", size = 9449083, upload-time = "2025-11-05T13:19:44.154Z" },
+    { url = "https://files.pythonhosted.org/packages/33/2b/545886c4d00f11a123da492940517c2e739c14331e43df066d68a468cc3d/networkit-11.2-cp312-cp312-macosx_15_0_x86_64.whl", hash = "sha256:53ae4298d13f7e13e3e362d5cc346954fccf516c9b2c525c02740840c7c338a1", size = 10110967, upload-time = "2025-11-05T13:19:46.688Z" },
+    { url = "https://files.pythonhosted.org/packages/54/cf/adb5594fb1c06ed5f032fd618185d62721bf3380b8bbef5742df24e16ecb/networkit-11.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:a2227135f01856caf077928a3e5b27f0aeb5734f1bfa5174e8510f975b732ff6", size = 10968848, upload-time = "2025-11-05T13:19:49.126Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/1d/a46b62f32e769fb7704cdc9d09937eea0ec8f9127b6c1ba1f609d3567f87/networkit-11.2-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:cb2b997f27148f301b2a12517d8ca606b7e86088279e1282fc24f651691c97c9", size = 10963273, upload-time = "2025-11-05T14:04:53.663Z" },
+    { url = "https://files.pythonhosted.org/packages/22/ea/75b347c6430f67bf813c5f6e314a70de115bd4754678de14f5102672b5ad/networkit-11.2-cp312-cp312-win_amd64.whl", hash = "sha256:36edff838daaa80a603ba375ce4df7a162e03f1cdf6c666dbc65a62807ad8fb2", size = 29819956, upload-time = "2025-11-05T13:19:52.094Z" },
+    { url = "https://files.pythonhosted.org/packages/33/2b/44e82a68ab771307bbac07ec3b589a651353405fe796c526961bcf2f8a00/networkit-11.2-cp313-cp313-macosx_15_0_arm64.whl", hash = "sha256:55c034c5741628c1dc54d64d8ea86be0ea6ff06a01ec445c8d78dd077ed7b544", size = 9425461, upload-time = "2025-11-05T13:19:54.734Z" },
+    { url = "https://files.pythonhosted.org/packages/35/a4/57c358b8b810169c042db5c34dec5f5a8e9f2a47d5801ab7aae2d808c565/networkit-11.2-cp313-cp313-macosx_15_0_x86_64.whl", hash = "sha256:0db942c4eb51b8f7ee96d23a3b8d278fcaa65c2b39c567115141aa9965535830", size = 10087121, upload-time = "2025-11-05T13:19:57.144Z" },
+    { url = "https://files.pythonhosted.org/packages/29/8f/58ab6200528af0d1cf8bd4ba748fc930b111ce68df0bd7aa79c006efbe61/networkit-11.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:4fe32f6d80046550e058cfb9b9d15648ff0e2f3e9de7b8106b4d385f00697fb6", size = 10959982, upload-time = "2025-11-05T13:19:59.5Z" },
+    { url = "https://files.pythonhosted.org/packages/05/14/978d59e4153c4213ea4e9112f72e7c4ca90d887f8b5b7eb2ec4e32b4c699/networkit-11.2-cp313-cp313-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:cb35ab1368f86c4b764fe70a94d5d3b2d30eee70618c9832e5ddbb19db5fdb59", size = 10957307, upload-time = "2025-11-05T14:04:57.102Z" },
+    { url = "https://files.pythonhosted.org/packages/32/19/5f13b2edecf5575f434fa1944ef9a94a61feb759b07f22b6a8f91f30d591/networkit-11.2-cp313-cp313-win_amd64.whl", hash = "sha256:3e2ba9199a981f334adaa3185301ddd211aeb6088cf2ec38027cc8ccd9e0b328", size = 29809610, upload-time = "2025-11-05T13:20:02.738Z" },
 ]
 
 [[package]]

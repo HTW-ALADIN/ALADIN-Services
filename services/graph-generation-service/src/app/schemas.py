@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from math import isfinite
 from typing import Annotated, Any, ClassVar, Literal, Self, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt, model_validator
@@ -318,8 +319,34 @@ class NetworKitConfigurationModelParams(StrictBaseModel):
         return self
 
 
+class GraphToolConfigurationModelParams(StrictBaseModel):
+    backend: Literal["graph_tool"]
+    out: list[NonNegativeInt]
+    in_: list[NonNegativeInt] | None = Field(default=None, alias="in")
+    parallelEdges: bool = False
+    selfLoops: bool = False
+    random: bool = True
+    seed: int | None = None
+
+    @model_validator(mode="after")
+    def validate_sequences(self) -> Self:
+        if not self.out:
+            raise RequestParameterError("params.out", "out must not be empty")
+        if self.in_ is None and sum(self.out) % 2:
+            raise RequestParameterError("params.out", "degree sum must be even")
+        if self.in_ is not None:
+            if len(self.in_) != len(self.out):
+                raise RequestParameterError("params.in", "in and out must have the same length")
+            if sum(self.in_) != sum(self.out):
+                raise RequestParameterError("params.in", "in-degree and out-degree sums must match")
+        return self
+
+
 ConfigurationModelParams: TypeAlias = Annotated[
-    NetworkXConfigurationModelParams | IgraphConfigurationModelParams | NetworKitConfigurationModelParams,
+    NetworkXConfigurationModelParams
+    | IgraphConfigurationModelParams
+    | NetworKitConfigurationModelParams
+    | GraphToolConfigurationModelParams,
     Field(discriminator="backend"),
 ]
 
@@ -328,16 +355,18 @@ class ConfigurationModelRequest(BackendDiscriminatedRequest):
     DEFAULT_BACKEND: ClassVar[str] = "networkx"
 
     algorithm: Literal["configuration_model"]
-    backend: Literal["networkx", "igraph", "networkit"] = "networkx"
+    backend: Literal["networkx", "igraph", "networkit", "graph_tool"] = "networkx"
     params: ConfigurationModelParams
     output: OutputOptions = Field(default_factory=OutputOptions)
 
     @model_validator(mode="after")
     def validate_directedness(self) -> Self:
-        directed = isinstance(self.params, IgraphConfigurationModelParams) and self.params.in_ is not None
+        directed = isinstance(self.params, (IgraphConfigurationModelParams, GraphToolConfigurationModelParams)) and (
+            self.params.in_ is not None
+        )
         if self.output.directed != directed:
             reason = (
-                "directed output requires an igraph in-degree sequence"
+                "directed output requires an in-degree sequence"
                 if self.output.directed
                 else "in requires directed output"
             )
@@ -375,8 +404,43 @@ class IgraphStochasticBlockModelParams(StrictBaseModel):
         return self
 
 
+class GraphToolStochasticBlockModelParams(StrictBaseModel):
+    backend: Literal["graph_tool"]
+    variant: Literal["poisson", "maxent"] = "poisson"
+    membership: list[NonNegativeInt]
+    matrix: list[list[NonNegativeFloat]]
+    outDegrees: list[NonNegativeFloat] | None = None
+    inDegrees: list[NonNegativeFloat] | None = None
+    microErs: bool = False
+    microDegs: bool = False
+    multigraph: bool = False
+    selfLoops: bool = False
+    seed: int | None = None
+
+    @model_validator(mode="after")
+    def validate_parameters(self) -> Self:
+        if not self.membership:
+            raise RequestParameterError("params.membership", "membership must not be empty")
+        blocks = max(self.membership) + 1
+        if len(self.matrix) != blocks or any(len(row) != blocks for row in self.matrix):
+            raise RequestParameterError("params.matrix", "matrix must be square and match membership blocks")
+        if self.outDegrees is not None and len(self.outDegrees) != len(self.membership):
+            raise RequestParameterError("params.outDegrees", "outDegrees must match membership length")
+        if self.inDegrees is not None and len(self.inDegrees) != len(self.membership):
+            raise RequestParameterError("params.inDegrees", "inDegrees must match membership length")
+        if self.variant == "maxent" and self.outDegrees is None:
+            raise RequestParameterError("params.outDegrees", "outDegrees is required for maxent")
+        if self.variant == "poisson" and (self.multigraph or self.selfLoops):
+            raise RequestParameterError("params.variant", "multigraph and selfLoops are maxent-only parameters")
+        if self.variant == "maxent" and (self.microErs or self.microDegs):
+            raise RequestParameterError("params.variant", "microErs and microDegs are poisson-only parameters")
+        if self.microDegs and self.outDegrees is None:
+            raise RequestParameterError("params.outDegrees", "outDegrees is required when microDegs is true")
+        return self
+
+
 StochasticBlockModelParams: TypeAlias = Annotated[
-    NetworkXStochasticBlockModelParams | IgraphStochasticBlockModelParams,
+    NetworkXStochasticBlockModelParams | IgraphStochasticBlockModelParams | GraphToolStochasticBlockModelParams,
     Field(discriminator="backend"),
 ]
 
@@ -385,15 +449,18 @@ class StochasticBlockModelRequest(BackendDiscriminatedRequest):
     DEFAULT_BACKEND: ClassVar[str] = "networkx"
 
     algorithm: Literal["stochastic_block_model"]
-    backend: Literal["networkx", "igraph"] = "networkx"
+    backend: Literal["networkx", "igraph", "graph_tool"] = "networkx"
     params: StochasticBlockModelParams
     output: OutputOptions = Field(default_factory=OutputOptions)
 
     @model_validator(mode="after")
     def validate_matrix_symmetry(self) -> Self:
-        matrix = (
-            self.params.p if isinstance(self.params, NetworkXStochasticBlockModelParams) else self.params.pref_matrix
-        )
+        if isinstance(self.params, NetworkXStochasticBlockModelParams):
+            matrix = self.params.p
+        elif isinstance(self.params, IgraphStochasticBlockModelParams):
+            matrix = self.params.pref_matrix
+        else:
+            matrix = self.params.matrix
         if not self.output.directed and any(matrix[i][j] != matrix[j][i] for i in range(len(matrix)) for j in range(i)):
             raise RequestParameterError("params", "probability matrix must be symmetric for an undirected graph")
         return self
@@ -1036,6 +1103,124 @@ class DuplicationDivergenceRequest(StrictBaseModel):
         return self
 
 
+class RandomPointGenerator(StrictBaseModel):
+    n: PositiveInt
+    dimensions: Annotated[int, Field(ge=2, le=64)] = 2
+    low: float = 0.0
+    high: float = 1.0
+    seed: int | None = None
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> Self:
+        if not isfinite(self.low) or not isfinite(self.high) or self.low >= self.high:
+            raise RequestParameterError("params.pointGenerator", "low and high must be finite and low < high")
+        return self
+
+
+def _point_shape(
+    points: list[list[float]] | None,
+    point_generator: RandomPointGenerator | None,
+) -> tuple[int, int]:
+    if (points is None) == (point_generator is None):
+        raise RequestParameterError("params", "provide exactly one of points or pointGenerator")
+    if point_generator is not None:
+        return point_generator.n, point_generator.dimensions
+
+    assert points is not None
+    if not points or not points[0]:
+        raise RequestParameterError("params.points", "points must not be empty")
+    dimensions = len(points[0])
+    if dimensions < 2 or any(len(point) != dimensions for point in points):
+        raise RequestParameterError("params.points", "points must have a consistent dimension of at least 2")
+    if any(not isfinite(value) for point in points for value in point):
+        raise RequestParameterError("params.points", "point coordinates must be finite")
+    return len(points), dimensions
+
+
+class KnnGraphParams(StrictBaseModel):
+    points: list[list[float]] | None = None
+    pointGenerator: RandomPointGenerator | None = None
+    k: PositiveInt
+    exact: bool = False
+    r: Probability = 0.5
+    epsilon: NonNegativeFloat = 0.001
+    maxIter: NonNegativeInt = 0
+
+    @model_validator(mode="after")
+    def validate_points_and_k(self) -> Self:
+        count, _dimensions = _point_shape(self.points, self.pointGenerator)
+        if self.k >= count:
+            raise RequestParameterError("params.k", "k must be smaller than the number of points")
+        return self
+
+
+class KnnGraphRequest(StrictBaseModel):
+    algorithm: Literal["knn_graph"]
+    backend: Literal["graph_tool"] = "graph_tool"
+    params: KnnGraphParams
+    output: OutputOptions = Field(default_factory=OutputOptions)
+
+
+class TriangulationParams(StrictBaseModel):
+    points: list[list[float]] | None = None
+    pointGenerator: RandomPointGenerator | None = None
+    type: Literal["simple", "delaunay"] = "simple"
+    periodic: bool = False
+
+    @model_validator(mode="after")
+    def validate_points(self) -> Self:
+        count, dimensions = _point_shape(self.points, self.pointGenerator)
+        if count < dimensions + 1:
+            raise RequestParameterError("params.points", "triangulation needs at least dimensions + 1 points")
+        if dimensions not in {2, 3}:
+            raise RequestParameterError("params.points", "triangulation supports only 2D or 3D points")
+        if self.periodic and self.type != "delaunay":
+            raise RequestParameterError("params.periodic", "periodic is supported only for delaunay triangulation")
+        return self
+
+
+class TriangulationRequest(StrictBaseModel):
+    algorithm: Literal["triangulation"]
+    backend: Literal["graph_tool"] = "graph_tool"
+    params: TriangulationParams
+    output: OutputOptions = Field(default_factory=OutputOptions)
+
+    @model_validator(mode="after")
+    def validate_directedness(self) -> Self:
+        if self.output.directed:
+            raise RequestParameterError("output.directed", "triangulation produces an undirected graph")
+        return self
+
+
+class PriceNetworkParams(StrictBaseModel):
+    n: PositiveInt
+    m: PositiveInt = 1
+    c: float | None = None
+    gamma: PositiveFloat = 1.0
+    seed: int | None = None
+
+    @model_validator(mode="after")
+    def validate_attachment(self) -> Self:
+        if self.m >= self.n:
+            raise RequestParameterError("params.m", "m must be smaller than n")
+        if self.c is not None and not isfinite(self.c):
+            raise RequestParameterError("params.c", "c must be finite")
+        return self
+
+
+class PriceNetworkRequest(StrictBaseModel):
+    algorithm: Literal["price_network"]
+    backend: Literal["graph_tool"] = "graph_tool"
+    params: PriceNetworkParams
+    output: OutputOptions = Field(default_factory=lambda: OutputOptions(directed=True))
+
+    @model_validator(mode="after")
+    def validate_attractiveness(self) -> Self:
+        if self.output.directed and self.params.c is not None and self.params.c < 0:
+            raise RequestParameterError("params.c", "c must be non-negative for a directed Price network")
+        return self
+
+
 GraphGenerationRequestValue: TypeAlias = (
     ErdosRenyiGnpRequest
     | ErdosRenyiGnmRequest
@@ -1060,6 +1245,9 @@ GraphGenerationRequestValue: TypeAlias = (
     | PowerlawClusterRequest
     | GeometricThresholdRequest
     | DuplicationDivergenceRequest
+    | KnnGraphRequest
+    | TriangulationRequest
+    | PriceNetworkRequest
 )
 
 
@@ -1085,6 +1273,12 @@ def validate_graph_size(request: GraphGenerationRequestValue) -> None:
         node_count = params["n1"] + params["n2"]
     elif algorithm == "community_clustered" and params.get("n") is None:
         node_count = params["l"] * params["k"]
+    elif isinstance(params.get("points"), list):
+        node_count = len(params["points"])
+    elif isinstance(params.get("pointGenerator"), dict):
+        node_count = params["pointGenerator"]["n"]
+    elif isinstance(params.get("membership"), list):
+        node_count = len(params["membership"])
     elif isinstance(params.get("n"), int):
         node_count = params["n"]
     elif isinstance(params.get("nMax"), int):

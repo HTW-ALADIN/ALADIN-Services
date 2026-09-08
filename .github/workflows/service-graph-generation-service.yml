@@ -91,7 +91,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Extract Docker metadata
-        id: meta
+        id: primary-meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/graph-generation-service
@@ -103,5 +103,21 @@ jobs:
         with:
           context: services/graph-generation-service
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.primary-meta.outputs.tags }}
+          labels: ${{ steps.primary-meta.outputs.labels }}
+      - name: Extract graph-tool sidecar metadata
+        id: sidecar-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/graph-tool-sidecar
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+      - name: Build and push graph-tool sidecar image
+        uses: docker/build-push-action@v6
+        with:
+          context: services/graph-generation-service
+          file: services/graph-generation-service/sidecar/Dockerfile
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+          tags: ${{ steps.sidecar-meta.outputs.tags }}
+          labels: ${{ steps.sidecar-meta.outputs.labels }}

@@ -16,6 +16,14 @@ class GraphExportError(Exception):
         super().__init__(reason)
 
 
+class GraphBackendError(Exception):
+    def __init__(self, backend: str, reason: str, *, status_code: int) -> None:
+        self.backend = backend
+        self.reason = reason
+        self.status_code = status_code
+        super().__init__(reason)
+
+
 DISCRIMINATOR_VALUES = set(ALGORITHM_SCHEMAS)
 DISCRIMINATOR_VALUES.update(
     backend for _request_schema, variants in ALGORITHM_SCHEMAS.values() for backend, _params_schema in variants
@@ -101,5 +109,23 @@ async def graph_export_exception_handler(request: Request, exc: Exception) -> JS
             "detail": exc.reason,
             "instance": str(request.url.path),
             "invalidParams": [{"name": "format", "reason": exc.reason}],
+        },
+    )
+
+
+async def graph_backend_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    if not isinstance(exc, GraphBackendError):
+        raise exc
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        media_type="application/problem+json",
+        content={
+            "type": "https://api.aladin.local/problems/graph-backend",
+            "title": "Graph backend failed",
+            "status": exc.status_code,
+            "detail": exc.reason,
+            "instance": str(request.url.path),
+            "invalidParams": [{"name": "backend", "reason": f"{exc.backend}: {exc.reason}"}],
         },
     )

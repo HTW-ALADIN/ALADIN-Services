@@ -61,6 +61,8 @@ def _graph_data(
     generated: GeneratedGraph,
 ) -> tuple[Sequence[Hashable], Sequence[tuple[Hashable, Hashable]]]:
     graph = generated.graph
+    if isinstance(graph, (nx.MultiGraph, nx.MultiDiGraph)):
+        return list(graph.nodes), [(source, target) for source, target, _key in graph.edges(keys=True)]
     if isinstance(graph, nx.Graph):
         return list(graph.nodes), list(graph.edges)
     if isinstance(graph, IgraphGraph):

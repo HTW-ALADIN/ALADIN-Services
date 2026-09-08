@@ -1,0 +1,18 @@
+services:
+  graph-generation-service:
+    build:
+      context: .
+    image: graph-generation-service
+    environment:
+      GRAPH_TOOL_SIDECAR_URL: http://graph-tool-sidecar:8003
+    ports:
+      - "8002:8002"
+    depends_on:
+      graph-tool-sidecar:
+        condition: service_healthy
+
+  graph-tool-sidecar:
+    build:
+      context: .
+      dockerfile: sidecar/Dockerfile
+    image: graph-tool-sidecar

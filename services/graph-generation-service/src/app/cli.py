@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pydantic import TypeAdapter, ValidationError
 
-from app.exceptions import GraphExportError
+from app.exceptions import GraphBackendError, GraphExportError
 from app.exporters import export_graph
 from app.routing import execute_request
 from app.schemas import GraphGenerationRequest, RequestParameterError, validate_graph_size
@@ -45,7 +45,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             labels=request.output.labels,
             resource_id="cli",
         )
-    except (GraphExportError, OSError, RequestParameterError, ValidationError) as exc:
+    except (GraphBackendError, GraphExportError, OSError, RequestParameterError, ValidationError) as exc:
         print(json.dumps({"error": str(exc)}), file=sys.stderr)
         return 2
 

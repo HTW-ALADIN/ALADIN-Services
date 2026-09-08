@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from app.adapters import igraph_adapter, networkit_adapter, networkx_adapter
+from app.adapters import graph_tool_adapter, igraph_adapter, networkit_adapter, networkx_adapter
 from app.domain import GeneratedGraph
 from app.schemas import GraphGenerationRequest
 
@@ -26,8 +26,10 @@ ADAPTERS: dict[RouteKey, Adapter] = {
     ("configuration_model", "networkx"): networkx_adapter.generate_configuration_model,
     ("configuration_model", "igraph"): igraph_adapter.generate_configuration_model,
     ("configuration_model", "networkit"): networkit_adapter.generate_configuration_model,
+    ("configuration_model", "graph_tool"): graph_tool_adapter.generate_configuration_model,
     ("stochastic_block_model", "networkx"): networkx_adapter.generate_stochastic_block_model,
     ("stochastic_block_model", "igraph"): igraph_adapter.generate_stochastic_block_model,
+    ("stochastic_block_model", "graph_tool"): graph_tool_adapter.generate_stochastic_block_model,
     ("random_regular", "networkx"): networkx_adapter.generate_random_regular,
     ("random_regular", "igraph"): igraph_adapter.generate_random_regular,
     ("random_geometric", "networkx"): networkx_adapter.generate_random_geometric,
@@ -52,6 +54,9 @@ ADAPTERS: dict[RouteKey, Adapter] = {
     ("powerlaw_cluster", "networkx"): networkx_adapter.generate_powerlaw_cluster,
     ("geometric_threshold", "networkx"): networkx_adapter.generate_geometric_threshold,
     ("duplication_divergence", "networkx"): networkx_adapter.generate_internet_as,
+    ("knn_graph", "graph_tool"): graph_tool_adapter.generate_knn_graph,
+    ("triangulation", "graph_tool"): graph_tool_adapter.generate_triangulation,
+    ("price_network", "graph_tool"): graph_tool_adapter.generate_price_network,
 }
 
 DIRECTED_ROUTES: frozenset[RouteKey] = frozenset(
@@ -71,6 +76,10 @@ DIRECTED_ROUTES: frozenset[RouteKey] = frozenset(
         ("random_bipartite", "igraph"),
         ("community_clustered", "networkx"),
         ("growing_attachment", "igraph"),
+        ("configuration_model", "graph_tool"),
+        ("stochastic_block_model", "graph_tool"),
+        ("knn_graph", "graph_tool"),
+        ("price_network", "graph_tool"),
     }
 )
 

@@ -32,8 +32,22 @@ CATALOG_ROWS: tuple[CatalogRow, ...] = (
         "NetworKitConfigurationModelParams",
         False,
     ),
+    (
+        "configuration_model",
+        "graph_tool",
+        "Degree-sequence / configuration model",
+        "GraphToolConfigurationModelParams",
+        False,
+    ),
     ("stochastic_block_model", "networkx", "Stochastic block model", "NetworkXStochasticBlockModelParams", True),
     ("stochastic_block_model", "igraph", "Stochastic block model", "IgraphStochasticBlockModelParams", False),
+    (
+        "stochastic_block_model",
+        "graph_tool",
+        "Stochastic block model",
+        "GraphToolStochasticBlockModelParams",
+        False,
+    ),
     ("random_regular", "networkx", "Random k-regular graph", "NetworkXRandomRegularParams", True),
     ("random_regular", "igraph", "Random k-regular graph", "IgraphRandomRegularParams", False),
     ("random_geometric", "networkx", "Random geometric graph", "NetworkXRandomGeometricParams", True),
@@ -89,6 +103,9 @@ CATALOG_ROWS: tuple[CatalogRow, ...] = (
         "DuplicationDivergenceParams",
         True,
     ),
+    ("knn_graph", "graph_tool", "k-nearest-neighbor graph", "KnnGraphParams", True),
+    ("triangulation", "graph_tool", "Triangulation / Delaunay graph", "TriangulationParams", True),
+    ("price_network", "graph_tool", "Price citation-growth model", "PriceNetworkParams", True),
 )
 
 

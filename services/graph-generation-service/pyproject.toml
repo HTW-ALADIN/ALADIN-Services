@@ -1,13 +1,13 @@
 [project]
 name = "graph-generation-service"
-version = "0.1.0"
+version = "0.2.0"
 description = "Unified FastAPI graph-generation API with backend-specific validation and adapter routing"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
     "igraph>=0.11.8",
-    "networkit>=11.1.0",
+    "networkit==11.2",
     "networkx>=3.4.2",
     "pydantic>=2.10.0",
     "uvicorn[standard]>=0.34.0",
@@ -47,7 +47,7 @@ exclude = [
 packages = ["src/app"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "sidecar/src"]
 
 [tool.mypy]
 python_version = "3.12"

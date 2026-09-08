@@ -1,4 +1,5 @@
-IMAGE_NAME  := graph-generation-service
+IMAGE_NAME          := graph-generation-service
+SIDECAR_IMAGE_NAME  := graph-tool-sidecar
 OPENAPI_OUT := graph-generation-service.openapi.json
 PORT        ?= 8002
 
@@ -11,12 +12,12 @@ build:
 	uv build
 
 test:
-	uv run pytest --cov=src/app --cov-report=xml --cov-report=term-missing
+	uv run pytest --cov=src/app --cov=sidecar/src/graph_tool_sidecar --cov-report=xml --cov-report=term-missing
 
 lint:
-	uv run ruff check src/ test/
-	uv run ruff format --check src/ test/
-	uv run mypy src/ test/
+	uv run ruff check src/ sidecar/src/ test/
+	uv run ruff format --check src/ sidecar/src/ test/
+	uv run mypy src/ sidecar/src/ test/
 
 start:
 	uv run uvicorn app.main:app --reload --port $(PORT) --app-dir src
@@ -27,6 +28,7 @@ clean:
 
 docker-build:
 	docker build -t $(IMAGE_NAME) .
+	docker build -f sidecar/Dockerfile -t $(SIDECAR_IMAGE_NAME) .
 
 generate-openapi:
 	uv run python src/generate_openapi.py

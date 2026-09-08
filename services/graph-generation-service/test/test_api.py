@@ -5,6 +5,8 @@ import networkx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.domain import GeneratedGraph
+from app.exceptions import GraphBackendError
 from app.main import GRAPH_STORE, app
 from app.routing import ADAPTERS
 
@@ -811,13 +813,13 @@ def test_openapi_contains_only_specified_routes() -> None:
             assert "422" not in operation["responses"]
 
 
-def test_catalog_exposes_complete_two_level_spec_a_union() -> None:
+def test_catalog_exposes_complete_two_level_spec_b_union() -> None:
     catalog = client.get("/v1/algorithms").json()
     algorithms = catalog["algorithms"]
     components = app.openapi()["components"]["schemas"]
 
-    assert len(algorithms) == 41
-    assert len({entry["algorithm"] for entry in algorithms}) == 23
+    assert len(algorithms) == 46
+    assert len({entry["algorithm"] for entry in algorithms}) == 26
     for algorithm in {entry["algorithm"] for entry in algorithms}:
         backends = [entry for entry in algorithms if entry["algorithm"] == algorithm]
         if len(backends) > 1:
@@ -830,3 +832,112 @@ def test_adapter_registry_matches_catalog() -> None:
     algorithms = client.get("/v1/algorithms").json()["algorithms"]
 
     assert set(ADAPTERS) == {(entry["algorithm"], entry["backend"]) for entry in algorithms}
+
+
+@pytest.mark.parametrize(
+    ("payload", "directed"),
+    [
+        (
+            {
+                "algorithm": "configuration_model",
+                "backend": "graph_tool",
+                "params": {"out": [2, 2, 2, 2]},
+            },
+            False,
+        ),
+        (
+            {
+                "algorithm": "stochastic_block_model",
+                "backend": "graph_tool",
+                "params": {
+                    "membership": [0, 0, 1, 1],
+                    "matrix": [[2.0, 0.5], [0.5, 2.0]],
+                },
+            },
+            False,
+        ),
+        (
+            {
+                "algorithm": "knn_graph",
+                "backend": "graph_tool",
+                "params": {"points": [[0, 0], [1, 0], [0, 1], [1, 1]], "k": 1},
+                "output": {"directed": True},
+            },
+            True,
+        ),
+        (
+            {
+                "algorithm": "triangulation",
+                "backend": "graph_tool",
+                "params": {"points": [[0, 0], [1, 0], [0, 1], [1, 1]], "type": "delaunay"},
+            },
+            False,
+        ),
+        (
+            {
+                "algorithm": "price_network",
+                "backend": "graph_tool",
+                "params": {"n": 20, "m": 2, "seed": 42},
+            },
+            True,
+        ),
+    ],
+)
+def test_all_spec_b_graph_tool_routes_generate(payload: dict[str, object], directed: bool) -> None:
+    graph: networkx.Graph[int] = networkx.DiGraph() if directed else networkx.Graph()
+    graph.add_nodes_from(range(4))
+    graph.add_edges_from([(0, 1), (1, 2)])
+    generated = GeneratedGraph(graph=graph, num_nodes=4, num_edges=2, directed=directed)
+    adapter = MagicMock(return_value=generated)
+    key = (str(payload["algorithm"]), "graph_tool")
+
+    with patch.dict(ADAPTERS, {key: adapter}):
+        response = client.post("/v1/graphs", json=payload)
+
+    assert response.status_code == 201
+    assert response.json()["backend"] == "graph_tool"
+    assert response.json()["metadata"]["directed"] is directed
+    assert adapter.call_args.kwargs.get("directed", False) is directed
+
+
+def test_graph_tool_backend_failure_uses_problem_details() -> None:
+    adapter = MagicMock(side_effect=GraphBackendError("graph_tool", "sidecar unavailable", status_code=503))
+    payload = {
+        "algorithm": "price_network",
+        "backend": "graph_tool",
+        "params": {"n": 20, "m": 2},
+    }
+
+    with patch.dict(ADAPTERS, {("price_network", "graph_tool"): adapter}):
+        response = client.post("/v1/graphs", json=payload)
+
+    assert response.status_code == 503
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["invalidParams"][0]["name"] == "backend"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "algorithm": "knn_graph",
+            "backend": "graph_tool",
+            "params": {"points": [[0, 0], [1, 1]], "pointGenerator": {"n": 2}, "k": 1},
+        },
+        {
+            "algorithm": "triangulation",
+            "backend": "graph_tool",
+            "params": {"points": [[0, 0], [1, 0], [0, 1]], "periodic": True},
+        },
+        {
+            "algorithm": "stochastic_block_model",
+            "backend": "graph_tool",
+            "params": {"variant": "maxent", "membership": [0, 0], "matrix": [[1.0]]},
+        },
+    ],
+)
+def test_spec_b_parameter_validation_uses_problem_details(payload: dict[str, object]) -> None:
+    response = client.post("/v1/graphs", json=payload)
+
+    assert response.status_code == 400
+    assert response.headers["content-type"] == "application/problem+json"
