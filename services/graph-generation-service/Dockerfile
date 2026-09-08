@@ -1,4 +1,4 @@
-FROM python:3.12-slim-trixie AS builder
+FROM python:3.12-slim-trixie@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
@@ -16,7 +16,7 @@ COPY src ./src
 RUN uv sync --locked --no-dev
 
 
-FROM python:3.12-slim-trixie AS runtime
+FROM python:3.12-slim-trixie@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
@@ -24,7 +24,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
 COPY --from=builder /app /app
 WORKDIR /app
 
+RUN groupadd --system appuser && useradd --system --gid appuser --no-create-home appuser \
+    && chown -R appuser:appuser /app
+
 ENV PATH="/app/.venv/bin:$PATH"
+
+USER appuser
 
 EXPOSE 8002
 

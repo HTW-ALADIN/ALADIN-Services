@@ -106,7 +106,10 @@ def generate_classic_deterministic(
         if shape == "complete":
             graph = Graph.Full(n=n)
         elif shape == "star":
-            graph = Graph.Star(n=n)
+            if n == 1:
+                graph = Graph(n=1)
+            else:
+                graph = Graph.Star(n=n)
         elif shape == "wheel":
             graph = Graph.Ring(n=n - 1)
             graph.add_vertex()

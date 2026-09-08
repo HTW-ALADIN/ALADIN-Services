@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Hashable, Iterable, Sequence
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Any, TypeAlias, cast
+from typing import TypeAlias, cast
 from uuid import NAMESPACE_URL, uuid5
 
 import networkx as nx
@@ -34,14 +34,13 @@ def export_graph(
     nodes, edges = _graph_data(generated)
     node_labels = _node_labels(len(nodes), mode=labels, resource_id=resource_id)
     label_by_node = dict(zip(nodes, node_labels, strict=True))
-    labeled_edges = [(label_by_node[source], label_by_node[target]) for source, target in edges]
 
     if output_format == "edge_list":
-        return _edge_list_export(generated, node_labels, labeled_edges)
+        return _edge_list_export(generated, node_labels, edges, label_by_node)
     if output_format == "adjacency":
-        return _adjacency_export(generated, node_labels, labeled_edges)
+        return _adjacency_export(generated, node_labels, edges, label_by_node)
 
-    normalized = _networkx_graph(generated, node_labels, labeled_edges)
+    normalized = _networkx_graph(generated, node_labels, edges, label_by_node)
     if output_format == "graphml":
         output = BytesIO()
         nx.write_graphml(normalized, output, encoding="utf-8")
@@ -53,6 +52,8 @@ def export_graph(
         raise GraphExportError("graph6 does not support directed graphs")
     if labels != "index":
         raise GraphExportError("graph6 does not support UUID labels")
+    if isinstance(normalized, (nx.MultiGraph, nx.MultiDiGraph)):
+        raise GraphExportError("graph6 does not support multigraphs")
 
     return ExportedGraph(content=nx.to_graph6_bytes(normalized, header=False), media_type="application/octet-stream")
 
@@ -64,10 +65,6 @@ def _graph_data(
     if isinstance(graph, (nx.MultiGraph, nx.MultiDiGraph)):
         return list(graph.nodes), [(source, target) for source, target, _key in graph.edges(keys=True)]
     if isinstance(graph, nx.Graph):
-        if graph.is_multigraph():
-            multiedges = cast(Iterable[tuple[Hashable, Hashable, Any]], graph.edges)
-            flat_edges: list[tuple[Hashable, Hashable]] = [(u, v) for u, v, _key in multiedges]
-            return list(graph.nodes), flat_edges
         return list(graph.nodes), list(cast(Iterable[tuple[Hashable, Hashable]], graph.edges))
     if isinstance(graph, IgraphGraph):
         nodes = list(range(graph.vcount()))
@@ -92,13 +89,14 @@ def _node_labels(count: int, *, mode: LabelMode, resource_id: str) -> list[NodeL
 def _edge_list_export(
     generated: GeneratedGraph,
     nodes: list[NodeLabel],
-    edges: list[tuple[NodeLabel, NodeLabel]],
+    edges: Sequence[tuple[Hashable, Hashable]],
+    label_by_node: dict[Hashable, NodeLabel],
 ) -> ExportedGraph:
     content: JsonValue = {
         "format": "edge_list",
         "directed": generated.directed,
         "nodes": list(nodes),
-        "edges": [[source, target] for source, target in edges],
+        "edges": [[label_by_node[source], label_by_node[target]] for source, target in edges],
     }
     return ExportedGraph(content=content, media_type="application/json")
 
@@ -106,14 +104,17 @@ def _edge_list_export(
 def _adjacency_export(
     generated: GeneratedGraph,
     nodes: list[NodeLabel],
-    edges: list[tuple[NodeLabel, NodeLabel]],
+    edges: Sequence[tuple[Hashable, Hashable]],
+    label_by_node: dict[Hashable, NodeLabel],
 ) -> ExportedGraph:
     position = {node: index for index, node in enumerate(nodes)}
     neighbors: list[list[NodeLabel]] = [[] for _node in nodes]
     for source, target in edges:
-        neighbors[position[source]].append(target)
+        source_label = label_by_node[source]
+        target_label = label_by_node[target]
+        neighbors[position[source_label]].append(target_label)
         if not generated.directed and source != target:
-            neighbors[position[target]].append(source)
+            neighbors[position[target_label]].append(source_label)
 
     content: JsonValue = {
         "format": "adjacency",
@@ -128,15 +129,22 @@ def _adjacency_export(
 
 def _networkx_graph(
     generated: GeneratedGraph,
-    nodes: list[NodeLabel],
-    edges: list[tuple[NodeLabel, NodeLabel]],
+    node_labels: list[NodeLabel],
+    edges: Sequence[tuple[Hashable, Hashable]],
+    label_by_node: dict[Hashable, NodeLabel],
 ) -> nx.Graph[NodeLabel]:
+    source = generated.graph
+    if isinstance(source, nx.Graph) and source.is_directed() == generated.directed:
+        if list(source.nodes) == node_labels:
+            return source
+
+    is_multi = isinstance(source, (nx.MultiGraph, nx.MultiDiGraph))
     graph: nx.Graph[NodeLabel]
     if generated.directed:
-        graph = nx.DiGraph()
+        graph = nx.MultiDiGraph() if is_multi else nx.DiGraph()
     else:
-        graph = nx.Graph()
+        graph = nx.MultiGraph() if is_multi else nx.Graph()
 
-    graph.add_nodes_from(nodes)
-    graph.add_edges_from(edges)
+    graph.add_nodes_from(node_labels)
+    graph.add_edges_from((label_by_node[u], label_by_node[v]) for u, v in edges)
     return graph

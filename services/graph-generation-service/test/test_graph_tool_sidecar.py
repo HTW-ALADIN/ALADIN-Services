@@ -166,3 +166,26 @@ def test_sidecar_health_checks_graph_tool_import(mock_import: MagicMock) -> None
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"algorithm": "price_network", "params": {"n": 1_000_000, "m": 1}, "directed": True},
+        {
+            "algorithm": "stochastic_block_model",
+            "params": {"membership": [0] * 10_000, "matrix": [[1.0]]},
+            "directed": True,
+        },
+        {"algorithm": "configuration_model", "params": {"out": [5_000_000]}, "directed": False},
+        {
+            "algorithm": "knn_graph",
+            "params": {"points": [[0.0, 0.0]] * 10_000, "k": 1_000},
+            "directed": False,
+        },
+    ],
+)
+def test_sidecar_rejects_oversized_requests(payload: dict[str, object]) -> None:
+    response = sidecar_client.post("/v1/generate", json=payload)
+
+    assert response.status_code == 422

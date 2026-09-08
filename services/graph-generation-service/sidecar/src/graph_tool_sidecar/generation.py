@@ -9,6 +9,9 @@ from numpy.typing import NDArray
 
 from graph_tool_sidecar.models import SidecarGraph, SidecarRequest
 
+MAX_GRAPH_NODES = 10_000
+MAX_GRAPH_EDGES = 2_000_000
+
 
 class _Vertex(Protocol):
     def __int__(self) -> int: ...
@@ -29,6 +32,7 @@ class _Graph(Protocol):
 
 
 def generate(request: SidecarRequest) -> SidecarGraph:
+    _assert_size_within_limits(request)
     graph_tool = import_module("graph_tool")
     generation = import_module("graph_tool.generation")
     params = request.params
@@ -126,13 +130,76 @@ def _stochastic_block_model(generation: Any, params: dict[str, Any], *, directed
     )
 
 
-def _points(params: dict[str, Any]) -> NDArray[np.float64]:
+def _assert_size_within_limits(request: SidecarRequest) -> None:
+    params = request.params
+    directed = request.directed
+
+    if request.algorithm == "configuration_model":
+        out = params.get("out")
+        if not isinstance(out, list):
+            raise ValueError("configuration_model requires params.out")
+        node_count = len(out)
+        in_ = params.get("in")
+        degree_sum = float(sum(out))
+        if isinstance(in_, list):
+            degree_sum = float(sum(in_))
+        expected_edges = degree_sum if directed else degree_sum / 2
+    elif request.algorithm == "stochastic_block_model":
+        membership = params.get("membership")
+        if not isinstance(membership, list):
+            raise ValueError("stochastic_block_model requires params.membership")
+        node_count = len(membership)
+        if membership:
+            blocks = max(membership) + 1
+            block_sizes = [0] * blocks
+            for block in membership:
+                block_sizes[block] += 1
+            out_degrees = params.get("outDegrees")
+            if isinstance(out_degrees, list) and out_degrees:
+                degree_sum = float(sum(float(value) for value in out_degrees))
+                expected_edges = degree_sum if directed else degree_sum / 2
+            else:
+                matrix = params.get("matrix")
+                if not isinstance(matrix, list):
+                    raise ValueError("stochastic_block_model requires params.matrix")
+                total = sum(
+                    float(matrix[i][j]) * block_sizes[i] * block_sizes[j] for i in range(blocks) for j in range(blocks)
+                )
+                expected_edges = total if directed else 0.5 * total
+        else:
+            expected_edges = 0.0
+    elif request.algorithm in {"knn_graph", "triangulation"}:
+        node_count = _point_count(params)
+        if request.algorithm == "knn_graph":
+            expected_edges = node_count * int(params.get("k", 0))
+        else:
+            expected_edges = 6.0 * node_count
+    else:
+        node_count = int(params.get("n", 0))
+        expected_edges = node_count * int(params.get("m", 1))
+
+    if node_count > MAX_GRAPH_NODES:
+        raise ValueError(f"graph must not exceed {MAX_GRAPH_NODES} nodes")
+    if expected_edges > MAX_GRAPH_EDGES:
+        raise ValueError(f"graph must not exceed {MAX_GRAPH_EDGES} edges")
+
+
+def _point_count(params: dict[str, Any]) -> int:
     raw_points = params.get("points")
     if isinstance(raw_points, list):
-        return np.asarray(raw_points, dtype=float)
-
+        return len(raw_points)
     generator = params.get("pointGenerator")
     if not isinstance(generator, dict):
+        raise ValueError("points or pointGenerator is required")
+    return int(generator["n"])
+
+
+def _points(params: dict[str, Any]) -> NDArray[np.float64]:
+    generator = params.get("pointGenerator")
+    if not isinstance(generator, dict):
+        raw_points = params.get("points")
+        if isinstance(raw_points, list):
+            return np.asarray(raw_points, dtype=float)
         raise ValueError("points or pointGenerator is required")
     rng = np.random.default_rng(generator.get("seed"))
     return rng.uniform(

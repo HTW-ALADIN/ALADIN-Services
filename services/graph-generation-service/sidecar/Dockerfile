@@ -1,9 +1,9 @@
-FROM debian:trixie-slim
+FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python3-fastapi \
-        python3-graph-tool \
+        python3-graph-tool=2.91+ds-5 \
         python3-numpy \
         uvicorn \
     && rm -rf /var/lib/apt/lists/*
@@ -11,7 +11,12 @@ RUN apt-get update \
 WORKDIR /app
 COPY sidecar/src ./src
 
+RUN groupadd --system appuser && useradd --system --gid appuser --no-create-home appuser \
+    && chown -R appuser:appuser /app
+
 ENV PYTHONPATH="/app/src"
+
+USER appuser
 
 EXPOSE 8003
 

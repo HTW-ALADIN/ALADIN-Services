@@ -28,6 +28,8 @@ MAX_GRAPH_EDGES = 2_000_000
 MAX_KLEINBERG_NODES = 2_500
 MAX_KLEINBERG_DIM = 11
 MAX_GEOMETRIC_DIM_WORK = 1_000_000
+MAX_WATTS_STROGATZ_DIM = 1_000
+MAX_WATTS_STROGATZ_NEI = 1_000
 
 
 class OutputOptions(StrictBaseModel):
@@ -78,6 +80,12 @@ class NetworkXBarabasiAlbertParams(StrictBaseModel):
     m: PositiveInt
     seed: int | None = None
 
+    @model_validator(mode="after")
+    def validate_degrees(self) -> Self:
+        if self.m >= self.n:
+            raise RequestParameterError("params.m", "m must be smaller than n")
+        return self
+
 
 class IgraphBarabasiAlbertParams(StrictBaseModel):
     backend: Literal["igraph"]
@@ -93,6 +101,12 @@ class NetworKitBarabasiAlbertParams(StrictBaseModel):
     nMax: PositiveInt
     n0: PositiveInt
     batagelj: bool = True
+
+    @model_validator(mode="after")
+    def validate_initial_size(self) -> Self:
+        if self.n0 > self.nMax:
+            raise RequestParameterError("params.n0", "n0 must not exceed nMax")
+        return self
 
 
 BarabasiAlbertParams: TypeAlias = Annotated[
@@ -229,9 +243,9 @@ class NetworkXWattsStrogatzParams(StrictBaseModel):
 
 class IgraphWattsStrogatzParams(StrictBaseModel):
     backend: Literal["igraph"]
-    dim: PositiveInt
+    dim: Annotated[int, Field(ge=1, le=MAX_WATTS_STROGATZ_DIM)]
     size: PositiveInt
-    nei: PositiveInt
+    nei: Annotated[int, Field(ge=1, le=MAX_WATTS_STROGATZ_NEI)]
     p: Probability
 
 
@@ -700,8 +714,8 @@ class NetworkXRandomTreeParams(StrictBaseModel):
 
     @model_validator(mode="after")
     def validate_variant(self) -> Self:
-        if self.variant == "random_powerlaw" and self.gamma is not None and self.gamma <= 0:
-            raise RequestParameterError("params.gamma", "gamma must be greater than 0")
+        if self.variant == "random_powerlaw" and self.gamma is not None and self.gamma <= 1:
+            raise RequestParameterError("params.gamma", "gamma must be greater than 1")
         if self.variant != "random_powerlaw" and self.gamma is not None:
             raise RequestParameterError("params.gamma", "gamma is only used by random_powerlaw")
         return self
@@ -1280,7 +1294,12 @@ def _bounded_power(base: int, exponent: int) -> int:
 
 def _lattice_ball_size(dim: int, radius: int) -> int:
     """Number of integer lattice points within L1 distance `radius` in `dim` dimensions (incl. center)."""
-    return sum(2**k * math.comb(dim, k) * math.comb(radius, k) for k in range(min(dim, radius) + 1))
+    total = 0
+    for k in range(min(dim, radius) + 1):
+        total += 2**k * math.comb(dim, k) * math.comb(radius, k)
+        if total > MAX_GRAPH_EDGES:
+            return MAX_GRAPH_EDGES + 1
+    return total
 
 
 def _estimate_expected_edges(algorithm: str, params: dict[str, Any], directed: bool, node_count: int) -> float:
@@ -1309,6 +1328,23 @@ def _estimate_expected_edges(algorithm: str, params: dict[str, Any], directed: b
         degree_sum = float(sum(params.get("sequence") or params.get("out") or ()))
         return degree_sum if directed else degree_sum / 2
     if algorithm == "stochastic_block_model":
+        membership = params.get("membership")
+        if isinstance(membership, list):
+            if not membership:
+                return 0.0
+            blocks = max(membership) + 1
+            block_sizes = [0] * blocks
+            for block in membership:
+                block_sizes[block] += 1
+            out_degrees = params.get("outDegrees")
+            if isinstance(out_degrees, list) and out_degrees:
+                degree_sum = float(sum(out_degrees))
+                return degree_sum if directed else degree_sum / 2
+            matrix = params.get("matrix") or []
+            total = sum(
+                float(matrix[i][j]) * block_sizes[i] * block_sizes[j] for i in range(blocks) for j in range(blocks)
+            )
+            return total if directed else 0.5 * total
         sizes = params.get("sizes") or params.get("block_sizes") or []
         matrix = params.get("p") or params.get("pref_matrix") or []
         total = sum(

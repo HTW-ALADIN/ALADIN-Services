@@ -6,7 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.domain import GeneratedGraph
-from app.exceptions import GraphBackendError
+from app.exceptions import GraphBackendError, GraphExportError
+from app.exporters import export_graph
 from app.main import GRAPH_STORE, app
 from app.routing import ADAPTERS
 
@@ -1165,3 +1166,101 @@ def test_rejects_directed_igraph_configuration_model_over_budget() -> None:
     )
 
     assert response.status_code == 400
+
+
+def test_rejects_graph_tool_stochastic_block_model_over_edge_budget() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={
+            "algorithm": "stochastic_block_model",
+            "backend": "graph_tool",
+            "params": {"membership": [0] * 10_000, "matrix": [[1.0]]},
+            "output": {"directed": True},
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_accepts_sparse_graph_tool_stochastic_block_model() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={
+            "algorithm": "stochastic_block_model",
+            "backend": "graph_tool",
+            "params": {"membership": [0] * 100, "matrix": [[0.001]]},
+            "output": {"directed": True},
+        },
+    )
+
+    assert response.status_code != 400
+
+
+def test_rejects_igraph_watts_strogatz_oversized_dimension() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={
+            "algorithm": "watts_strogatz",
+            "backend": "igraph",
+            "params": {"dim": 100_000, "size": 1, "nei": 100_000, "p": 0.1},
+        },
+    )
+
+    assert response.status_code == 400
+    assert any(error["name"] == "params.dim" for error in response.json()["invalidParams"])
+
+
+def test_rejects_barabasi_albert_m_at_least_n() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={"algorithm": "barabasi_albert", "backend": "networkx", "params": {"n": 5, "m": 5}},
+    )
+
+    assert response.status_code == 400
+    assert any(error["name"] == "params.m" for error in response.json()["invalidParams"])
+
+
+def test_rejects_networkit_barabasi_albert_n0_above_nmax() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={"algorithm": "barabasi_albert", "backend": "networkit", "params": {"k": 3, "nMax": 10, "n0": 20}},
+    )
+
+    assert response.status_code == 400
+    assert any(error["name"] == "params.n0" for error in response.json()["invalidParams"])
+
+
+def test_rejects_random_powerlaw_gamma_at_or_below_one() -> None:
+    response = client.post(
+        "/v1/graphs",
+        json={
+            "algorithm": "random_tree",
+            "backend": "networkx",
+            "params": {"n": 10, "variant": "random_powerlaw", "gamma": 1.0},
+        },
+    )
+
+    assert response.status_code == 400
+    assert any(error["name"] == "params.gamma" for error in response.json()["invalidParams"])
+
+
+def test_exports_multigraph_parallel_edges_to_graphml() -> None:
+    graph: networkx.MultiGraph[int] = networkx.MultiGraph()
+    graph.add_nodes_from([0, 1, 2])
+    graph.add_edges_from([(0, 1), (0, 1), (1, 2)])
+    generated = GeneratedGraph(graph=graph, num_nodes=3, num_edges=3, directed=False)
+
+    exported = export_graph(generated, output_format="graphml", labels="index", resource_id="grf_multi")
+
+    assert isinstance(exported.content, bytes)
+    assert exported.content.count(b"<edge ") == 3
+
+
+def test_rejects_graph6_export_for_multigraph() -> None:
+    graph: networkx.MultiGraph[int] = networkx.MultiGraph()
+    graph.add_nodes_from([0, 1, 2])
+    graph.add_edges_from([(0, 1), (0, 1)])
+    generated = GeneratedGraph(graph=graph, num_nodes=3, num_edges=2, directed=False)
+
+    with pytest.raises(GraphExportError):
+        export_graph(generated, output_format="graph6", labels="index", resource_id="grf_multi")

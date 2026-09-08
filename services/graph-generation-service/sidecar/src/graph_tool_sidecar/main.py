@@ -29,5 +29,5 @@ def generate_graph(request: SidecarRequest) -> SidecarGraph:
         return generate(request)
     except ImportError as exc:
         raise HTTPException(status_code=503, detail="graph-tool is unavailable") from exc
-    except (AssertionError, KeyError, TypeError, ValueError, RuntimeError) as exc:
+    except (AssertionError, IndexError, KeyError, TypeError, ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=f"graph-tool generation failed: {exc}") from exc
