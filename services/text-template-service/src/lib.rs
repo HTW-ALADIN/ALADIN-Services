@@ -1,4 +1,5 @@
 pub mod api;
+mod bounded_filters;
 pub mod cli;
 mod cli_args;
 pub mod config;

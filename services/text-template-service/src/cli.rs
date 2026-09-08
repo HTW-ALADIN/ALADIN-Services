@@ -178,12 +178,6 @@ fn collect_bundle_files(
                 let path = entry.path();
                 let relative = path.strip_prefix(root).map_err(|_| escaped_path_error())?;
                 let logical_name = logical_template_name(relative)?;
-                if logical_name.len() > limits.max_template_name_bytes {
-                    return Err(ServiceError::payload_too_large(format!(
-                        "template name exceeds {} bytes: {logical_name}",
-                        limits.max_template_name_bytes
-                    )));
-                }
                 let source = read_text(&path, "template", limits.max_template_bytes)?;
                 insert_template(templates, logical_name, source)?;
             }
@@ -411,7 +405,7 @@ mod tests {
     }
 
     #[test]
-    fn bundle_loading_enforces_file_directory_and_name_limits() {
+    fn bundle_loading_enforces_file_and_directory_limits() {
         let directory = tempfile::tempdir().unwrap();
         fs::write(directory.path().join("one.txt"), "one").unwrap();
         fs::write(directory.path().join("two.txt"), "two").unwrap();
@@ -434,17 +428,26 @@ mod tests {
             .unwrap_err()
             .detail
             .contains("traversal exceeds 3 entries"));
+    }
 
+    #[test]
+    fn bundle_name_limits_share_the_renderer_error_contract() {
         let named = tempfile::tempdir().unwrap();
         fs::write(named.path().join("long.txt"), "source").unwrap();
+        let context = named.path().join("context.json");
+        fs::write(&context, "{}").unwrap();
         let short_names = Limits {
             max_template_name_bytes: 3,
             ..Limits::default()
         };
-        assert!(load_bundle(named.path(), &short_names)
-            .unwrap_err()
-            .detail
-            .contains("template name exceeds 3 bytes"));
+        let mut args = render_args(&context);
+        args.template_dir = Some(named.path().to_path_buf());
+        args.entrypoint = Some("long.txt".to_string());
+
+        let error = execute_render(args, &short_names).unwrap_err();
+
+        assert_eq!(error.code, "invalid-request");
+        assert!(error.detail.contains("template name exceeds 3 bytes"));
     }
 
     #[test]

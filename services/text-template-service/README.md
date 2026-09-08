@@ -1,7 +1,7 @@
 # Text Template Service
 
 A stateless REST and CLI wrapper around
-[MiniJinja 2.23.0](https://github.com/mitsuhiko/minijinja). It renders arbitrary
+[MiniJinja 2.24.0](https://github.com/mitsuhiko/minijinja). It renders arbitrary
 text from Jinja-compatible templates and JSON context while keeping templates,
 includes, and inheritance inside an in-memory request boundary.
 
@@ -147,6 +147,15 @@ result. Fuel and recursion bounds terminate expensive template execution. The
 wall-clock timeout bounds the HTTP wait; fuel remains the hard in-process
 execution bound for the synchronous renderer. Concurrent render work is capped;
 requests receive `503 Service Unavailable` while every render slot is occupied.
+
+The built-in `indent`, `tojson`, and `format` filters are wrapped with bounded
+equivalents: a single filter value may not materialize more than the default
+output limit (1,048,576 bytes) before rendering stops, oversized `tojson`
+pretty-print widths are rejected, and printf field widths/precisions in
+`format` are clamped to 256 characters. These safeguards exist because the
+upstream engine performs unbounded single allocations for those widths; a
+deployment that raises `TEXT_TEMPLATE_MAX_OUTPUT_BYTES` above its default keeps
+these per-filter ceilings.
 
 ## Hardware requirements
 

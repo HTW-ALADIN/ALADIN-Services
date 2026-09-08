@@ -1,10 +1,13 @@
+use std::collections::{HashMap, VecDeque};
 use std::io::{self, Write};
+use std::sync::{Arc, Mutex};
 
 use axum::http::StatusCode;
 use minijinja::{AutoEscape, Environment, ErrorKind};
 use serde_json::Value;
 
 use crate::{
+    bounded_filters,
     config::Limits,
     error::ServiceError,
     model::{
@@ -14,12 +17,55 @@ use crate::{
 };
 
 pub const ENGINE_NAME: &str = "minijinja";
-pub const ENGINE_VERSION: &str = "2.23.0";
+pub const ENGINE_VERSION: &str = "2.24.0";
+
+const CACHE_MAX_ENTRIES: usize = 32;
+const CACHE_MAX_RETAINED_BYTES: usize = 8 * 1024 * 1024;
+/// Multiplier applied to template source bytes to approximate the memory a
+/// cached entry actually retains (the key itself, the template sources the
+/// engine keeps per loaded template, and the compiled bytecode).
+const CACHE_MEMORY_WEIGHT_FACTOR: usize = 3;
 
 pub fn render(request: &RenderRequest, limits: &Limits) -> Result<RenderResponse, ServiceError> {
     validate_request(request, limits)?;
+    let compiled = build_environment(request, limits)?;
+    execute(compiled, request, limits)
+}
 
-    let mut environment = Environment::new();
+pub fn render_cached(
+    request: &RenderRequest,
+    limits: &Limits,
+    cache: &TemplateCache,
+) -> Result<RenderResponse, ServiceError> {
+    validate_request(request, limits)?;
+    let key = CacheKey::from_request(request, limits);
+    let compiled = match cache.get(&key) {
+        Some(environment) => CompiledEnvironment {
+            environment,
+            entrypoint: key.entrypoint.clone(),
+            source_kind: source_kind_of(request),
+        },
+        None => {
+            let compiled = build_environment(request, limits)?;
+            cache.insert(key, compiled.environment.clone());
+            compiled
+        }
+    };
+    execute(compiled, request, limits)
+}
+
+struct CompiledEnvironment {
+    environment: Arc<Environment<'static>>,
+    entrypoint: String,
+    source_kind: &'static str,
+}
+
+fn build_environment(
+    request: &RenderRequest,
+    limits: &Limits,
+) -> Result<CompiledEnvironment, ServiceError> {
+    let mut environment: Environment<'static> = Environment::new();
+    bounded_filters::register(&mut environment);
     environment.set_undefined_behavior(match request.options.undefined {
         UndefinedBehavior::Strict => minijinja::UndefinedBehavior::Strict,
         UndefinedBehavior::Lenient => minijinja::UndefinedBehavior::Lenient,
@@ -35,7 +81,7 @@ pub fn render(request: &RenderRequest, limits: &Limits) -> Result<RenderResponse
 
     let (entrypoint, source_kind) = match &request.source {
         TemplateSource::Inline { template, name } => {
-            let name = name.as_deref().unwrap_or("inline.txt").to_string();
+            let name = inline_name(name);
             environment
                 .add_template_owned(name.clone(), template.clone())
                 .map_err(map_engine_error)?;
@@ -53,9 +99,32 @@ pub fn render(request: &RenderRequest, limits: &Limits) -> Result<RenderResponse
             (entrypoint.clone(), "bundle")
         }
     };
+    Ok(CompiledEnvironment {
+        environment: Arc::new(environment),
+        entrypoint,
+        source_kind,
+    })
+}
 
-    let template = environment
-        .get_template(&entrypoint)
+fn inline_name(name: &Option<String>) -> String {
+    name.clone().unwrap_or_else(|| "inline.txt".to_string())
+}
+
+fn source_kind_of(request: &RenderRequest) -> &'static str {
+    match &request.source {
+        TemplateSource::Inline { .. } => "inline",
+        TemplateSource::Bundle { .. } => "bundle",
+    }
+}
+
+fn execute(
+    compiled: CompiledEnvironment,
+    request: &RenderRequest,
+    limits: &Limits,
+) -> Result<RenderResponse, ServiceError> {
+    let template = compiled
+        .environment
+        .get_template(&compiled.entrypoint)
         .map_err(map_engine_error)?;
     let mut writer = BoundedWriter::new(limits.max_output_bytes);
     let context = Value::Object(request.context.clone());
@@ -65,6 +134,11 @@ pub fn render(request: &RenderRequest, limits: &Limits) -> Result<RenderResponse
                 "rendered output exceeds {} bytes",
                 limits.max_output_bytes
             )));
+        }
+        if error.detail() == Some(bounded_filters::OUTPUT_LIMIT_DETAIL) {
+            return Err(ServiceError::resource_limit(
+                bounded_filters::OUTPUT_LIMIT_DETAIL,
+            ));
         }
         return Err(map_engine_error(error));
     }
@@ -76,10 +150,131 @@ pub fn render(request: &RenderRequest, limits: &Limits) -> Result<RenderResponse
         metadata: RenderMetadata {
             engine: ENGINE_NAME,
             engine_version: ENGINE_VERSION,
-            source_kind,
+            source_kind: compiled.source_kind,
             output_bytes,
         },
     })
+}
+
+#[derive(Clone)]
+pub struct TemplateCache {
+    inner: Arc<Mutex<CacheState>>,
+}
+
+impl Default for TemplateCache {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(CacheState::default())),
+        }
+    }
+}
+
+impl TemplateCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn get(&self, key: &CacheKey) -> Option<Arc<Environment<'static>>> {
+        let state = cache_lock(&self.inner);
+        state.entries.get(key).cloned()
+    }
+
+    fn insert(&self, key: CacheKey, environment: Arc<Environment<'static>>) {
+        let mut state = cache_lock(&self.inner);
+        if state.entries.contains_key(&key) {
+            return;
+        }
+        let added_weight = key.retained_weight();
+        if added_weight > CACHE_MAX_RETAINED_BYTES {
+            // Never admit a single entry that exceeds the whole budget; it is
+            // still rendered (the compiled environment is returned to the
+            // caller), just not retained.
+            return;
+        }
+        while !state.order.is_empty()
+            && (state.entries.len() >= CACHE_MAX_ENTRIES
+                || state.retained_bytes.saturating_add(added_weight) > CACHE_MAX_RETAINED_BYTES)
+        {
+            let Some(oldest) = state.order.pop_front() else {
+                break;
+            };
+            if state.entries.remove(oldest.as_ref()).is_some() {
+                state.retained_bytes = state
+                    .retained_bytes
+                    .saturating_sub(oldest.retained_weight());
+            }
+        }
+        let key = Arc::new(key);
+        state.entries.insert(key.clone(), environment);
+        state.order.push_back(key);
+        state.retained_bytes = state.retained_bytes.saturating_add(added_weight);
+    }
+}
+
+fn cache_lock(inner: &Mutex<CacheState>) -> std::sync::MutexGuard<'_, CacheState> {
+    inner
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[derive(Default)]
+struct CacheState {
+    entries: HashMap<Arc<CacheKey>, Arc<Environment<'static>>>,
+    order: VecDeque<Arc<CacheKey>>,
+    retained_bytes: usize,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct CacheKey {
+    entrypoint: String,
+    templates: Vec<(String, String)>,
+    autoescape: Autoescape,
+    undefined: UndefinedBehavior,
+    keep_trailing_newline: bool,
+    recursion_limit: usize,
+    fuel: u64,
+}
+
+impl CacheKey {
+    fn from_request(request: &RenderRequest, limits: &Limits) -> Self {
+        let (entrypoint, templates) = match &request.source {
+            TemplateSource::Inline { template, name } => {
+                let name = inline_name(name);
+                (name.clone(), vec![(name, template.clone())])
+            }
+            TemplateSource::Bundle {
+                entrypoint,
+                templates,
+            } => (
+                entrypoint.clone(),
+                templates
+                    .iter()
+                    .map(|(name, source)| (name.clone(), source.clone()))
+                    .collect(),
+            ),
+        };
+        Self {
+            entrypoint,
+            templates,
+            autoescape: request.options.autoescape,
+            undefined: request.options.undefined,
+            keep_trailing_newline: request.options.keep_trailing_newline,
+            recursion_limit: limits.recursion_limit,
+            fuel: limits.fuel,
+        }
+    }
+
+    fn template_bytes(&self) -> usize {
+        self.templates
+            .iter()
+            .map(|(name, source)| name.len() + source.len())
+            .sum()
+    }
+
+    fn retained_weight(&self) -> usize {
+        self.template_bytes()
+            .saturating_mul(CACHE_MEMORY_WEIGHT_FACTOR)
+    }
 }
 
 fn validate_request(request: &RenderRequest, limits: &Limits) -> Result<(), ServiceError> {
@@ -241,8 +436,11 @@ mod tests {
     use std::io::Write;
 
     use minijinja::{Error, ErrorKind};
+    use serde_json::json;
 
-    use super::{map_engine_error, BoundedWriter};
+    use super::{map_engine_error, render, render_cached, BoundedWriter, TemplateCache};
+    use crate::config::Limits;
+    use crate::model::{Autoescape, RenderOptions, RenderRequest, TemplateSource};
 
     #[test]
     fn maps_write_and_generic_engine_errors() {
@@ -260,5 +458,56 @@ mod tests {
         let mut writer = BoundedWriter::new(4);
         writer.write_all(b"test").unwrap();
         writer.flush().unwrap();
+    }
+
+    #[test]
+    fn cached_render_matches_uncached_output() {
+        let cache = TemplateCache::new();
+        let limits = Limits::default();
+        let request = RenderRequest {
+            source: TemplateSource::Inline {
+                template: "Hello {{ name }}".to_string(),
+                name: Some("greeting.j2".to_string()),
+            },
+            context: json!({ "name": "world" })
+                .as_object()
+                .cloned()
+                .unwrap_or_default(),
+            options: RenderOptions::default(),
+        };
+
+        let expected = render(&request, &limits).unwrap().output;
+        let first = render_cached(&request, &limits, &cache).unwrap().output;
+        let second = render_cached(&request, &limits, &cache).unwrap().output;
+
+        assert_eq!(first, expected);
+        assert_eq!(second, expected);
+    }
+
+    #[test]
+    fn cached_renders_do_not_mix_autoescape_options() {
+        let cache = TemplateCache::new();
+        let limits = Limits::default();
+        let mut request = RenderRequest {
+            source: TemplateSource::Inline {
+                template: "{{ value }}".to_string(),
+                name: None,
+            },
+            context: json!({ "value": "<b>bold</b>" })
+                .as_object()
+                .cloned()
+                .unwrap_or_default(),
+            options: RenderOptions {
+                autoescape: Autoescape::Html,
+                ..RenderOptions::default()
+            },
+        };
+
+        let escaped = render_cached(&request, &limits, &cache).unwrap().output;
+        assert_eq!(escaped, "&lt;b&gt;bold&lt;&#x2f;b&gt;");
+
+        request.options.autoescape = Autoescape::None;
+        let raw = render_cached(&request, &limits, &cache).unwrap().output;
+        assert_eq!(raw, "<b>bold</b>");
     }
 }

@@ -21,13 +21,14 @@ use crate::{
         CapabilitiesResponse, EngineInfo, FeatureInfo, HealthResponse, LimitInfo, RenderRequest,
     },
     openapi::ApiDoc,
-    renderer::{self, ENGINE_NAME, ENGINE_VERSION},
+    renderer::{self, TemplateCache, ENGINE_NAME, ENGINE_VERSION},
 };
 
 #[derive(Clone)]
 pub struct AppState {
     pub limits: Arc<Limits>,
     render_slots: Arc<Semaphore>,
+    template_cache: TemplateCache,
 }
 
 impl AppState {
@@ -36,6 +37,7 @@ impl AppState {
         Self {
             limits: Arc::new(limits),
             render_slots,
+            template_cache: TemplateCache::new(),
         }
     }
 }
@@ -134,9 +136,10 @@ pub async fn render_template(
         .map_err(|_| ServiceError::unavailable("all render workers are busy"))?;
     let limits = (*state.limits).clone();
     let timeout = Duration::from_millis(limits.timeout_ms);
+    let cache = state.template_cache.clone();
     let task = tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        renderer::render(&request, &limits)
+        renderer::render_cached(&request, &limits, &cache)
     });
     let rendered = await_render_task(task, timeout).await?;
 

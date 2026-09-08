@@ -18,7 +18,7 @@ pub enum TemplateSource {
     },
 }
 
-#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, ToSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum UndefinedBehavior {
     #[default]
@@ -26,7 +26,7 @@ pub enum UndefinedBehavior {
     Lenient,
 }
 
-#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, ToSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Autoescape {
     #[default]
