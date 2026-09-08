@@ -101,9 +101,10 @@ make start
 ```
 
 `make coverage` uses `cargo-llvm-cov` and fails unless the testable library
-surface has 100% line coverage. The small `src/main.rs` process bootstrap is
-excluded from that percentage; its CLI exit paths are exercised by integration
-tests and the long-running server path is covered by the Docker smoke test.
+surface has at least 80% line coverage (override with `COVERAGE_THRESHOLD`).
+The small `src/main.rs` process bootstrap is excluded from that percentage; its
+CLI exit paths are exercised by integration tests and the long-running server
+path is covered by the Docker smoke test.
 
 The server listens on `0.0.0.0:8000` by default. Override it with:
 

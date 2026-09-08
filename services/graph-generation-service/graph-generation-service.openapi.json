@@ -1,0 +1,4049 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Unified Graph Generation Service",
+    "description": "Strictly validated graph-generation API with backend-specific adapter routing.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/algorithms": {
+      "get": {
+        "tags": [
+          "Algorithms"
+        ],
+        "summary": "List supported graph generation algorithms and backend parameter schemas",
+        "operationId": "list_algorithms_v1_algorithms_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlgorithmCatalogResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/graphs": {
+      "post": {
+        "tags": [
+          "Graphs"
+        ],
+        "summary": "Generate a graph using a backend-specific algorithm adapter",
+        "operationId": "create_graph_v1_graphs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GraphGenerationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request validation failed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/graphs/{graphId}": {
+      "get": {
+        "tags": [
+          "Graphs"
+        ],
+        "summary": "Retrieve a generated graph resource",
+        "operationId": "get_graph_v1_graphs__graphId__get",
+        "parameters": [
+          {
+            "name": "graphId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Graphid"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "edge_list",
+                    "adjacency",
+                    "graphml",
+                    "gml",
+                    "graph6"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Format"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Graph metadata or the requested graph serialization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphResource"
+                }
+              },
+              "application/graphml+xml": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The requested graph serialization is not valid for this resource.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Graph resource was not found.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Graphs"
+        ],
+        "summary": "Release a generated graph resource",
+        "operationId": "delete_graph_v1_graphs__graphId__delete",
+        "parameters": [
+          {
+            "name": "graphId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Graphid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Graph resource was not found.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AlgorithmBackendDescriptor": {
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "title": "Backend"
+          },
+          "canonicalFamily": {
+            "type": "string",
+            "title": "Canonicalfamily"
+          },
+          "paramsSchema": {
+            "type": "string",
+            "title": "Paramsschema"
+          },
+          "defaultBackend": {
+            "type": "boolean",
+            "title": "Defaultbackend",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "algorithm",
+          "backend",
+          "canonicalFamily",
+          "paramsSchema"
+        ],
+        "title": "AlgorithmBackendDescriptor"
+      },
+      "AlgorithmCatalogResponse": {
+        "properties": {
+          "algorithms": {
+            "items": {
+              "$ref": "#/components/schemas/AlgorithmBackendDescriptor"
+            },
+            "type": "array",
+            "title": "Algorithms"
+          },
+          "schemas": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Schemas"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "algorithms",
+          "schemas"
+        ],
+        "title": "AlgorithmCatalogResponse"
+      },
+      "BarabasiAlbertRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BarabasiAlbertNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/BarabasiAlbertIgraphRequest"
+          },
+          {
+            "$ref": "#/components/schemas/BarabasiAlbertNetworkitRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/BarabasiAlbertNetworkxRequest",
+            "igraph": "#/components/schemas/BarabasiAlbertIgraphRequest",
+            "networkit": "#/components/schemas/BarabasiAlbertNetworkitRequest"
+          }
+        }
+      },
+      "ChungLuRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ChungLuNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ChungLuNetworkitRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/ChungLuNetworkxRequest",
+            "networkit": "#/components/schemas/ChungLuNetworkitRequest"
+          }
+        }
+      },
+      "ClassicDeterministicRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ClassicDeterministicNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ClassicDeterministicIgraphRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/ClassicDeterministicNetworkxRequest",
+            "igraph": "#/components/schemas/ClassicDeterministicIgraphRequest"
+          }
+        }
+      },
+      "CommunityClusteredRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CommunityClusteredNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/CommunityClusteredNetworkitRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/CommunityClusteredNetworkxRequest",
+            "networkit": "#/components/schemas/CommunityClusteredNetworkitRequest"
+          }
+        }
+      },
+      "ConfigurationModelRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ConfigurationModelNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ConfigurationModelIgraphRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ConfigurationModelNetworkitRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/ConfigurationModelNetworkxRequest",
+            "igraph": "#/components/schemas/ConfigurationModelIgraphRequest",
+            "networkit": "#/components/schemas/ConfigurationModelNetworkitRequest"
+          }
+        }
+      },
+      "DuplicationDivergenceParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n"
+        ],
+        "title": "DuplicationDivergenceParams"
+      },
+      "DuplicationDivergenceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "duplication_divergence",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/DuplicationDivergenceParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "DuplicationDivergenceRequest"
+      },
+      "ErdosRenyiGnmRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ErdosRenyiGnmNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ErdosRenyiGnmIgraphRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/ErdosRenyiGnmNetworkxRequest",
+            "igraph": "#/components/schemas/ErdosRenyiGnmIgraphRequest"
+          }
+        }
+      },
+      "ErdosRenyiGnpRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ErdosRenyiGnpNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ErdosRenyiGnpIgraphRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ErdosRenyiGnpNetworkitRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/ErdosRenyiGnpNetworkxRequest",
+            "igraph": "#/components/schemas/ErdosRenyiGnpIgraphRequest",
+            "networkit": "#/components/schemas/ErdosRenyiGnpNetworkitRequest"
+          }
+        }
+      },
+      "ForestFireParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "fw_prob": {
+            "type": "number",
+            "title": "Fw Prob"
+          },
+          "bw_factor": {
+            "type": "number",
+            "title": "Bw Factor",
+            "default": 0.0
+          },
+          "ambs": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Ambs",
+            "default": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "fw_prob"
+        ],
+        "title": "ForestFireParams"
+      },
+      "ForestFireRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "forest_fire",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/ForestFireParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "ForestFireRequest"
+      },
+      "GeometricThresholdParams": {
+        "properties": {
+          "variant": {
+            "type": "string",
+            "enum": [
+              "waxman",
+              "geographical_threshold"
+            ],
+            "title": "Variant",
+            "default": "waxman"
+          },
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "beta": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beta"
+          },
+          "alpha": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alpha"
+          },
+          "theta": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theta"
+          },
+          "dim": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Dim",
+            "default": 2
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n"
+        ],
+        "title": "GeometricThresholdParams"
+      },
+      "GeometricThresholdRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "geometric_threshold",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/GeometricThresholdParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "GeometricThresholdRequest"
+      },
+      "GraphLinks": {
+        "properties": {
+          "self": {
+            "type": "string",
+            "title": "Self"
+          },
+          "export": {
+            "type": "string",
+            "title": "Export"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "self",
+          "export"
+        ],
+        "title": "GraphLinks"
+      },
+      "GraphMetadata": {
+        "properties": {
+          "numNodes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numnodes"
+          },
+          "numEdges": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numedges"
+          },
+          "directed": {
+            "type": "boolean",
+            "title": "Directed"
+          },
+          "createdAt": {
+            "type": "string",
+            "title": "Createdat"
+          },
+          "generationTimeMs": {
+            "type": "integer",
+            "title": "Generationtimems"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "directed",
+          "createdAt",
+          "generationTimeMs"
+        ],
+        "title": "GraphMetadata"
+      },
+      "GraphResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "completed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "algorithm": {
+            "type": "string",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "title": "Backend"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/GraphMetadata"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/GraphLinks"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "algorithm",
+          "backend",
+          "params",
+          "metadata",
+          "_links"
+        ],
+        "title": "GraphResource"
+      },
+      "GrowingAttachmentParams": {
+        "properties": {
+          "variant": {
+            "type": "string",
+            "enum": [
+              "growing_random",
+              "establishment",
+              "preference",
+              "asymmetric_preference",
+              "recent_degree"
+            ],
+            "title": "Variant"
+          },
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "m": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "M"
+          },
+          "power": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power"
+          },
+          "k": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "K"
+          },
+          "type_dist": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number",
+                  "maximum": 1.0,
+                  "minimum": 0.0
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Dist"
+          },
+          "type_dist_matrix": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number",
+                    "maximum": 1.0,
+                    "minimum": 0.0
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Dist Matrix"
+          },
+          "pref_matrix": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number",
+                    "maximum": 1.0,
+                    "minimum": 0.0
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pref Matrix"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window"
+          },
+          "citation": {
+            "type": "boolean",
+            "title": "Citation",
+            "default": false
+          },
+          "outpref": {
+            "type": "boolean",
+            "title": "Outpref",
+            "default": false
+          },
+          "loops": {
+            "type": "boolean",
+            "title": "Loops",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "variant",
+          "n"
+        ],
+        "title": "GrowingAttachmentParams"
+      },
+      "GrowingAttachmentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "growing_attachment",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/GrowingAttachmentParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "GrowingAttachmentRequest"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HyperbolicParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "k": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "K",
+            "default": 6.0
+          },
+          "gamma": {
+            "type": "number",
+            "exclusiveMinimum": 2.0,
+            "title": "Gamma",
+            "default": 3.0
+          },
+          "T": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "T",
+            "default": 0.0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n"
+        ],
+        "title": "HyperbolicParams"
+      },
+      "HyperbolicRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "hyperbolic",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkit",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/HyperbolicParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "HyperbolicRequest"
+      },
+      "IgraphBarabasiAlbertParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "m": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "M"
+          },
+          "power": {
+            "type": "number",
+            "title": "Power",
+            "default": 1.0
+          },
+          "zero_appeal": {
+            "type": "number",
+            "title": "Zero Appeal",
+            "default": 1.0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "m"
+        ],
+        "title": "IgraphBarabasiAlbertParams"
+      },
+      "IgraphClassicDeterministicParams": {
+        "properties": {
+          "shape": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "star",
+              "wheel",
+              "path",
+              "cycle",
+              "grid",
+              "hypercube",
+              "lattice"
+            ],
+            "title": "Shape"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "cols": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cols"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "shape"
+        ],
+        "title": "IgraphClassicDeterministicParams"
+      },
+      "IgraphConfigurationModelParams": {
+        "properties": {
+          "out": {
+            "items": {
+              "type": "integer",
+              "minimum": 0.0
+            },
+            "type": "array",
+            "title": "Out"
+          },
+          "in": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer",
+                  "minimum": 0.0
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "configuration",
+              "fast_heur_simple",
+              "configuration_simple",
+              "edge_switching_simple",
+              "vl"
+            ],
+            "title": "Method",
+            "default": "configuration"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "out"
+        ],
+        "title": "IgraphConfigurationModelParams"
+      },
+      "IgraphErdosRenyiGnmParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "m": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "M"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "m"
+        ],
+        "title": "IgraphErdosRenyiGnmParams"
+      },
+      "IgraphErdosRenyiGnpParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "p": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "P"
+          },
+          "loops": {
+            "type": "boolean",
+            "title": "Loops",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "p"
+        ],
+        "title": "IgraphErdosRenyiGnpParams"
+      },
+      "IgraphNamedGraphParams": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "petersen",
+              "chvatal",
+              "tutte",
+              "karate_club"
+            ],
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "IgraphNamedGraphParams"
+      },
+      "IgraphRandomBipartiteParams": {
+        "properties": {
+          "n1": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N1"
+          },
+          "n2": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N2"
+          },
+          "p": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P"
+          },
+          "m": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "M"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n1",
+          "n2"
+        ],
+        "title": "IgraphRandomBipartiteParams"
+      },
+      "IgraphRandomGeometricParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "radius": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Radius"
+          },
+          "torus": {
+            "type": "boolean",
+            "title": "Torus",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "radius"
+        ],
+        "title": "IgraphRandomGeometricParams"
+      },
+      "IgraphRandomRegularParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "k": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "K"
+          },
+          "multiple": {
+            "type": "boolean",
+            "title": "Multiple",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "k"
+        ],
+        "title": "IgraphRandomRegularParams"
+      },
+      "IgraphRandomTreeParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "variant": {
+            "type": "string",
+            "const": "tree_game",
+            "title": "Variant",
+            "default": "tree_game"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "lerw",
+              "prufer",
+              "random"
+            ],
+            "title": "Method",
+            "default": "lerw"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n"
+        ],
+        "title": "IgraphRandomTreeParams"
+      },
+      "IgraphStochasticBlockModelParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "pref_matrix": {
+            "items": {
+              "items": {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Pref Matrix"
+          },
+          "block_sizes": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "title": "Block Sizes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "pref_matrix",
+          "block_sizes"
+        ],
+        "title": "IgraphStochasticBlockModelParams"
+      },
+      "IgraphWattsStrogatzParams": {
+        "properties": {
+          "dim": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Dim"
+          },
+          "size": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Size"
+          },
+          "nei": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Nei"
+          },
+          "p": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "P"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dim",
+          "size",
+          "nei",
+          "p"
+        ],
+        "title": "IgraphWattsStrogatzParams"
+      },
+      "InvalidParam": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "reason"
+        ],
+        "title": "InvalidParam"
+      },
+      "KleinbergSmallWorldParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "p": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "P",
+            "default": 1
+          },
+          "q": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Q",
+            "default": 1
+          },
+          "r": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "R",
+            "default": 2
+          },
+          "dim": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Dim",
+            "default": 2
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n"
+        ],
+        "title": "KleinbergSmallWorldParams"
+      },
+      "KleinbergSmallWorldRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "kleinberg_small_world",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/KleinbergSmallWorldParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "KleinbergSmallWorldRequest"
+      },
+      "KroneckerRmatRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "kronecker_rmat",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkit",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworKitKroneckerRmatParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "KroneckerRmatRequest"
+      },
+      "NamedGraphRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/NamedGraphNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/NamedGraphIgraphRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/NamedGraphNetworkxRequest",
+            "igraph": "#/components/schemas/NamedGraphIgraphRequest"
+          }
+        }
+      },
+      "NetworKitBarabasiAlbertParams": {
+        "properties": {
+          "k": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "K"
+          },
+          "nMax": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Nmax"
+          },
+          "n0": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N0"
+          },
+          "batagelj": {
+            "type": "boolean",
+            "title": "Batagelj",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "k",
+          "nMax",
+          "n0"
+        ],
+        "title": "NetworKitBarabasiAlbertParams"
+      },
+      "NetworKitChungLuParams": {
+        "properties": {
+          "degreeSequence": {
+            "items": {
+              "type": "number",
+              "minimum": 0.0
+            },
+            "type": "array",
+            "title": "Degreesequence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "degreeSequence"
+        ],
+        "title": "NetworKitChungLuParams"
+      },
+      "NetworKitCommunityClusteredParams": {
+        "properties": {
+          "variant": {
+            "type": "string",
+            "enum": [
+              "clustered_random",
+              "lfr"
+            ],
+            "title": "Variant"
+          },
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "k": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "K"
+          },
+          "pIntra": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pintra"
+          },
+          "pInter": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinter"
+          },
+          "tau1": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tau1"
+          },
+          "tau2": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tau2"
+          },
+          "mu": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mu"
+          },
+          "averageDegree": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Averagedegree"
+          },
+          "maxDegree": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxdegree"
+          },
+          "minCommunity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mincommunity"
+          },
+          "maxCommunity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxcommunity"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "variant",
+          "n"
+        ],
+        "title": "NetworKitCommunityClusteredParams"
+      },
+      "NetworKitConfigurationModelParams": {
+        "properties": {
+          "sequence": {
+            "items": {
+              "type": "integer",
+              "minimum": 0.0
+            },
+            "type": "array",
+            "title": "Sequence"
+          },
+          "variant": {
+            "type": "string",
+            "enum": [
+              "havel_hakimi",
+              "edge_switching"
+            ],
+            "title": "Variant",
+            "default": "havel_hakimi"
+          },
+          "ignoreIfNotRealizable": {
+            "type": "boolean",
+            "title": "Ignoreifnotrealizable",
+            "default": false
+          },
+          "numSwitchesPerEdge": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Numswitchesperedge",
+            "default": 10
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sequence"
+        ],
+        "title": "NetworKitConfigurationModelParams"
+      },
+      "NetworKitErdosRenyiGnpParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "p": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "P"
+          },
+          "selfLoops": {
+            "type": "boolean",
+            "title": "Selfloops",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "p"
+        ],
+        "title": "NetworKitErdosRenyiGnpParams"
+      },
+      "NetworKitKroneckerRmatParams": {
+        "properties": {
+          "scale": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Scale"
+          },
+          "edgeFactor": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Edgefactor"
+          },
+          "a": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "A"
+          },
+          "b": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "B"
+          },
+          "c": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "C"
+          },
+          "d": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "D"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "scale",
+          "edgeFactor",
+          "a",
+          "b",
+          "c",
+          "d"
+        ],
+        "title": "NetworKitKroneckerRmatParams"
+      },
+      "NetworKitWattsStrogatzParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "nNeighbors": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Nneighbors"
+          },
+          "p": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "P"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "nNeighbors",
+          "p"
+        ],
+        "title": "NetworKitWattsStrogatzParams"
+      },
+      "NetworkXBarabasiAlbertParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "m": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "M"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "m"
+        ],
+        "title": "NetworkXBarabasiAlbertParams"
+      },
+      "NetworkXChungLuParams": {
+        "properties": {
+          "degreeSequence": {
+            "items": {
+              "type": "number",
+              "minimum": 0.0
+            },
+            "type": "array",
+            "title": "Degreesequence"
+          },
+          "selfloops": {
+            "type": "boolean",
+            "title": "Selfloops",
+            "default": true
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "degreeSequence"
+        ],
+        "title": "NetworkXChungLuParams"
+      },
+      "NetworkXClassicDeterministicParams": {
+        "properties": {
+          "shape": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "star",
+              "wheel",
+              "path",
+              "cycle",
+              "grid",
+              "hypercube",
+              "lattice"
+            ],
+            "title": "Shape"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "cols": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cols"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "shape"
+        ],
+        "title": "NetworkXClassicDeterministicParams"
+      },
+      "NetworkXCommunityClusteredParams": {
+        "properties": {
+          "variant": {
+            "type": "string",
+            "enum": [
+              "planted_partition",
+              "gaussian_random_partition",
+              "lfr",
+              "relaxed_caveman"
+            ],
+            "title": "Variant"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "l": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "L"
+          },
+          "k": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "K"
+          },
+          "s": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S"
+          },
+          "v": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "V"
+          },
+          "p": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P"
+          },
+          "pIntra": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pintra"
+          },
+          "pInter": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinter"
+          },
+          "tau1": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tau1"
+          },
+          "tau2": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tau2"
+          },
+          "mu": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mu"
+          },
+          "averageDegree": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Averagedegree"
+          },
+          "minDegree": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mindegree"
+          },
+          "maxDegree": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxdegree"
+          },
+          "minCommunity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mincommunity"
+          },
+          "maxCommunity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxcommunity"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "variant"
+        ],
+        "title": "NetworkXCommunityClusteredParams"
+      },
+      "NetworkXConfigurationModelParams": {
+        "properties": {
+          "sequence": {
+            "items": {
+              "type": "integer",
+              "minimum": 0.0
+            },
+            "type": "array",
+            "title": "Sequence"
+          },
+          "variant": {
+            "type": "string",
+            "enum": [
+              "configuration",
+              "havel_hakimi",
+              "expected_degree"
+            ],
+            "title": "Variant",
+            "default": "configuration"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "selfloops": {
+            "type": "boolean",
+            "title": "Selfloops",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sequence"
+        ],
+        "title": "NetworkXConfigurationModelParams"
+      },
+      "NetworkXErdosRenyiGnmParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "m": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "M"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "m"
+        ],
+        "title": "NetworkXErdosRenyiGnmParams"
+      },
+      "NetworkXErdosRenyiGnpParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "p": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "P"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "p"
+        ],
+        "title": "NetworkXErdosRenyiGnpParams"
+      },
+      "NetworkXNamedGraphParams": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "petersen",
+              "chvatal",
+              "tutte",
+              "karate_club"
+            ],
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "NetworkXNamedGraphParams"
+      },
+      "NetworkXRandomBipartiteParams": {
+        "properties": {
+          "n1": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N1"
+          },
+          "n2": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N2"
+          },
+          "p": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P"
+          },
+          "m": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "M"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n1",
+          "n2"
+        ],
+        "title": "NetworkXRandomBipartiteParams"
+      },
+      "NetworkXRandomGeometricParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "radius": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Radius"
+          },
+          "dim": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Dim",
+            "default": 2
+          },
+          "p": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "P",
+            "default": 2.0
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "variant": {
+            "type": "string",
+            "enum": [
+              "random_geometric",
+              "soft_random_geometric"
+            ],
+            "title": "Variant",
+            "default": "random_geometric"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "radius"
+        ],
+        "title": "NetworkXRandomGeometricParams"
+      },
+      "NetworkXRandomRegularParams": {
+        "properties": {
+          "d": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "D"
+          },
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "d",
+          "n"
+        ],
+        "title": "NetworkXRandomRegularParams"
+      },
+      "NetworkXRandomTreeParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "variant": {
+            "type": "string",
+            "enum": [
+              "random_labeled",
+              "random_powerlaw"
+            ],
+            "title": "Variant",
+            "default": "random_labeled"
+          },
+          "gamma": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gamma"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "tries": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Tries",
+            "default": 100
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n"
+        ],
+        "title": "NetworkXRandomTreeParams"
+      },
+      "NetworkXStochasticBlockModelParams": {
+        "properties": {
+          "sizes": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "title": "Sizes"
+          },
+          "p": {
+            "items": {
+              "items": {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "P"
+          },
+          "selfloops": {
+            "type": "boolean",
+            "title": "Selfloops",
+            "default": false
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sizes",
+          "p"
+        ],
+        "title": "NetworkXStochasticBlockModelParams"
+      },
+      "NetworkXWattsStrogatzParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "k": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "K"
+          },
+          "p": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "P"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "variant": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "connected"
+            ],
+            "title": "Variant",
+            "default": "standard"
+          },
+          "tries": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tries"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "k",
+          "p"
+        ],
+        "title": "NetworkXWattsStrogatzParams"
+      },
+      "OutputOptions": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "edge_list",
+              "adjacency",
+              "graphml",
+              "gml",
+              "graph6"
+            ],
+            "title": "Format",
+            "default": "edge_list"
+          },
+          "directed": {
+            "type": "boolean",
+            "title": "Directed",
+            "default": false
+          },
+          "labels": {
+            "type": "string",
+            "enum": [
+              "index",
+              "uuid"
+            ],
+            "title": "Labels",
+            "default": "index"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "OutputOptions"
+      },
+      "PowerlawClusterParams": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "N"
+          },
+          "m": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "M"
+          },
+          "p": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "P"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n",
+          "m",
+          "p"
+        ],
+        "title": "PowerlawClusterParams"
+      },
+      "PowerlawClusterRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "powerlaw_cluster",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/PowerlawClusterParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "PowerlawClusterRequest"
+      },
+      "ProblemDetails": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "integer",
+            "title": "Status"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "instance": {
+            "type": "string",
+            "title": "Instance"
+          },
+          "invalidParams": {
+            "items": {
+              "$ref": "#/components/schemas/InvalidParam"
+            },
+            "type": "array",
+            "title": "Invalidparams"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "invalidParams"
+        ],
+        "title": "ProblemDetails"
+      },
+      "RandomBipartiteRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RandomBipartiteNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/RandomBipartiteIgraphRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/RandomBipartiteNetworkxRequest",
+            "igraph": "#/components/schemas/RandomBipartiteIgraphRequest"
+          }
+        }
+      },
+      "RandomGeometricRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RandomGeometricNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/RandomGeometricIgraphRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/RandomGeometricNetworkxRequest",
+            "igraph": "#/components/schemas/RandomGeometricIgraphRequest"
+          }
+        }
+      },
+      "RandomRegularRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RandomRegularNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/RandomRegularIgraphRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/RandomRegularNetworkxRequest",
+            "igraph": "#/components/schemas/RandomRegularIgraphRequest"
+          }
+        }
+      },
+      "RandomTreeRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RandomTreeNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/RandomTreeIgraphRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/RandomTreeNetworkxRequest",
+            "igraph": "#/components/schemas/RandomTreeIgraphRequest"
+          }
+        }
+      },
+      "StaticFitnessParams": {
+        "properties": {
+          "variant": {
+            "type": "string",
+            "enum": [
+              "static_fitness",
+              "static_power_law"
+            ],
+            "title": "Variant",
+            "default": "static_fitness"
+          },
+          "m": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "M"
+          },
+          "fitness_out": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number",
+                  "exclusiveMinimum": 0.0
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fitness Out"
+          },
+          "fitness_in": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number",
+                  "exclusiveMinimum": 0.0
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fitness In"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "exponent_out": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exponent Out"
+          },
+          "exponent_in": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exponent In"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "m"
+        ],
+        "title": "StaticFitnessParams"
+      },
+      "StaticFitnessRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "static_fitness",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/StaticFitnessParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "StaticFitnessRequest"
+      },
+      "StochasticBlockModelRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/StochasticBlockModelNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/StochasticBlockModelIgraphRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/StochasticBlockModelNetworkxRequest",
+            "igraph": "#/components/schemas/StochasticBlockModelIgraphRequest"
+          }
+        }
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WattsStrogatzRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/WattsStrogatzNetworkxRequest"
+          },
+          {
+            "$ref": "#/components/schemas/WattsStrogatzIgraphRequest"
+          },
+          {
+            "$ref": "#/components/schemas/WattsStrogatzNetworkitRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "backend",
+          "mapping": {
+            "networkx": "#/components/schemas/WattsStrogatzNetworkxRequest",
+            "igraph": "#/components/schemas/WattsStrogatzIgraphRequest",
+            "networkit": "#/components/schemas/WattsStrogatzNetworkitRequest"
+          }
+        }
+      },
+      "GraphGenerationRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ErdosRenyiGnpRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ErdosRenyiGnmRequest"
+          },
+          {
+            "$ref": "#/components/schemas/WattsStrogatzRequest"
+          },
+          {
+            "$ref": "#/components/schemas/BarabasiAlbertRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ConfigurationModelRequest"
+          },
+          {
+            "$ref": "#/components/schemas/StochasticBlockModelRequest"
+          },
+          {
+            "$ref": "#/components/schemas/RandomRegularRequest"
+          },
+          {
+            "$ref": "#/components/schemas/RandomGeometricRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ForestFireRequest"
+          },
+          {
+            "$ref": "#/components/schemas/KroneckerRmatRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ClassicDeterministicRequest"
+          },
+          {
+            "$ref": "#/components/schemas/NamedGraphRequest"
+          },
+          {
+            "$ref": "#/components/schemas/RandomTreeRequest"
+          },
+          {
+            "$ref": "#/components/schemas/RandomBipartiteRequest"
+          },
+          {
+            "$ref": "#/components/schemas/CommunityClusteredRequest"
+          },
+          {
+            "$ref": "#/components/schemas/HyperbolicRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ChungLuRequest"
+          },
+          {
+            "$ref": "#/components/schemas/StaticFitnessRequest"
+          },
+          {
+            "$ref": "#/components/schemas/GrowingAttachmentRequest"
+          },
+          {
+            "$ref": "#/components/schemas/KleinbergSmallWorldRequest"
+          },
+          {
+            "$ref": "#/components/schemas/PowerlawClusterRequest"
+          },
+          {
+            "$ref": "#/components/schemas/GeometricThresholdRequest"
+          },
+          {
+            "$ref": "#/components/schemas/DuplicationDivergenceRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "algorithm",
+          "mapping": {
+            "erdos_renyi_gnp": "#/components/schemas/ErdosRenyiGnpRequest",
+            "erdos_renyi_gnm": "#/components/schemas/ErdosRenyiGnmRequest",
+            "watts_strogatz": "#/components/schemas/WattsStrogatzRequest",
+            "barabasi_albert": "#/components/schemas/BarabasiAlbertRequest",
+            "configuration_model": "#/components/schemas/ConfigurationModelRequest",
+            "stochastic_block_model": "#/components/schemas/StochasticBlockModelRequest",
+            "random_regular": "#/components/schemas/RandomRegularRequest",
+            "random_geometric": "#/components/schemas/RandomGeometricRequest",
+            "forest_fire": "#/components/schemas/ForestFireRequest",
+            "kronecker_rmat": "#/components/schemas/KroneckerRmatRequest",
+            "classic_deterministic": "#/components/schemas/ClassicDeterministicRequest",
+            "named_graph": "#/components/schemas/NamedGraphRequest",
+            "random_tree": "#/components/schemas/RandomTreeRequest",
+            "random_bipartite": "#/components/schemas/RandomBipartiteRequest",
+            "community_clustered": "#/components/schemas/CommunityClusteredRequest",
+            "hyperbolic": "#/components/schemas/HyperbolicRequest",
+            "chung_lu": "#/components/schemas/ChungLuRequest",
+            "static_fitness": "#/components/schemas/StaticFitnessRequest",
+            "growing_attachment": "#/components/schemas/GrowingAttachmentRequest",
+            "kleinberg_small_world": "#/components/schemas/KleinbergSmallWorldRequest",
+            "powerlaw_cluster": "#/components/schemas/PowerlawClusterRequest",
+            "geometric_threshold": "#/components/schemas/GeometricThresholdRequest",
+            "duplication_divergence": "#/components/schemas/DuplicationDivergenceRequest"
+          }
+        }
+      },
+      "ErdosRenyiGnpNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "erdos_renyi_gnp",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXErdosRenyiGnpParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "ErdosRenyiGnpNetworkxRequest"
+      },
+      "ErdosRenyiGnpIgraphRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "erdos_renyi_gnp",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/IgraphErdosRenyiGnpParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "ErdosRenyiGnpIgraphRequest"
+      },
+      "ErdosRenyiGnpNetworkitRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "erdos_renyi_gnp",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkit",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworKitErdosRenyiGnpParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "ErdosRenyiGnpNetworkitRequest"
+      },
+      "ErdosRenyiGnmNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "erdos_renyi_gnm",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXErdosRenyiGnmParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "ErdosRenyiGnmNetworkxRequest"
+      },
+      "ErdosRenyiGnmIgraphRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "erdos_renyi_gnm",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/IgraphErdosRenyiGnmParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "ErdosRenyiGnmIgraphRequest"
+      },
+      "WattsStrogatzNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "watts_strogatz",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXWattsStrogatzParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "WattsStrogatzNetworkxRequest"
+      },
+      "WattsStrogatzIgraphRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "watts_strogatz",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/IgraphWattsStrogatzParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "WattsStrogatzIgraphRequest"
+      },
+      "WattsStrogatzNetworkitRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "watts_strogatz",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkit",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworKitWattsStrogatzParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "WattsStrogatzNetworkitRequest"
+      },
+      "BarabasiAlbertNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "barabasi_albert",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXBarabasiAlbertParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "BarabasiAlbertNetworkxRequest"
+      },
+      "BarabasiAlbertIgraphRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "barabasi_albert",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/IgraphBarabasiAlbertParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "BarabasiAlbertIgraphRequest"
+      },
+      "BarabasiAlbertNetworkitRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "barabasi_albert",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkit",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworKitBarabasiAlbertParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "BarabasiAlbertNetworkitRequest"
+      },
+      "ConfigurationModelNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "configuration_model",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXConfigurationModelParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "ConfigurationModelNetworkxRequest"
+      },
+      "ConfigurationModelIgraphRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "configuration_model",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/IgraphConfigurationModelParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "ConfigurationModelIgraphRequest"
+      },
+      "ConfigurationModelNetworkitRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "configuration_model",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkit",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworKitConfigurationModelParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "ConfigurationModelNetworkitRequest"
+      },
+      "StochasticBlockModelNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "stochastic_block_model",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXStochasticBlockModelParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "StochasticBlockModelNetworkxRequest"
+      },
+      "StochasticBlockModelIgraphRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "stochastic_block_model",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/IgraphStochasticBlockModelParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "StochasticBlockModelIgraphRequest"
+      },
+      "RandomRegularNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "random_regular",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXRandomRegularParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "RandomRegularNetworkxRequest"
+      },
+      "RandomRegularIgraphRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "random_regular",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/IgraphRandomRegularParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "RandomRegularIgraphRequest"
+      },
+      "RandomGeometricNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "random_geometric",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXRandomGeometricParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "RandomGeometricNetworkxRequest"
+      },
+      "RandomGeometricIgraphRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "random_geometric",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/IgraphRandomGeometricParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "RandomGeometricIgraphRequest"
+      },
+      "ClassicDeterministicNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "classic_deterministic",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXClassicDeterministicParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "ClassicDeterministicNetworkxRequest"
+      },
+      "ClassicDeterministicIgraphRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "classic_deterministic",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/IgraphClassicDeterministicParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "ClassicDeterministicIgraphRequest"
+      },
+      "NamedGraphNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "named_graph",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXNamedGraphParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "NamedGraphNetworkxRequest"
+      },
+      "NamedGraphIgraphRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "named_graph",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/IgraphNamedGraphParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "NamedGraphIgraphRequest"
+      },
+      "RandomTreeNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "random_tree",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXRandomTreeParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "RandomTreeNetworkxRequest"
+      },
+      "RandomTreeIgraphRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "random_tree",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/IgraphRandomTreeParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "RandomTreeIgraphRequest"
+      },
+      "RandomBipartiteNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "random_bipartite",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXRandomBipartiteParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "RandomBipartiteNetworkxRequest"
+      },
+      "RandomBipartiteIgraphRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "random_bipartite",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "igraph",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/IgraphRandomBipartiteParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "RandomBipartiteIgraphRequest"
+      },
+      "CommunityClusteredNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "community_clustered",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXCommunityClusteredParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "CommunityClusteredNetworkxRequest"
+      },
+      "CommunityClusteredNetworkitRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "community_clustered",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkit",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworKitCommunityClusteredParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "CommunityClusteredNetworkitRequest"
+      },
+      "ChungLuNetworkxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "chung_lu",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkx",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworkXChungLuParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "ChungLuNetworkxRequest"
+      },
+      "ChungLuNetworkitRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "algorithm",
+          "backend",
+          "params"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "const": "chung_lu",
+            "title": "Algorithm"
+          },
+          "backend": {
+            "type": "string",
+            "const": "networkit",
+            "title": "Backend"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NetworKitChungLuParams"
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputOptions"
+          }
+        },
+        "title": "ChungLuNetworkitRequest"
+      }
+    }
+  }
+}
