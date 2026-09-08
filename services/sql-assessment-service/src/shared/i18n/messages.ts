@@ -18,6 +18,7 @@ export type MessageKey =
 	| 'INVALID_REQUEST_BODY'
 	| 'MISSING_CONNECTION_INFO'
 	| 'INVALID_CONNECTION_INFO'
+	| 'UNSAFE_CONNECTION_HOST'
 	| 'UNABLE_TO_CONNECT'
 	| 'DATABASE_NOT_REGISTERED'
 	// ── database controller ──────────────────────────────────────────────────
@@ -127,6 +128,8 @@ export const MESSAGES: MessageCatalogue = {
 		INVALID_REQUEST_BODY: 'Invalid request body.',
 		MISSING_CONNECTION_INFO: 'Missing connectionInfo.',
 		INVALID_CONNECTION_INFO: 'Invalid connection information.',
+		UNSAFE_CONNECTION_HOST:
+			'Connection target is blocked: loopback, private, link-local and cloud metadata addresses are not allowed.',
 		UNABLE_TO_CONNECT: 'Unable to connect to database.',
 		DATABASE_NOT_REGISTERED:
 			'Unregistered database, please trigger database analysis.',
@@ -264,6 +267,8 @@ export const MESSAGES: MessageCatalogue = {
 		INVALID_REQUEST_BODY: 'Ungültiger Anfrage-Body.',
 		MISSING_CONNECTION_INFO: 'Verbindungsinformationen fehlen.',
 		INVALID_CONNECTION_INFO: 'Ungültige Verbindungsinformationen.',
+		UNSAFE_CONNECTION_HOST:
+			'Verbindungsziel blockiert: Loopback-, private, Link-Local- und Cloud-Metadata-Adressen sind nicht erlaubt.',
 		UNABLE_TO_CONNECT: 'Verbindung zur Datenbank nicht möglich.',
 		DATABASE_NOT_REGISTERED:
 			'Datenbank nicht registriert. Bitte zunächst eine Datenbankanalyse auslösen.',

@@ -95,14 +95,28 @@ async def _download_via_scimesh(
 async def _download_via_academic_mcp(
     provider: str, paper_id: str, credentials: dict[str, str], dest_dir: str
 ) -> DownloadResult:
-    # NOTE (known SSRF-check gap): unlike the scimesh path above, academic-mcp's
-    # searchers resolve and fetch the PDF URL entirely inside the vendored
-    # library (e.g. `requests.get(provider_supplied_url)`), with no point at
-    # which this service can intercept the URL to run it through
-    # `core/url_safety.py` first. This is a real, currently-unmitigated gap
-    # for academic-mcp-backed providers -- see the README's Security
-    # Disclaimer -- until either the vendored library exposes a pluggable
-    # HTTP transport or this adapter is rewritten to fetch PDFs itself.
+    # Unlike the scimesh path above, academic-mcp's searchers resolve and fetch
+    # the PDF URL entirely inside the vendored library (e.g.
+    # `requests.get(provider_supplied_url)`), with no point at which this
+    # service can intercept the URL to run it through `core/url_safety.py`
+    # first. Because provider-supplied URLs are not fully trusted (the same
+    # risk shape as caller-supplied URLs elsewhere in this service), this path
+    # is gated behind an explicit operator opt-in (ACADEMIC_MCP_DOWNLOADS_ALLOWED)
+    # and remains disabled by default; even when enabled, network-level egress
+    # controls are still required (see the README's Security Disclaimer). The
+    # scimesh path validates every URL and is unaffected by this gate.
+    if not settings.academic_mcp_downloads_allowed:
+        return DownloadResult(
+            provider,
+            paper_id,
+            "error",
+            error=(
+                "academic_mcp downloads are disabled by default (SSRF gap: "
+                "provider-supplied PDF URLs cannot be validated before fetch). "
+                "Set ACADEMIC_MCP_DOWNLOADS_ALLOWED=true to enable, with egress "
+                "controls in place."
+            ),
+        )
     try:
         path = await academic_mcp_adapter.download(provider, credentials, paper_id, dest_dir)
     except Exception as exc:  # noqa: BLE001

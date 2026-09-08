@@ -1,0 +1,43 @@
+# End-to-end test stack for the ConceptNet sidecar integration.
+#
+# Runs the main text-similarity-service together with the conceptnet-sidecar and
+# exercises the cross-process flow: conceptnet_numberbatch / backend=local is
+# served by the sidecar; the sidecar lazy-loads and TTL-evicts the model; a down
+# sidecar yields a clean 503. Used by tests/e2e/test_conceptnet_sidecar.sh.
+#
+# Requires a real Numberbatch model file mounted at ./model/ (see the root
+# conceptnet-sidecar README). Set CONCEPTNET_MODEL_PATH accordingly.
+
+services:
+  conceptnet-sidecar:
+    build:
+      context: ./conceptnet-sidecar
+      dockerfile: Dockerfile
+    container_name: conceptnet-test-sidecar
+    ports:
+      - "18200:8200"
+    volumes:
+      - ./model:/model:ro
+    environment:
+      - CONCEPTNET_MODEL_PATH=/model/conceptnet-numberbatch-17-06-300
+      - CONCEPTNET_IDLE_TTL_SECONDS=1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/health/ready')"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  text-similarity-service:
+    build:
+      context: ../..
+      dockerfile: services/text-similarity-service/Dockerfile
+      args:
+        SIMILARITY_PROFILE: cpu
+    container_name: conceptnet-test-main
+    ports:
+      - "18000:8000"
+    environment:
+      - TEXT_SIMILARITY_CONCEPTNET_URL=http://conceptnet-sidecar:8200
+    depends_on:
+      conceptnet-sidecar:
+        condition: service_healthy
