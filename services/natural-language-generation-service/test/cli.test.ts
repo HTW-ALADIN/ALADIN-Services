@@ -78,6 +78,12 @@ describe('CLI', () => {
 		expect(output.stderr()).to.contain('required option');
 	});
 
+	it('returns a zero code when help is displayed', async () => {
+		const output = capture();
+		expect(await runCli(['--help'], { streams: output.streams })).to.equal(0);
+		expect(output.stdout()).to.contain('Usage');
+	});
+
 	it('uses the process streams when no streams are supplied', async (context) => {
 		const stderr = context.mock.method(process.stderr, 'write', () => true);
 		expect(await runCli(['generate'])).to.equal(1);

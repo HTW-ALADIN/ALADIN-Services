@@ -399,6 +399,8 @@ export const CapabilitiesSchema = Type.Object(
 			maxDepth: Type.Integer(),
 			maxOutputBytes: Type.Integer(),
 			templateTimeoutMs: Type.Integer(),
+			maxConcurrentWorkers: Type.Integer(),
+			realizationTimeoutMs: Type.Integer(),
 		}),
 	},
 	{ additionalProperties: false, $id: 'Capabilities' }

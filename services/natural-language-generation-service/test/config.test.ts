@@ -9,6 +9,9 @@ describe('configuration', () => {
 		'NLG_MAX_DEPTH',
 		'NLG_MAX_OUTPUT_BYTES',
 		'NLG_TEMPLATE_TIMEOUT_MS',
+		'NLG_MAX_CONCURRENT_WORKERS',
+		'NLG_REALIZATION_TIMEOUT_MS',
+		'NLG_IDLE_WORKER_EVICTION_MS',
 	];
 	const saved = new Map<string, string | undefined>();
 
@@ -33,6 +36,12 @@ describe('configuration', () => {
 		expect(loadLimits().maxNodes).to.equal(25);
 		process.env.NLG_TEMPLATE_TIMEOUT_MS = '250';
 		expect(loadLimits().templateTimeoutMs).to.equal(250);
+		process.env.NLG_MAX_CONCURRENT_WORKERS = '2';
+		expect(loadLimits().maxConcurrentWorkers).to.equal(2);
+		process.env.NLG_REALIZATION_TIMEOUT_MS = '125';
+		expect(loadLimits().realizationTimeoutMs).to.equal(125);
+		process.env.NLG_IDLE_WORKER_EVICTION_MS = '250';
+		expect(loadLimits().idleWorkerEvictionMs).to.equal(250);
 	});
 
 	it('rejects invalid values', () => {

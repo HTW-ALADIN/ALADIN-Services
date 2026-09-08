@@ -4,6 +4,9 @@ export interface ServiceLimits {
 	maxDepth: number;
 	maxOutputBytes: number;
 	templateTimeoutMs: number;
+	maxConcurrentWorkers: number;
+	realizationTimeoutMs: number;
+	idleWorkerEvictionMs: number;
 }
 
 export const DEFAULT_LIMITS: ServiceLimits = {
@@ -12,6 +15,9 @@ export const DEFAULT_LIMITS: ServiceLimits = {
 	maxDepth: 64,
 	maxOutputBytes: 1_048_576,
 	templateTimeoutMs: 5_000,
+	maxConcurrentWorkers: 4,
+	realizationTimeoutMs: 5_000,
+	idleWorkerEvictionMs: 60_000,
 };
 
 function positiveInteger(name: string, fallback: number): number {
@@ -42,6 +48,18 @@ export function loadLimits(): ServiceLimits {
 		templateTimeoutMs: positiveInteger(
 			'NLG_TEMPLATE_TIMEOUT_MS',
 			DEFAULT_LIMITS.templateTimeoutMs
+		),
+		maxConcurrentWorkers: positiveInteger(
+			'NLG_MAX_CONCURRENT_WORKERS',
+			DEFAULT_LIMITS.maxConcurrentWorkers
+		),
+		realizationTimeoutMs: positiveInteger(
+			'NLG_REALIZATION_TIMEOUT_MS',
+			DEFAULT_LIMITS.realizationTimeoutMs
+		),
+		idleWorkerEvictionMs: positiveInteger(
+			'NLG_IDLE_WORKER_EVICTION_MS',
+			DEFAULT_LIMITS.idleWorkerEvictionMs
 		),
 	};
 }

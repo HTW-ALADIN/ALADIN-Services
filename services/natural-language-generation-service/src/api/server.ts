@@ -31,6 +31,13 @@ export async function buildServer(options: BuildServerOptions = {}) {
 	const server = Fastify({
 		logger: options.logger ?? false,
 		bodyLimit: limits.maxBodyBytes,
+		ajv: {
+			customOptions: {
+				coerceTypes: false,
+				removeAdditional: false,
+				useDefaults: false,
+			},
+		},
 	});
 
 	await server.register(fastifySwagger, {
@@ -97,7 +104,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
 					};
 				}
 			}
-			for (const status of ['400', '413', '422', '500']) {
+			for (const status of ['400', '413', '415', '422', '429', '500']) {
 				const problemResponse = generateOperation?.responses?.[status] as {
 					content: Record<string, unknown>;
 				};
@@ -165,7 +172,9 @@ export async function buildServer(options: BuildServerOptions = {}) {
 					},
 					400: ProblemSchema,
 					413: ProblemSchema,
+					415: ProblemSchema,
 					422: ProblemSchema,
+					429: ProblemSchema,
 					500: ProblemSchema,
 				},
 			},
@@ -196,9 +205,17 @@ export async function buildServer(options: BuildServerOptions = {}) {
 				'Payload too large',
 				`request body exceeds ${limits.maxBodyBytes} bytes`
 			);
+		} else if (error.code === 'FST_ERR_CTP_INVALID_MEDIA_TYPE') {
+			serviceError = new ServiceError(
+				'unsupported-media-type',
+				415,
+				'Unsupported media type',
+				'send an application/json request body'
+			);
 		} else if (
 			error.validation !== undefined ||
-			error.code === 'FST_ERR_CTP_INVALID_JSON_BODY'
+			error.code === 'FST_ERR_CTP_INVALID_JSON_BODY' ||
+			error.code === 'FST_ERR_CTP_EMPTY_JSON_BODY'
 		) {
 			serviceError = new ServiceError(
 				'invalid-request',
@@ -215,8 +232,11 @@ export async function buildServer(options: BuildServerOptions = {}) {
 				'the request could not be processed'
 			);
 		}
-		return reply
-			.status(serviceError.status)
+		const out = reply.status(serviceError.status);
+		if (serviceError.status === 429) {
+			out.header('retry-after', '1');
+		}
+		return out
 			.type('application/problem+json')
 			.send(toProblem(serviceError, request.url));
 	});

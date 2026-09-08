@@ -1110,14 +1110,18 @@
 												"maxNodes",
 												"maxDepth",
 												"maxOutputBytes",
-												"templateTimeoutMs"
+												"templateTimeoutMs",
+												"maxConcurrentWorkers",
+												"realizationTimeoutMs"
 											],
 											"properties": {
 												"maxBodyBytes": { "type": "integer" },
 												"maxNodes": { "type": "integer" },
 												"maxDepth": { "type": "integer" },
 												"maxOutputBytes": { "type": "integer" },
-												"templateTimeoutMs": { "type": "integer" }
+												"templateTimeoutMs": { "type": "integer" },
+												"maxConcurrentWorkers": { "type": "integer" },
+												"realizationTimeoutMs": { "type": "integer" }
 											}
 										}
 									}
@@ -1213,7 +1217,47 @@
 							}
 						}
 					},
+					"415": {
+						"description": "Default Response",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"additionalProperties": false,
+									"type": "object",
+									"required": ["type", "title", "status", "detail", "code"],
+									"properties": {
+										"type": { "type": "string" },
+										"title": { "type": "string" },
+										"status": { "type": "integer" },
+										"detail": { "type": "string" },
+										"code": { "type": "string" },
+										"instance": { "type": "string" }
+									}
+								}
+							}
+						}
+					},
 					"422": {
+						"description": "Default Response",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"additionalProperties": false,
+									"type": "object",
+									"required": ["type", "title", "status", "detail", "code"],
+									"properties": {
+										"type": { "type": "string" },
+										"title": { "type": "string" },
+										"status": { "type": "integer" },
+										"detail": { "type": "string" },
+										"code": { "type": "string" },
+										"instance": { "type": "string" }
+									}
+								}
+							}
+						}
+					},
+					"429": {
 						"description": "Default Response",
 						"content": {
 							"application/problem+json": {

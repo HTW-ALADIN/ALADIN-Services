@@ -1,3 +1,4 @@
+import { Worker } from 'node:worker_threads';
 import jsRealB from 'jsrealb';
 import type { ServiceLimits } from './config.js';
 import { ServiceError } from './errors.js';
@@ -10,6 +11,8 @@ import type {
 	TemplateGenerationResponse,
 } from './schemas.js';
 import { realizeTemplate, rosaeNlgVersion } from './template-realizer.js';
+import type { SurfaceWorkerPayload } from './surface-worker.js';
+import { createEngineWorker, runWorker } from './worker-runner.js';
 
 jsRealB.setExceptionOnWarning(true);
 
@@ -141,6 +144,10 @@ export function inspectRequestStructure(
 	return inspectStructure(structure as StructuralNode, limits);
 }
 
+function createSurfaceWorker(): Worker {
+	return createEngineWorker('surface-worker');
+}
+
 export function realize(
 	request: SurfaceRealizationRequest,
 	limits: ServiceLimits
@@ -161,54 +168,38 @@ export async function realize(
 		inspectTemplateData(request.input.data, limits);
 		return realizeTemplate(request, limits);
 	}
-	const structure = structuredClone(
-		request.input.structure
-	) as StructuralNode & {
-		lang?: 'en' | 'fr';
-	};
+	const structure = request.input.structure as StructuralNode;
 	const nodeCount = inspectStructure(structure, limits);
-	structure.lang = request.language;
+	const workerData: SurfaceWorkerPayload = {
+		structure,
+		language: request.language,
+		maxOutputBytes: limits.maxOutputBytes,
+	};
 
-	try {
-		const constituent = jsRealB.fromJSON(
-			structure as unknown as Record<string, unknown>,
-			request.language
-		);
-		if (constituent === undefined) {
-			throw new Error('jsRealB did not create a realisable structure');
-		}
+	const result = await runWorker({
+		workerData,
+		timeoutMs: limits.realizationTimeoutMs,
+		timeoutDetail: `surface realisation exceeded ${limits.realizationTimeoutMs} ms`,
+		workerFactory: createSurfaceWorker,
+		maxConcurrent: limits.maxConcurrentWorkers,
+		failureTitle: 'Realisation failed',
+		busyDetail:
+			'the server is already processing the maximum number of concurrent generations',
+		internalDetail: 'realization worker failed',
+		reuseWorker: true,
+	});
 
-		const text = constituent.realize().trimEnd();
-		if (Buffer.byteLength(text, 'utf8') > limits.maxOutputBytes) {
-			throw new ServiceError(
-				'resource-limit',
-				422,
-				'Resource limit exceeded',
-				`realised output exceeds ${limits.maxOutputBytes} bytes`
-			);
-		}
-
-		return {
-			text,
-			mode: request.mode,
-			backend: request.backend,
-			language: request.language,
-			metadata: {
-				engineVersion: jsRealB.jsRealB_version,
-				representation: request.input.representation,
-				nodeCount,
-			},
-		};
-	} catch (error) {
-		if (error instanceof ServiceError) throw error;
-		const detail = error instanceof Error ? error.message : String(error);
-		throw new ServiceError(
-			'realisation-error',
-			422,
-			'Realisation failed',
-			detail
-		);
-	}
+	return {
+		text: result.text,
+		mode: request.mode,
+		backend: request.backend,
+		language: request.language,
+		metadata: {
+			engineVersion: result.engineVersion,
+			representation: request.input.representation,
+			nodeCount,
+		},
+	};
 }
 
 export function capabilities(limits: ServiceLimits) {
@@ -273,6 +264,8 @@ export function capabilities(limits: ServiceLimits) {
 			maxDepth: limits.maxDepth,
 			maxOutputBytes: limits.maxOutputBytes,
 			templateTimeoutMs: limits.templateTimeoutMs,
+			maxConcurrentWorkers: limits.maxConcurrentWorkers,
+			realizationTimeoutMs: limits.realizationTimeoutMs,
 		},
 	};
 }

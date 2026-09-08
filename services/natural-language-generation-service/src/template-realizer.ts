@@ -1,11 +1,16 @@
 import { createRequire } from 'node:module';
-import { Worker } from 'node:worker_threads';
+import type { Worker } from 'node:worker_threads';
 import type { ServiceLimits } from './config.js';
 import { ServiceError } from './errors.js';
 import type {
 	TemplateGenerationRequest,
 	TemplateGenerationResponse,
 } from './schemas.js';
+import {
+	createEngineWorker,
+	runWorker,
+	type RunnerSuccess,
+} from './worker-runner.js';
 
 const RESERVED_DATA_KEYS = new Set([
 	'__proto__',
@@ -34,105 +39,32 @@ export interface TemplateWorkerPayload {
 	data: TemplateGenerationRequest['input']['data'];
 	language: TemplateGenerationRequest['language'];
 	seed: number;
+	maxOutputBytes: number;
 }
 
-interface TemplateWorkerSuccess {
-	ok: true;
-	text: string;
-	engineVersion: string;
-}
+export type TemplateWorkerFactory = () => Worker;
 
-interface TemplateWorkerFailure {
-	ok: false;
-	detail: string;
-}
-
-type TemplateWorkerMessage = TemplateWorkerSuccess | TemplateWorkerFailure;
-export type TemplateWorkerFactory = (payload: TemplateWorkerPayload) => Worker;
-
-function createTemplateWorker(payload: TemplateWorkerPayload): Worker {
-	const sourceMode = import.meta.url.endsWith('.ts');
-	/* c8 ignore next -- the compiled path is exercised by the Docker smoke test. */
-	const workerName = sourceMode ? 'template-worker.ts' : 'template-worker.js';
-	return new Worker(new URL(workerName, import.meta.url), {
-		workerData: payload,
-		/* c8 ignore next -- tsx is needed only when executing TypeScript directly. */
-		execArgv: sourceMode ? ['--import', 'tsx'] : [],
-		resourceLimits: { maxOldGenerationSizeMb: 512 },
-	});
-}
-
-function internalWorkerError(): ServiceError {
-	return new ServiceError(
-		'internal-error',
-		500,
-		'Internal server error',
-		'template worker failed'
-	);
+export function createTemplateWorker(): Worker {
+	return createEngineWorker('template-worker');
 }
 
 export async function runTemplateWorker(
 	payload: TemplateWorkerPayload,
 	timeoutMs: number,
-	workerFactory: TemplateWorkerFactory = createTemplateWorker
-): Promise<TemplateWorkerSuccess> {
-	return new Promise<TemplateWorkerSuccess>((resolve, reject) => {
-		let worker: Worker;
-		try {
-			worker = workerFactory(payload);
-		} catch {
-			reject(internalWorkerError());
-			return;
-		}
-
-		let settled = false;
-		function finish(action: () => void, terminateWorker: boolean): void {
-			if (settled) return;
-			settled = true;
-			clearTimeout(timer);
-			if (terminateWorker) {
-				void worker.terminate().then(action, action);
-				return;
-			}
-			action();
-		}
-
-		const timer = setTimeout(() => {
-			finish(
-				() =>
-					reject(
-						new ServiceError(
-							'resource-limit',
-							422,
-							'Resource limit exceeded',
-							`template generation exceeded ${timeoutMs} ms`
-						)
-					),
-				true
-			);
-		}, timeoutMs);
-
-		worker.once('message', (message: TemplateWorkerMessage) => {
-			finish(() => {
-				if (message.ok) resolve(message);
-				else {
-					reject(
-						new ServiceError(
-							'realisation-error',
-							422,
-							'Template generation failed',
-							message.detail
-						)
-					);
-				}
-			}, true);
-		});
-		worker.once('error', () => {
-			finish(() => reject(internalWorkerError()), false);
-		});
-		worker.once('exit', () => {
-			finish(() => reject(internalWorkerError()), false);
-		});
+	workerFactory: TemplateWorkerFactory,
+	maxConcurrent = Number.POSITIVE_INFINITY
+): Promise<RunnerSuccess> {
+	return runWorker({
+		workerData: payload,
+		timeoutMs,
+		timeoutDetail: `template generation exceeded ${timeoutMs} ms`,
+		workerFactory,
+		maxConcurrent,
+		failureTitle: 'Template generation failed',
+		busyDetail:
+			'the server is already processing the maximum number of concurrent generations',
+		internalDetail: 'template worker failed',
+		reuseWorker: false,
 	});
 }
 
@@ -166,17 +98,12 @@ export async function realizeTemplate(
 			data: request.input.data,
 			language: request.language,
 			seed,
+			maxOutputBytes: limits.maxOutputBytes,
 		},
-		limits.templateTimeoutMs
+		limits.templateTimeoutMs,
+		createTemplateWorker,
+		limits.maxConcurrentWorkers
 	);
-	if (Buffer.byteLength(result.text, 'utf8') > limits.maxOutputBytes) {
-		throw new ServiceError(
-			'resource-limit',
-			422,
-			'Resource limit exceeded',
-			`generated output exceeds ${limits.maxOutputBytes} bytes`
-		);
-	}
 	return {
 		text: result.text,
 		mode: request.mode,

@@ -13,6 +13,7 @@ import {
 	runTemplateWorker,
 	type TemplateWorkerPayload,
 } from '../src/template-realizer.js';
+import { resetWorkerPool } from '../src/worker-runner.js';
 import {
 	englishRequest,
 	frenchRequest,
@@ -35,11 +36,14 @@ function workerPayload(): TemplateWorkerPayload {
 		data: {},
 		language: 'en_US',
 		seed: 0,
+		maxOutputBytes: DEFAULT_LIMITS.maxOutputBytes,
 	};
 }
 
 function fakeWorker(events: EventEmitter): Worker {
 	return Object.assign(events, {
+		postMessage: () => {},
+		unref: () => {},
 		terminate: async () => 0,
 	}) as unknown as Worker;
 }
@@ -140,6 +144,49 @@ describe('realizer', () => {
 		);
 		queueMicrotask(() => exitEvents.emit('exit', 1));
 		expect(await rejection(exited)).to.have.property('code', 'internal-error');
+	});
+
+	it('rejects new generations once the worker concurrency cap is reached', async () => {
+		resetWorkerPool();
+		const stuck = new EventEmitter();
+		const first = runTemplateWorker(
+			workerPayload(),
+			50,
+			() => fakeWorker(stuck),
+			1
+		);
+		const second = await rejection(
+			runTemplateWorker(
+				workerPayload(),
+				50,
+				() => fakeWorker(new EventEmitter()),
+				1
+			)
+		);
+		expect(second).to.include({ code: 'server-busy', status: 429 });
+		expect(await rejection(first)).to.have.property('code', 'resource-limit');
+	});
+
+	it('tolerates a worker that fails to terminate', async () => {
+		resetWorkerPool();
+		const failing = new EventEmitter();
+		const terminated = runTemplateWorker(
+			workerPayload(),
+			100,
+			() =>
+				Object.assign(failing, {
+					postMessage: () => {},
+					unref: () => {},
+					terminate: async () => {
+						throw new Error('terminate failed');
+					},
+				}) as unknown as Worker
+		);
+		queueMicrotask(() => failing.emit('error', new Error('boom')));
+		expect(await rejection(terminated)).to.have.property(
+			'code',
+			'internal-error'
+		);
 	});
 
 	it('applies allowlisted grammatical properties', async () => {

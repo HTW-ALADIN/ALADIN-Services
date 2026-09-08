@@ -1,25 +1,27 @@
-import { parentPort, workerData } from 'node:worker_threads';
+import { parentPort } from 'node:worker_threads';
 import rosaeNlg from 'rosaenlg';
 import type { TemplateWorkerPayload } from './template-realizer.js';
+import { postFailure, postOutput } from './worker-message.js';
 
-const payload = workerData as TemplateWorkerPayload;
+const port = parentPort!;
 
-try {
-	const text = rosaeNlg.render(payload.template, {
-		...payload.data,
-		language: payload.language,
-		forceRandomSeed: payload.seed,
-		compileDebug: false,
-		cache: false,
-	});
-	parentPort!.postMessage({
-		ok: true,
-		text,
-		engineVersion: rosaeNlg.getRosaeNlgVersion(),
-	});
-} catch (error) {
-	parentPort!.postMessage({
-		ok: false,
-		detail: error instanceof Error ? error.message : String(error),
-	});
-}
+port.on('message', (payload: TemplateWorkerPayload) => {
+	try {
+		const text = rosaeNlg.render(payload.template, {
+			...payload.data,
+			language: payload.language,
+			forceRandomSeed: payload.seed,
+			compileDebug: false,
+			cache: false,
+		});
+		postOutput(
+			port,
+			'generated',
+			text,
+			payload.maxOutputBytes,
+			rosaeNlg.getRosaeNlgVersion()
+		);
+	} catch (error) {
+		postFailure(port, error);
+	}
+});

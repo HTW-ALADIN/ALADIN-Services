@@ -4,6 +4,7 @@ import { loadLimits } from '../config.js';
 import { ServiceError, toProblem } from '../errors.js';
 import { inspectRequestStructure, realize } from '../realizer.js';
 import { validateGenerateRequest } from '../validation.js';
+import { setWorkerIdleEvictionMs } from '../worker-runner.js';
 import { readRequest } from './io.js';
 
 export interface CliStreams {
@@ -25,6 +26,7 @@ export async function runCli(
 		stderr: process.stderr,
 	};
 	const limits = options.limits ?? loadLimits();
+	setWorkerIdleEvictionMs(limits.idleWorkerEvictionMs);
 	const program = new Command();
 	program
 		.name('nlg')
@@ -71,7 +73,7 @@ export async function runCli(
 			'code' in error &&
 			String(error.code).startsWith('commander.')
 		) {
-			// Commander already wrote a concise usage error to stderr.
+			return (error as unknown as { exitCode: number }).exitCode;
 		} else {
 			const detail = error instanceof Error ? error.message : String(error);
 			streams.stderr.write(

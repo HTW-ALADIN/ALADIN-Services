@@ -153,12 +153,31 @@ The two modes have different trust requirements:
 
 The service rejects Pug `include` and `extends` directives and prevents data
 from replacing renderer control options. These are boundary checks, not a
-security sandbox. Each template runs in a dedicated Node.js worker thread with
-a 512 MiB old-generation heap limit. The worker is terminated when
-`NLG_TEMPLATE_TIMEOUT_MS` expires, so a looping template cannot block the REST
-or CLI process indefinitely. Worker isolation limits availability failures; it
-does not remove the template's operating-system permissions. Deploy the service
-behind an authenticated gateway and restrict template mode to trusted callers.
+security sandbox. Both modes execute their engine in a Node.js worker thread
+with a 512 MiB V8 old-generation heap ceiling. Surface realization keeps a
+small warm pool of workers (up to `NLG_MAX_CONCURRENT_WORKERS`) that are reused
+across requests and evicted after `NLG_IDLE_WORKER_EVICTION_MS` of inactivity.
+Template generation always runs in a fresh worker so that no engine or global
+state persists between template executions. When a task exceeds its timeout
+(`NLG_TEMPLATE_TIMEOUT_MS` or `NLG_REALIZATION_TIMEOUT_MS`), its worker is
+terminated and evicted, so a looping template or pathological structure cannot
+block the REST or CLI process indefinitely. The timeout measures the whole
+task including first-time worker start-up, so the timeouts should stay above
+the engine cold-start time. The timeout terminates only the engine worker
+itself: a template that spawns its own subprocesses or nested workers is not
+sandboxed, and those descendants are not tracked or killed. When the configured
+number of engine workers are all busy, further requests are rejected with a
+`429 server-busy` problem response carrying a `Retry-After` header instead of
+queueing indefinitely; the container memory limit must still be sized for the
+worst case. Engine workers are large: a warm template worker measured about
+0.5 GiB of process RSS and a warm surface worker about 0.4 GiB, so size the
+container to at least `NLG_MAX_CONCURRENT_WORKERS × 0.5 GiB` plus the Node.js
+baseline (~0.2 GiB) and lower the cap for memory-constrained deployments.
+Evicting a worker releases its thread but does not return its V8 heap to the
+operating system, so process RSS stays near the burst high-water until the
+process restarts. Worker isolation limits availability failures; it does not
+remove the template's operating-system permissions. Deploy the service behind
+an authenticated gateway and restrict template mode to trusted callers.
 If untrusted users only need to provide content, store templates under
 application control and let users supply only their JSON data—or expose only
 the surface-realisation mode.
@@ -187,15 +206,17 @@ REST failures use `application/problem+json`; CLI failures use the same shape
 on stderr. Each contains an HTTP-style `status`, a stable `code`, and a
 human-readable `detail`.
 
-| Code                | Status | Meaning                                                            |
-| ------------------- | -----: | ------------------------------------------------------------------ |
-| `invalid-request`   |    400 | The request does not match the schema or violates a boundary check |
-| `invalid-json`      |    400 | CLI input is not valid JSON                                        |
-| `input-error`       |    400 | The CLI could not read its requested input                         |
-| `payload-too-large` |    413 | REST or CLI input exceeds `NLG_MAX_BODY_BYTES`                     |
-| `resource-limit`    |    422 | Structure/data depth, value count, or output exceeds a limit       |
-| `realisation-error` |    422 | The selected engine could not generate the text                    |
-| `internal-error`    |    500 | An unexpected server or CLI failure occurred                       |
+| Code                     | Status | Meaning                                                                        |
+| ------------------------ | -----: | ------------------------------------------------------------------------------ |
+| `invalid-request`        |    400 | The request does not match the schema or violates a boundary check             |
+| `invalid-json`           |    400 | CLI input is not valid JSON                                                    |
+| `input-error`            |    400 | The CLI could not read its requested input                                     |
+| `payload-too-large`      |    413 | REST or CLI input exceeds `NLG_MAX_BODY_BYTES`                                 |
+| `unsupported-media-type` |    415 | REST request used an unsupported `Content-Type`                                |
+| `resource-limit`         |    422 | Structure/data depth, value count, output size, or engine time exceeds a limit |
+| `realisation-error`      |    422 | The selected engine could not generate the text                                |
+| `server-busy`            |    429 | The configured number of concurrent engine workers is in use                   |
+| `internal-error`         |    500 | An unexpected server or CLI failure occurred                                   |
 
 Unexpected internal details are not returned to REST clients.
 
@@ -215,6 +236,10 @@ The CLI could not read the requested input.
 
 The REST or CLI input exceeds the configured body-size limit.
 
+### unsupported-media-type
+
+The REST request used a `Content-Type` other than `application/json`.
+
 ### resource-limit
 
 Input depth, value count, output size, or template execution time exceeds an
@@ -224,6 +249,11 @@ active service limit.
 
 The selected NLG engine could not generate text from the validated request.
 
+### server-busy
+
+The number of concurrent engine workers configured by
+`NLG_MAX_CONCURRENT_WORKERS` is in use. Retry the request later.
+
 ### internal-error
 
 An unexpected service or worker failure occurred. REST responses do not expose
@@ -231,20 +261,26 @@ internal implementation details.
 
 ## Configuration and resource limits
 
-| Environment variable      |   Default |
-| ------------------------- | --------: |
-| `HOST`                    | `0.0.0.0` |
-| `PORT`                    |    `8000` |
-| `NLG_MAX_BODY_BYTES`      | `1048576` |
-| `NLG_MAX_NODES`           |    `1000` |
-| `NLG_MAX_DEPTH`           |      `64` |
-| `NLG_MAX_OUTPUT_BYTES`    | `1048576` |
-| `NLG_TEMPLATE_TIMEOUT_MS` |    `5000` |
+| Environment variable          |   Default |
+| ----------------------------- | --------: |
+| `HOST`                        | `0.0.0.0` |
+| `PORT`                        |    `8000` |
+| `NLG_MAX_BODY_BYTES`          | `1048576` |
+| `NLG_MAX_NODES`               |    `1000` |
+| `NLG_MAX_DEPTH`               |      `64` |
+| `NLG_MAX_OUTPUT_BYTES`        | `1048576` |
+| `NLG_TEMPLATE_TIMEOUT_MS`     |    `5000` |
+| `NLG_REALIZATION_TIMEOUT_MS`  |    `5000` |
+| `NLG_MAX_CONCURRENT_WORKERS`  |       `4` |
+| `NLG_IDLE_WORKER_EVICTION_MS` |   `60000` |
 
 Schema validation additionally limits template length, individual strings,
 collection sizes, lemmas, and formatting properties. `NLG_MAX_NODES` applies
-to jsRealB structure nodes and RosaeNLG data values. Template workers also use
-a fixed 512 MiB V8 old-generation heap limit.
+to jsRealB structure nodes and RosaeNLG data values. Engine workers also use a
+fixed 512 MiB V8 old-generation heap ceiling, and output-size limits are
+enforced inside the worker before generated text is transferred to the main
+process. `NLG_IDLE_WORKER_EVICTION_MS` controls how long a warm surface worker
+is kept after its last task before it is evicted.
 
 ## Docker and hardware
 
@@ -265,7 +301,11 @@ compiled service code and production dependencies.
 
 Neither upstream project publishes a formal minimum RAM requirement. A
 numerical minimum should be established by measuring the container with the
-limits and concurrency used by the target deployment.
+limits and concurrency used by the target deployment. As a starting point, the
+container memory limit should be at least
+`NLG_MAX_CONCURRENT_WORKERS × 0.5 GiB` (per warm engine worker, measured) plus
+the Node.js baseline (~0.2 GiB); see "Security and trust boundary" for the
+measured per-worker figures and the effect of worker eviction on process RSS.
 
 ## Development
 
