@@ -166,13 +166,17 @@ def generate_community_clustered(
     mu: float | None = None,
 ) -> GeneratedGraph:
     if variant == "clustered_random":
-        assert k is not None and p_intra is not None and p_inter is not None
+        if not (k is not None and p_intra is not None and p_inter is not None):
+            raise ValueError("required graph parameters are missing")
         generator = ClusteredRandomGraphGenerator(n=n, k=k, pIntra=p_intra, pInter=p_inter)
         return _generated_graph(generator.generate())
 
-    assert average_degree is not None and max_degree is not None
-    assert tau1 is not None and tau2 is not None and mu is not None
-    assert min_community is not None and max_community is not None
+    if not (average_degree is not None and max_degree is not None):
+        raise ValueError("required graph parameters are missing")
+    if not (tau1 is not None and tau2 is not None and mu is not None):
+        raise ValueError("required graph parameters are missing")
+    if not (min_community is not None and max_community is not None):
+        raise ValueError("required graph parameters are missing")
     generator = _NetworKitLFRGenerator(n)
     generator.generatePowerlawDegreeSequence(average_degree, max_degree, -tau1)
     generator.generatePowerlawCommunitySizeSequence(min_community, max_community, -tau2)

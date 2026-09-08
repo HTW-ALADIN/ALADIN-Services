@@ -188,4 +188,4 @@ def test_sidecar_health_checks_graph_tool_import(mock_import: MagicMock) -> None
 def test_sidecar_rejects_oversized_requests(payload: dict[str, object]) -> None:
     response = sidecar_client.post("/v1/generate", json=payload)
 
-    assert response.status_code == 422
+    assert response.status_code == 400

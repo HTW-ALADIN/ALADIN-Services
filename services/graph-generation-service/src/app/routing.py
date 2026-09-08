@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
+
+import networkx as nx
+from pydantic import TypeAdapter
 
 from app.adapters import graph_tool_adapter, igraph_adapter, networkit_adapter, networkx_adapter
 from app.domain import GeneratedGraph
-from app.schemas import GraphGenerationRequest
+from app.schemas import GraphGenerationRequest, validate_graph_size
+from graph_safety.limits import ResourceLimitError, check_result
+from graph_safety.process import SLOTS, run_worker
 
 Adapter = Callable[..., GeneratedGraph]
 RouteKey = tuple[str, str]
@@ -95,6 +101,41 @@ def execute_request(request: GraphGenerationRequest) -> GeneratedGraph:
         params["directed"] = request.output.directed
 
     return adapter(**params)
+
+
+def execute_isolated(request: GraphGenerationRequest) -> GeneratedGraph:
+    validate_graph_size(request)
+    if request.backend == "graph_tool":
+        if not SLOTS.acquire(blocking=False):
+            raise ResourceLimitError("generation workers are busy; retry later", 503)
+        try:
+            return execute_request(request)
+        finally:
+            SLOTS.release()
+    result = run_worker("primary", request.model_dump(by_alias=True))
+    graph: nx.Graph[int] = nx.MultiDiGraph() if result["directed"] else nx.MultiGraph()
+    graph.add_nodes_from(result["nodes"])
+    graph.add_edges_from(result["edges"])
+    check_result(graph.number_of_nodes(), graph.number_of_edges())
+    return GeneratedGraph(graph, graph.number_of_nodes(), graph.number_of_edges(), graph.is_directed())
+
+
+def worker_generate(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.exporters import _graph_data
+
+    request: GraphGenerationRequest = TypeAdapter(GraphGenerationRequest).validate_python(payload)
+    validate_graph_size(request)
+    if request.backend == "graph_tool":
+        raise ValueError("graph-tool must execute in its sidecar")
+    generated = execute_request(request)
+    check_result(generated.num_nodes, generated.num_edges)
+    nodes, edges = _graph_data(generated)
+    indices = {node: index for index, node in enumerate(nodes)}
+    return {
+        "nodes": list(range(len(nodes))),
+        "edges": [(indices[a], indices[b]) for a, b in edges],
+        "directed": generated.directed,
+    }
 
 
 def _snake_case(name: str) -> str:

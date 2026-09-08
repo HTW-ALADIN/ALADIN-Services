@@ -114,10 +114,12 @@ def generate_classic_deterministic(
     cols: int | None = None,
 ) -> GeneratedGraph:
     if shape in {"grid", "lattice"}:
-        assert rows is not None and cols is not None
+        if not (rows is not None and cols is not None):
+            raise ValueError("required graph parameters are missing")
         graph = nx.grid_2d_graph(rows, cols, periodic=shape == "lattice")
     else:
-        assert n is not None
+        if not (n is not None):
+            raise ValueError("required graph parameters are missing")
         if shape == "complete":
             graph = nx.complete_graph(n)
         elif shape == "star":
@@ -172,7 +174,8 @@ def generate_random_bipartite(
     if m is not None:
         graph = nx.bipartite.gnmk_random_graph(n=n1, m=n2, k=m, seed=seed, directed=directed)
     else:
-        assert p is not None
+        if not (p is not None):
+            raise ValueError("required graph parameters are missing")
         graph = nx.bipartite.random_graph(n=n1, m=n2, p=p, seed=seed, directed=directed)
     return _generated_graph(graph)
 
@@ -200,10 +203,12 @@ def generate_community_clustered(
     directed: bool = False,
 ) -> GeneratedGraph:
     if variant == "planted_partition":
-        assert l is not None and k is not None and p_intra is not None and p_inter is not None
+        if not (l is not None and k is not None and p_intra is not None and p_inter is not None):
+            raise ValueError("required graph parameters are missing")
         graph = nx.planted_partition_graph(l=l, k=k, p_in=p_intra, p_out=p_inter, seed=seed, directed=directed)
     elif variant == "gaussian_random_partition":
-        assert n is not None and s is not None and v is not None and p_intra is not None and p_inter is not None
+        if not (n is not None and s is not None and v is not None and p_intra is not None and p_inter is not None):
+            raise ValueError("required graph parameters are missing")
         graph = nx.gaussian_random_partition_graph(
             n=n,
             s=s,
@@ -214,10 +219,12 @@ def generate_community_clustered(
             directed=directed,
         )
     elif variant == "relaxed_caveman":
-        assert l is not None and k is not None and p is not None
+        if not (l is not None and k is not None and p is not None):
+            raise ValueError("required graph parameters are missing")
         graph = nx.relaxed_caveman_graph(l=l, k=k, p=p, seed=seed)
     else:
-        assert n is not None and tau1 is not None and tau2 is not None and mu is not None
+        if not (n is not None and tau1 is not None and tau2 is not None and mu is not None):
+            raise ValueError("required graph parameters are missing")
         graph = nx.LFR_benchmark_graph(
             n=n,
             tau1=tau1,
@@ -260,10 +267,12 @@ def generate_geometric_threshold(
     seed: int | None = None,
 ) -> GeneratedGraph:
     if variant == "waxman":
-        assert beta is not None and alpha is not None
+        if not (beta is not None and alpha is not None):
+            raise ValueError("required graph parameters are missing")
         graph = nx.waxman_graph(n=n, beta=beta, alpha=alpha, seed=seed)
     else:
-        assert theta is not None
+        if not (theta is not None):
+            raise ValueError("required graph parameters are missing")
         graph = nx.geographical_threshold_graph(n=n, theta=theta, dim=dim, seed=seed)
     return _generated_graph(graph)
 
