@@ -202,7 +202,7 @@ def _textdistance_needleman_wunsch(
     # strings score ~0. Invert to a real distance (0 for identical input):
     # distance = maximum - similarity.
     similarity = alg(pair.a, pair.b)
-    d = int(round(alg.maximum(pair.a, pair.b) - similarity))
+    d = round(alg.maximum(pair.a, pair.b) - similarity)
     return AlignmentResult(id=pair.id, edit_distance=d, cigar=None)
 
 
