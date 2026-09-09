@@ -81,14 +81,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build and start services
-        run: docker compose -f services/graph-generation-service/compose.yaml up -d --build --wait --wait-timeout 300
+        run: docker compose -f compose.yaml up -d --build --wait --wait-timeout 300
       - name: Verify API and sidecar readiness
         run: |
           curl --fail --retry 10 --retry-delay 3 http://localhost:8002/healthz
           curl --fail --retry 10 --retry-delay 3 http://localhost:8002/readyz
       - name: Tear down
         if: always()
-        run: docker compose -f services/graph-generation-service/compose.yaml down -v
+        run: docker compose -f compose.yaml down -v
 
   build:
     name: Build Docker Image
