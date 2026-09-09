@@ -22,7 +22,7 @@ from .catalog import CATALOG, PROFILE, get_catalog
 from .conceptnet_api import MAX_REMOTE_INPUTS, ConceptNetError
 from .conceptnet_client import ConceptNetSidecarError, is_sidecar_reachable
 from .lexical import DEFAULT_LEXICAL_BACKENDS, compute_lexical
-from .model_cache import LargeModelDownloadBlocked, cache_summary, is_warm, warm_start
+from .model_cache import LargeModelDownloadBlocked, cache_summary, is_warm, prewarm_default_gensim, warm_start
 from .models import (
     LexicalRequest,
     RetrievalRequest,
@@ -69,6 +69,10 @@ async def lifespan(_app: FastAPI):
     for higher idle RAM. ``warm_start`` is non-fatal — failures relax to lazy.
     """
     warm_start()
+    # Start the small default gensim model (glove) downloading/loading in the
+    # background so the first embedding_cosine/wmd request doesn't block on an
+    # unbounded, synchronous download in the request path.
+    prewarm_default_gensim()
     yield
 
 

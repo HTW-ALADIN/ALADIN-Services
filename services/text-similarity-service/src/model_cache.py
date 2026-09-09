@@ -255,6 +255,32 @@ def get_gensim_model(model_name: str = "glove-wiki-gigaword-50") -> Any:
     return _get(f"gensim:{model_name}", lambda: api.load(model_name))
 
 
+def prewarm_default_gensim() -> None:
+    """Start a non-blocking download/load of the small default gensim model.
+
+    ``get_gensim_model`` is called from the request path (embedding_cosine /
+    wmd), and a first-time ``gensim.downloader.api.load`` of even the small
+    glove model can block a worker thread for a long download. Kicking it off
+    in a daemon thread at startup keeps the app serving immediately and makes
+    the first request hit a mostly-warm cache. Non-fatal: on failure the model
+    simply stays lazy and the normal request path loads it as before.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    def _load() -> None:
+        try:
+            get_gensim_model()
+        except Exception:  # noqa: BLE001  # pre-warm must never break boot
+            logger.warning(
+                "background gensim pre-warm failed; the model stays lazy",
+                exc_info=True,
+            )
+
+    threading.Thread(target=_load, name="gensim-prewarm", daemon=True).start()
+
+
 def get_cross_encoder_model(model_name: str = "cross-encoder/stsb-roberta-base") -> Any:
     from sentence_transformers import CrossEncoder
 

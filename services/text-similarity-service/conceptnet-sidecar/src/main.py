@@ -9,7 +9,6 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from starlette.concurrency import run_in_threadpool
 
 from . import model_cache
 from .model_cache import ModelFileError
@@ -66,16 +65,20 @@ def status():
 
 
 @app.post("/v1/relatedness")
-async def relatedness(request: RelatednessRequest):
+def relatedness(request: RelatednessRequest):
     """Score a batch of word pairs using gensim ``KeyedVectors.similarity``.
 
     Returns one item per pair. Out-of-vocabulary words yield ``score: null`` with
     an ``error`` message for that pair instead of failing the whole batch. Scores
     are raw cosine similarity in ``[-1, 1]`` — normalization to ``[0,1]`` is the
     main service's job so this sidecar stays dumb and replaceable.
+
+    This is deliberately a *sync* endpoint: FastAPI runs it in a worker thread,
+    so the gensim scoring loop (up to MAX_BATCH_SIZE pairs per request) never
+    blocks the asyncio event loop for other requests.
     """
     try:
-        kv = await run_in_threadpool(model_cache.cache.get_model)
+        kv = model_cache.cache.get_model()
     except ModelFileError as e:
         # Never leak the internal model filesystem path (CONCEPTNET_MODEL_PATH) in
         # the response body; log the real error server-side for operators instead.
@@ -101,10 +104,10 @@ def _score_pair(kv, pair_id: str, word_a: str, word_b: str, lang: str) -> Relate
     if not term_a or not term_b:
         return RelatednessItem(id=pair_id, score=0.0)  # exactly one empty -> nothing in common
     try:
-        if uri_a == uri_b:
-            score = 1.0
-        else:
-            score = float(kv.similarity(uri_a, uri_b))
+        # No uri_a == uri_b shortcut: identical URIs must still go through
+        # ``kv.similarity`` so two identical OUT-of-vocabulary terms take the
+        # OOV error path instead of being reported as perfectly similar.
+        score = float(kv.similarity(uri_a, uri_b))
         return RelatednessItem(id=pair_id, score=round(score, 4))
     except KeyError as e:
         missing = str(e).strip("'\"")

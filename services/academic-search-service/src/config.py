@@ -38,5 +38,14 @@ class Settings(BaseSettings):
     # Per-provider HTTP timeout (seconds).
     provider_timeout_seconds: float = 30.0
 
+    # academic-mcp-backed providers resolve and fetch PDF URLs entirely inside
+    # the vendored library, with no point at which this service can validate the
+    # URL before it is fetched (unlike the scimesh path, which checks every URL
+    # via core/url_safety). PDF downloads through that path are therefore
+    # DISABLED by default and require an explicit operator opt-in, accepting the
+    # SSRF risk (see README's Security Disclaimer; network-level egress controls
+    # are still required).
+    academic_mcp_downloads_allowed: bool = False
+
 
 settings = Settings()

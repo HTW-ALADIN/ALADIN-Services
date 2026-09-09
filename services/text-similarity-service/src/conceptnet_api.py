@@ -97,7 +97,15 @@ def compute_relatedness_remote(input_data: dict[str, Any], params: dict[str, Any
     else:
         raw = _fetch_relatedness(uri_a, uri_b)
 
-    return {"raw": raw, "similarity": raw, "distance": 1.0 - raw, "source": "conceptnet_api"}
+    # Mirror the local sidecar path: map the raw value through the same
+    # {raw, similarity, distance} normalizer (clamped to [0,1]) so both
+    # backends of the conceptnet_numberbatch variant agree on range and shape,
+    # while keeping the remote-only "source" marker for existing clients.
+    from .similarity import _normalize_similarity
+
+    result = _normalize_similarity(raw, "embedding_cosine", "gensim")
+    result["source"] = "conceptnet_api"
+    return result
 
 
 def _fetch_relatedness(uri_a: str, uri_b: str) -> float:

@@ -752,6 +752,26 @@ class TestStructuralStylistic:
         )
         assert r["similarity"] == pytest.approx(0.0)
 
+    def test_ngram_containment_short_distinct_texts_not_perfect(self):
+        """Distinct non-empty texts shorter than `n` share no n-grams and must
+        NOT be reported as perfectly similar (regression: both-empty branch
+        used to fire for non-empty short inputs)."""
+        r = compute_similarity(
+            "structural_stylistic",
+            "builtin",
+            {"text_a": "hi", "text_b": "no"},
+            {"variant": "ngram_containment", "n": 3},
+        )
+        assert r["similarity"] == pytest.approx(0.0)
+
+        identical = compute_similarity(
+            "structural_stylistic",
+            "builtin",
+            {"text_a": "hi", "text_b": "hi"},
+            {"variant": "ngram_containment", "n": 3},
+        )
+        assert identical["similarity"] == pytest.approx(1.0)
+
     def test_type_token_ratio_identical(self):
         r = compute_similarity(
             "structural_stylistic",

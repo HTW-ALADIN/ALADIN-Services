@@ -175,10 +175,13 @@ def _gensim_word_similarity(kv, a: str, b: str) -> float:
     """Word-level similarity for glove/fasttext; multi-word falls back to n_similarity.
 
     Raises ``_WordOutOfVocabulary`` for words missing from the model's vocabulary
-    (gensim raises ``KeyError``), so callers can map it to a graceful response.
+    (gensim raises ``KeyError``) and for empty inputs (``n_similarity`` would
+    raise ``ZeroDivisionError``), so callers can map both to a graceful response.
     """
     words_a = a.split()
     words_b = b.split()
+    if not words_a or not words_b:
+        raise _WordOutOfVocabulary("one of the inputs has no words in the embedding vocabulary (empty input)")
     try:
         if len(words_a) == 1 and len(words_b) == 1:
             return float(kv.similarity(words_a[0], words_b[0]))
@@ -537,7 +540,10 @@ def _ngram_containment_similarity(a: str, b: str, n: int) -> float:
         # Fall back to character n-grams for very short/empty inputs.
         grams_a, grams_b = _n_grams(_tokenize_chars(a), n), _n_grams(_tokenize_chars(b), n)
     if not grams_a and not grams_b:
-        return 1.0  # both empty
+        # No extractable n-grams on either side. Only identical inputs (both
+        # empty, or the same short text) are fully similar; two distinct
+        # non-empty texts that are simply shorter than `n` share nothing.
+        return 1.0 if a == b else 0.0
     if not grams_a or not grams_b:
         return 0.0
     left = len(grams_a & grams_b) / len(grams_a)

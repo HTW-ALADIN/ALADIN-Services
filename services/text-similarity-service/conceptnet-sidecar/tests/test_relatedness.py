@@ -110,6 +110,20 @@ def test_oov_pair_does_not_fail_batch(monkeypatch):
     assert "oov" in body[1]["error"]
 
 
+def test_identical_oov_terms_are_not_scored_as_perfect(monkeypatch):
+    """Two identical out-of-vocabulary terms must NOT be scored 1.0 — the
+    uri_a == uri_b shortcut would bypass the vocabulary check entirely."""
+    client = _make_client(monkeypatch, model=FakeKeyedVectors())
+    resp = client.post(
+        "/v1/relatedness",
+        json={"pairs": [{"id": "p1", "word_a": "zzznotaword", "word_b": "zzznotaword"}]},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body[0]["score"] is None
+    assert "oov" in body[0]["error"]
+
+
 def test_missing_model_path_returns_503(monkeypatch):
     """A missing/unset model path yields 503, not a crash."""
     client = _make_client(monkeypatch, model=None, model_path="/does/not/exist")
