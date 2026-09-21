@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+
+# Docker
+docker-compose*.yml
+Dockerfile
+README.md
+
+# Build artifacts
+*.openapi.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv
+venv
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+
+# Optional Java DKPro sidecar (not part of the Python image)
+dkpro-sidecar/
+
+# Docs / tests
+docs/
+http-tests/
+
+# Node (monorepo noise)
+node_modules/

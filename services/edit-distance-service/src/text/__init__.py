@@ -197,8 +197,13 @@ def _textdistance_needleman_wunsch(
 
     gap_cost = params.get("gap_cost", 1.0)
     alg = textdistance.NeedlemanWunsch(gap_cost=gap_cost)
-    d = alg(pair.a, pair.b)
-    return AlignmentResult(id=pair.id, edit_distance=int(d), cigar=None)
+    # `alg(...)` returns the raw global-alignment SIMILARITY (match=+1,
+    # mismatch=0, gap=-gap_cost): identical strings score max_len, unrelated
+    # strings score ~0. Invert to a real distance (0 for identical input):
+    # distance = maximum - similarity.
+    similarity = alg(pair.a, pair.b)
+    d = round(alg.maximum(pair.a, pair.b) - similarity)
+    return AlignmentResult(id=pair.id, edit_distance=d, cigar=None)
 
 
 def _textdistance_gotoh(
@@ -206,10 +211,17 @@ def _textdistance_gotoh(
 ) -> ScalarDistanceResult:
     import textdistance
 
-    d = textdistance.gotoh(pair.a, pair.b)
-    max_len = max(len(pair.a), len(pair.b))
+    # Same inversion as Needleman-Wunsch: Gotoh's `__call__` is an alignment
+    # similarity score (max for identical strings), so map it to a distance via
+    # maximum - similarity before reporting it as a scalar_distance.
+    alg = textdistance.Gotoh()
+    similarity = alg(pair.a, pair.b)
+    maximum = alg.maximum(pair.a, pair.b)
+    d = maximum - similarity
     return ScalarDistanceResult(
-        id=pair.id, value=d, normalized=d / max_len if max_len > 0 else 0.0
+        id=pair.id,
+        value=round(d, 4),
+        normalized=d / maximum if maximum > 0 else 0.0,
     )
 
 
@@ -218,10 +230,17 @@ def _textdistance_smith_waterman(
 ) -> ScalarDistanceResult:
     import textdistance
 
-    d = textdistance.smith_waterman(pair.a, pair.b)
-    max_len = max(len(pair.a), len(pair.b))
+    # Smith-Waterman is a local-alignment SIMILARITY (identical strings score
+    # min_len, unrelated strings ~0); invert to a distance so the reported
+    # scalar_distance means 0 = identical, like every other distance here.
+    alg = textdistance.SmithWaterman()
+    similarity = alg(pair.a, pair.b)
+    maximum = alg.maximum(pair.a, pair.b)
+    d = maximum - similarity
     return ScalarDistanceResult(
-        id=pair.id, value=d, normalized=d / max_len if max_len > 0 else 0.0
+        id=pair.id,
+        value=round(d, 4),
+        normalized=d / maximum if maximum > 0 else 0.0,
     )
 
 

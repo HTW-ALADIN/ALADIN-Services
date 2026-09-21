@@ -1,0 +1,38 @@
+services:
+  text-similarity-service:
+    container_name: text-similarity-service
+    build:
+      context: ../..
+      dockerfile: services/text-similarity-service/Dockerfile
+      args:
+        SIMILARITY_PROFILE: pytorch
+        INSTALL_MODEL: "true"
+        HF_PRELOAD: all
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - TEXT_SIMILARITY_CONCEPTNET_URL=http://conceptnet-sidecar:8200
+    stdin_open: true
+    tty: true
+
+  conceptnet-sidecar:
+    container_name: conceptnet-sidecar
+    build:
+      context: ./conceptnet-sidecar
+      dockerfile: Dockerfile
+    ports:
+      - "8200:8200"
+    volumes:
+      # Point CONCEPTNET_MODEL_PATH at a local Numberbatch model (./model/) as
+      # documented in the conceptnet-sidecar README.
+      - ./model:/model:ro
+    environment:
+      - CONCEPTNET_MODEL_PATH=/model/conceptnet-numberbatch-17-06-300
+      - CONCEPTNET_IDLE_TTL_SECONDS=900
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/health/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
