@@ -18,6 +18,8 @@ import { vi } from 'vitest';
 import { GradingController } from '../../src/grading/grading-controller';
 import { SQLQueryGradingService } from '../../src/grading/query-grading-service';
 import { TaskDescriptionGenerationService } from '../../src/generation/description/task-description-generation-service';
+import { TemplateTaskDescriptionGenerationEngine } from '../../src/generation/description/template-task-description-generation-engine';
+import { LLMTaskDescriptionGenerationEngine } from '../../src/generation/description/llm-task-description-generation-engine';
 import { ResultSetComparator } from '../../src/grading/result-set-comparator';
 import { ASTComparator } from '../../src/grading/comparators/ast-comparator';
 import { ExecutionPlanComparator } from '../../src/grading/comparators/execution-plan-comparator';
@@ -112,9 +114,10 @@ describe('GradingController — PGlite backend', () => {
 
 		controller = new GradingController(
 			queryGradingService,
-			// Task-description generation is a no-op stub (no OPENAI key in tests):
-			// gradeQuery only calls it for non-equivalent queries, and the stub
-			// returns undefined so no description is appended.
+			// Task-description generation is a no-op stub here: gradeQuery only
+			// calls it for non-equivalent queries, and the stub returns
+			// undefined so no description is appended. Template-fallback
+			// behaviour is covered in the dedicated describe block below.
 			{
 				generateTaskFromQuery: vi.fn().mockResolvedValue(undefined),
 			} as unknown as TaskDescriptionGenerationService,
@@ -328,6 +331,68 @@ describe('GradingController — PGlite backend', () => {
 			const body = firstJson(json);
 			expect(body.plansMatch).toBe(false);
 			expect(body.penaltyPoints).toBeGreaterThan(0);
+		});
+	});
+
+	// ── Request-time template fallback for LLM grading strategy ──────────────
+
+	describe('gradeQuery with generationStrategy llm and no llmGateway block', () => {
+		let fallbackController: GradingController;
+
+		beforeEach(() => {
+			const joinComparator = new JoinComparator();
+			const resultSetComparator = new ResultSetComparator();
+			const astComparator = new ASTComparator(joinComparator);
+			const executionPlanComparator = new ExecutionPlanComparator(
+				new ExecutionPlanParser(),
+				joinComparator,
+			);
+			const queryGradingService = new SQLQueryGradingService(
+				resultSetComparator,
+				astComparator,
+				executionPlanComparator,
+				new GradeCalculator(),
+				new FeedbackAssembler(),
+			);
+			const templateEngine =
+				new TemplateTaskDescriptionGenerationEngine();
+			const generationService = new TaskDescriptionGenerationService(
+				new LLMTaskDescriptionGenerationEngine(),
+				templateEngine,
+			);
+			fallbackController = new GradingController(
+				queryGradingService,
+				generationService,
+				resultSetComparator,
+				astComparator,
+				executionPlanComparator,
+				new QueryProximityService(),
+				new DatabaseService(new DatabaseAnalyzer()),
+			);
+		});
+
+		it('produces template-backed task-description feedback without failing', async () => {
+			const { res, status, json } = mockRes();
+			await fallbackController.gradeQuery(
+				mockReq({
+					connectionInfo: PGLITE_CONN_WITH_SQL,
+					gradingRequest: {
+						referenceQuery: REF_QUERY,
+						studentQuery: WRONG_STUDENT_QUERY,
+					},
+					generationStrategy: 'llm',
+				}),
+				res,
+			);
+
+			expect(status).toHaveBeenCalledWith(200);
+			const body = firstJson(json);
+			expect(body.comparisonResult.equivalent).toBe(false);
+			const solution =
+				body.comparisonResult.feedbackDetails.taskDescription.description
+					?.solution;
+			expect(typeof solution).toBe('string');
+			expect(solution.length).toBeGreaterThan(0);
 		});
 	});
 });
