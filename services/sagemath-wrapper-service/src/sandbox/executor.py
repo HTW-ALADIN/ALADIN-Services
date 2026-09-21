@@ -50,9 +50,9 @@ _SEM_ACQUIRE_TIMEOUT = float(os.environ.get("SAGE_SEM_ACQUIRE_TIMEOUT", "30.0"))
 # makes every sandboxed call fail. 1024 MiB keeps worst-case combined usage
 # (2 GiB at the default concurrency of 2) within the documented "3 GB RAM
 # minimum" deployment target (see README.md).
-_MAX_MEMORY = int(os.environ.get("SAGE_MAX_MEMORY_MB", "1024")) * 1024 * 1024
+_MAX_MEMORY = int(os.environ.get("SAGE_MAX_MEMORY_MB", "2048")) * 1024 * 1024
 _MAX_CPU = 60                      # 60 seconds CPU time
-_MAX_PROCESSES = 64                # prevent fork bombs
+_MAX_PROCESSES = int(os.environ.get("SAGE_MAX_PROCESSES", "512"))  # prevent fork bombs (SageMath/cysignals needs threads)
 
 # Sanity-check the operator-configured memory budget at import time. This is
 # a deploy-safety guardrail only — it does not enforce anything — but it

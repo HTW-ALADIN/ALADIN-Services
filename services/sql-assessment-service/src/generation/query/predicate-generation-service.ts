@@ -11,6 +11,7 @@ import {
 } from '../../shared/constants';
 import { IParsedColumn } from '../../shared/interfaces/domain';
 import { RowQueryFn } from '../../shared/utils/database-utils';
+import { quoteIdentifier } from '../../shared/utils/identifier-quoting';
 import { isValidForAggregation } from '../../shared/utils/validation';
 import { random, randomBoolean, shuffle } from '../../shared/utils/random';
 import { SelectASTBuilder } from './select-ast-builder';
@@ -157,7 +158,7 @@ export class PredicateGenerationService {
 			column.name,
 			column.type,
 			runQuery,
-			`SELECT ${column.name} FROM ${schema}.${column.tableName} ORDER BY RANDOM() LIMIT 1`,
+			`SELECT ${quoteIdentifier(column.name)} FROM ${quoteIdentifier(schema)}.${quoteIdentifier(column.tableName)} ORDER BY RANDOM() LIMIT 1`,
 		);
 
 		if (randomValue) {
@@ -199,7 +200,7 @@ export class PredicateGenerationService {
 			column.name,
 			column.type,
 			runQuery,
-			`SELECT ${column.name} FROM ${schema}.${column.tableName} WHERE ${column.name} NOT IN (SELECT MAX(${column.name}) FROM  ${schema}.${column.tableName}) ORDER BY RANDOM() LIMIT 1`,
+			`SELECT ${quoteIdentifier(column.name)} FROM ${quoteIdentifier(schema)}.${quoteIdentifier(column.tableName)} WHERE ${quoteIdentifier(column.name)} NOT IN (SELECT MAX(${quoteIdentifier(column.name)}) FROM  ${quoteIdentifier(schema)}.${quoteIdentifier(column.tableName)}) ORDER BY RANDOM() LIMIT 1`,
 		);
 
 		if (randomValue) {
@@ -226,7 +227,7 @@ export class PredicateGenerationService {
 			column.name,
 			column.type,
 			runQuery,
-			`SELECT ${column.name} FROM ${schema}.${column.tableName} WHERE ${column.name} NOT IN (SELECT MIN(${column.name}) FROM  ${schema}.${column.tableName}) ORDER BY RANDOM() LIMIT 1`,
+			`SELECT ${quoteIdentifier(column.name)} FROM ${quoteIdentifier(schema)}.${quoteIdentifier(column.tableName)} WHERE ${quoteIdentifier(column.name)} NOT IN (SELECT MIN(${quoteIdentifier(column.name)}) FROM  ${quoteIdentifier(schema)}.${quoteIdentifier(column.tableName)}) ORDER BY RANDOM() LIMIT 1`,
 		);
 
 		if (randomValue) {
@@ -253,7 +254,7 @@ export class PredicateGenerationService {
 			column.name,
 			column.type,
 			runQuery,
-			`SELECT ${column.name} FROM ${schema}.${column.tableName} ORDER BY RANDOM() LIMIT 1`,
+			`SELECT ${quoteIdentifier(column.name)} FROM ${quoteIdentifier(schema)}.${quoteIdentifier(column.tableName)} ORDER BY RANDOM() LIMIT 1`,
 		);
 
 		if (randomValue) {
@@ -279,7 +280,7 @@ export class PredicateGenerationService {
 		const randomValue = await this.getRandomValuesFromDatabase(
 			column,
 			runQuery,
-			`WITH selected_rows AS ( SELECT ${column.name}, LEAD(${column.name}) OVER (ORDER BY RANDOM()) as next_value, LAG(${column.name}) OVER (ORDER BY RANDOM()) as prev_value FROM ${schema}.${column.tableName} ) SELECT ${column.name} FROM selected_rows WHERE ${column.name} IS DISTINCT FROM next_value AND ${column.name} IS DISTINCT FROM prev_value ORDER BY RANDOM() LIMIT 2;`,
+			`WITH selected_rows AS ( SELECT ${quoteIdentifier(column.name)}, LEAD(${quoteIdentifier(column.name)}) OVER (ORDER BY RANDOM()) as next_value, LAG(${quoteIdentifier(column.name)}) OVER (ORDER BY RANDOM()) as prev_value FROM ${quoteIdentifier(schema)}.${quoteIdentifier(column.tableName)} ) SELECT ${quoteIdentifier(column.name)} FROM selected_rows WHERE ${quoteIdentifier(column.name)} IS DISTINCT FROM next_value AND ${quoteIdentifier(column.name)} IS DISTINCT FROM prev_value ORDER BY RANDOM() LIMIT 2;`,
 		);
 
 		if (randomValue && randomValue.length > 1) {
@@ -307,7 +308,7 @@ export class PredicateGenerationService {
 		const randomValue = await this.getRandomValuesFromDatabase(
 			column,
 			runQuery,
-			`WITH row_count AS ( SELECT COUNT(*) AS total_rows FROM ${schema}.${column.tableName} ), random_selection AS ( SELECT ${column.name} FROM ${schema}.${column.tableName} ORDER BY RANDOM() LIMIT 4 ) SELECT ${column.name} FROM random_selection WHERE (SELECT total_rows FROM row_count) >= 2 LIMIT LEAST((SELECT total_rows FROM row_count), 4);`,
+			`WITH row_count AS ( SELECT COUNT(*) AS total_rows FROM ${quoteIdentifier(schema)}.${quoteIdentifier(column.tableName)} ), random_selection AS ( SELECT ${quoteIdentifier(column.name)} FROM ${quoteIdentifier(schema)}.${quoteIdentifier(column.tableName)} ORDER BY RANDOM() LIMIT 4 ) SELECT ${quoteIdentifier(column.name)} FROM random_selection WHERE (SELECT total_rows FROM row_count) >= 2 LIMIT LEAST((SELECT total_rows FROM row_count), 4);`,
 		);
 
 		if (randomValue && randomValue.length > 1) {
@@ -357,7 +358,7 @@ export class PredicateGenerationService {
 			'aggvalue',
 			column.type,
 			runQuery,
-			`SELECT ${column.aggregation}(${column.name}) AS aggvalue FROM ${schema}.${column.tableName}`,
+			`SELECT ${column.aggregation}(${quoteIdentifier(column.name)}) AS aggvalue FROM ${quoteIdentifier(schema)}.${quoteIdentifier(column.tableName)}`,
 			true,
 		);
 
