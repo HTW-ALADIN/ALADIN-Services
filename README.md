@@ -10,6 +10,7 @@
 [![academic-search-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-academic-search-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-academic-search-service.yml)
 [![sagemath-wrapper CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-sagemath-wrapper.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-sagemath-wrapper.yml)
 [![edit-distance-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-edit-distance-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-edit-distance-service.yml)
+[![graph-generation-service CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-graph-generation-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-graph-generation-service.yml)
 
 ## Services
 
@@ -24,6 +25,7 @@
 | [llm-gateway-service](services/llm-gateway-service/README.md) | TypeScript | [![CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-llm-gateway-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-llm-gateway-service.yml) | [![codecov](https://codecov.io/gh/HTW-ALADIN/ALADIN-Services/graph/badge.svg?flag=llm-gateway-service)](https://codecov.io/gh/HTW-ALADIN/ALADIN-Services?flags[0]=llm-gateway-service) | HTTP/CLI wrapper around a self-hosted LLM Gateway instance, using the Vercel AI SDK |
 | [sagemath-wrapper](services/sagemath-wrapper-service/README.md) | Python | [![CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-sagemath-wrapper.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-sagemath-wrapper.yml) | — | SageMath REST/CLI wrapper — SAT solving, linear algebra, MILP, symbolic calculus, sandboxed |
 | [edit-distance-service](services/edit-distance-service/README.md) | Python | [![CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-edit-distance-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-edit-distance-service.yml) | — | Unified REST API for text edit distance (15 algorithms) and graph edit distance (4 GED algorithms) over multiple open-source libraries |
+| [graph-generation-service](services/graph-generation-service/README.md) | Python | [![CI](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-graph-generation-service.yml/badge.svg)](https://github.com/HTW-ALADIN/ALADIN-Services/actions/workflows/service-graph-generation-service.yml) | [![codecov](https://codecov.io/gh/HTW-ALADIN/ALADIN-Services/graph/badge.svg?flag=graph-generation-service)](https://codecov.io/gh/HTW-ALADIN/ALADIN-Services?flags[0]=graph-generation-service) | Graph Generation — validated multi-backend graph generation and export through NetworkX, igraph, and NetworKit |
 
 ## For Developers:
 
