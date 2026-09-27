@@ -1,0 +1,48 @@
+[project]
+name = "langgraph-service"
+version = "0.1.0"
+description = "Generic LangGraph execution engine over caller-supplied graph definitions"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.6",
+  "httpx>=0.27",
+  "typer>=0.13",
+  "langgraph>=1.0",
+  "langchain-core>=0.3",
+  "langgraph-checkpoint-postgres>=3.0",
+]
+
+[project.scripts]
+langgraph-service = "cli:app"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=6.0",
+  "respx>=0.21",
+  "ruff>=0.7",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "test"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["test"]
+pythonpath = ["src"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cli", "src/api", "src/core"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

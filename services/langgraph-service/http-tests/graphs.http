@@ -1,0 +1,24 @@
+@baseUrl = http://localhost:8004
+
+### Create a graph (transform-only, no gateway needed)
+POST {{baseUrl}}/v1/graphs
+Content-Type: application/json
+
+{
+  "name": "echo",
+  "nodes": [
+    {"id": "a", "type": "transform", "operations": [{"op": "const", "value": 1}]},
+    {"id": "b", "type": "transform", "operations": [{"op": "pick", "from_key": "value"}]}
+  ],
+  "edges": [["a", "b"]],
+  "entry": "a"
+}
+
+### List graphs
+GET {{baseUrl}}/v1/graphs
+
+### Get a graph (replace with a real id)
+GET {{baseUrl}}/v1/graphs/gr_replace_me
+
+### Delete a graph (replace with a real id)
+DELETE {{baseUrl}}/v1/graphs/gr_replace_me
