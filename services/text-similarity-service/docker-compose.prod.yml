@@ -1,0 +1,38 @@
+services:
+  text-similarity-service:
+    image: ghcr.io/htw-aladin/text-similarity-hf:latest
+    container_name: text-similarity-service
+    ports:
+      - "8000:8000"
+    environment:
+      - TEXT_SIMILARITY_CONCEPTNET_URL=http://conceptnet-sidecar:8200
+    depends_on:
+      - conceptnet-sidecar
+    restart: unless-stopped
+
+  conceptnet-sidecar:
+    image: ghcr.io/htw-aladin/conceptnet-sidecar:latest
+    container_name: conceptnet-sidecar
+    ports:
+      - "8200:8200"
+    volumes:
+      - conceptnet-model:/model:ro
+    environment:
+      - CONCEPTNET_MODEL_PATH=/model/conceptnet-numberbatch-17-06-300
+      - CONCEPTNET_IDLE_TTL_SECONDS=900
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/health/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  # The Numberbatch model is expected to arrive OUT OF BAND: copy/seed the
+  # `conceptnet-numberbatch-17-06-300` KeyedVectors file into this volume before
+  # `docker compose up` (e.g. `docker run --rm -v conceptnet-model:/model alpine cp ./model.bin /model/`).
+  # Without it, the sidecar reports NotReady and `conceptnet_numberbatch` /
+  # `embedding_cosine` / `backend: local` returns 503 (the main service still
+  # starts and serves every other algorithm; it is deliberately NOT gated on the
+  # sidecar's readiness — see ADR-0001).
+  conceptnet-model:

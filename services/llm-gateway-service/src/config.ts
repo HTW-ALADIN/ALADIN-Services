@@ -39,6 +39,12 @@ export interface AppConfig {
 	admin: AdminConfig;
 	port: number;
 	host: string;
+	/**
+	 * Optional bearer token protecting the HTTP API. When set, every
+	 * request except `/health` and `/docs` must present it in the
+	 * `Authorization: Bearer <token>` header. Unset = no auth (dev default).
+	 */
+	httpToken?: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -54,6 +60,7 @@ export function loadConfig(): AppConfig {
 		},
 		port: parseInt(envValue('PORT') ?? '8002', 10),
 		host: envValue('HOST') ?? '0.0.0.0',
+		httpToken: envValue('LLM_GATEWAY_HTTP_TOKEN'),
 	};
 }
 

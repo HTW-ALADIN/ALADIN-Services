@@ -37,6 +37,7 @@ import {
 	CustomProviderOverrideSchema,
 	ErrorResponseSchema,
 } from './schemas/common.schema.js';
+import { config } from '../config.js';
 
 // Read version from package.json — tsx supports JSON imports
 import { createRequire } from 'module';
@@ -120,6 +121,30 @@ export async function buildServer(options: BuildServerOptions = {}) {
 		routePrefix: '/docs',
 		uiConfig: { docExpansion: 'full', deepLinking: true },
 	});
+
+	// Optional bearer-token protection for the inference API. Enforced only when
+	// LLM_GATEWAY_HTTP_TOKEN is configured, so existing deployments without auth
+	// keep working unchanged; /health (liveness for orchestrators) and /docs are
+	// exempt. Without this token, any client that can reach the port can spend
+	// the configured LLM_GATEWAY_API_KEY and trigger server-side fetches to
+	// customProvider URLs.
+	if (config.httpToken) {
+		fastify.addHook('onRequest', async (request, reply) => {
+			const url = request.url.split('?')[0];
+			if (url === '/health' || url.startsWith('/docs')) {
+				return;
+			}
+			const header = request.headers.authorization ?? '';
+			if (
+				!header.startsWith('Bearer ') ||
+				header.slice('Bearer '.length).trim() !== config.httpToken
+			) {
+				return reply
+					.code(401)
+					.send({ message: 'unauthorized', detail: 'Missing or invalid bearer token.' });
+			}
+		});
+	}
 
 	await fastify.register(healthRoutes);
 	await fastify.register(generateRoutes(options.generate));
