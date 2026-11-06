@@ -42,7 +42,7 @@ class ChartJSAdapter(OutputAdapter):
                 "labels": df["t"].to_list(),
                 "datasets": [
                     {
-                        "label": "Substrat 1 (S1)",
+                        "label": "C-Source",
                         "yAxisID": "yL",
                         "fill": False,
                         "lineTension": 0.2,
@@ -51,18 +51,18 @@ class ChartJSAdapter(OutputAdapter):
                         "borderColor": orange,
                         "data": df["c_S1"].to_list(),
                     },
+                    # {
+                    #     "label": "Summe Feeding S1",
+                    #     "yAxisID": "yL",
+                    #     "fill": False,
+                    #     "lineTension": 0.2,
+                    #     "pointRadius": 0,
+                    #     "backgroundColor": sun_yellow,
+                    #     "borderColor": sun_yellow,
+                    #     "data": df["Sum_Feed"].to_list(),
+                    # },
                     {
-                        "label": "Summe Feeding S1",
-                        "yAxisID": "yL",
-                        "fill": False,
-                        "lineTension": 0.2,
-                        "pointRadius": 0,
-                        "backgroundColor": sun_yellow,
-                        "borderColor": sun_yellow,
-                        "data": df["Sum_Feed"].to_list(),
-                    },
-                    {
-                        "label": "Substrat 2 (S2)",
+                        "label": "N-Source",
                         "yAxisID": "yR",
                         "fill": False,
                         "lineTension": 0.2,
@@ -93,7 +93,7 @@ class ChartJSAdapter(OutputAdapter):
                         "min": 0,
                         "title": {
                             "display": True,
-                            "text": "c(S1) [g" + cdot + "L" + hochminus1 + "]",
+                            "text": "c(C-Source) [g"+cdot+"L"+hochminus1+"]",
                             "font": {"size": labelfontsize},
                         },
                     },
@@ -105,7 +105,7 @@ class ChartJSAdapter(OutputAdapter):
                         "min": 0,
                         "title": {
                             "display": True,
-                            "text": "c(S2) [g" + cdot + "L" + hochminus1 + "]",
+                            "text": "c(N-Source) [g"+cdot+"L"+hochminus1+"]",
                             "font": {"size": labelfontsize},
                             "color": petrol,
                         },
@@ -116,7 +116,7 @@ class ChartJSAdapter(OutputAdapter):
                     "legend": {"position": "bottom"},
                     "title": {
                         "display": True,
-                        "text": "Substratkonzentration",
+                        "text": "Substrates",
                         "font": {"size": labelfontsize + 2},
                     },
                 },
@@ -129,7 +129,7 @@ class ChartJSAdapter(OutputAdapter):
                 "labels": df["t"].to_list(),
                 "datasets": [
                     {
-                        "label": "Druck (p)",
+                        "label": "pressure (p)",
                         "yAxisID": "yL",
                         "fill": False,
                         "lineTension": 0.2,
@@ -139,7 +139,7 @@ class ChartJSAdapter(OutputAdapter):
                         "data": df["Druck"].to_list(),
                     },
                     {
-                        "label": "Begasungsrate Luft (Q_Air)",
+                        "label": "aeration rate (air) (Q_Air)",
                         "yAxisID": "yL",
                         "fill": False,
                         "lineTension": 0.2,
@@ -149,7 +149,7 @@ class ChartJSAdapter(OutputAdapter):
                         "data": df["Begasungsrate"].to_list(),
                     },
                     {
-                        "label": "Drehzahl (n)",
+                        "label": "agitation rate (n)",
                         "yAxisID": "yR",
                         "fill": False,
                         "lineTension": 0.2,
@@ -159,7 +159,7 @@ class ChartJSAdapter(OutputAdapter):
                         "data": df["Drehzahl"].to_list(),
                     },
                     {
-                        "label": "Gel" + "\u00f6" + "stsauerstoff (DO)",
+                        "label": "dissolved oxygen (DO)",
                         "yAxisID": "yR",
                         "fill": False,
                         "lineTension": 0.2,
@@ -213,7 +213,7 @@ class ChartJSAdapter(OutputAdapter):
                     "legend": {"position": "bottom"},
                     "title": {
                         "display": True,
-                        "text": "Begasungsbezogen",
+                        "text": "Aeration related",
                         "font": {"size": labelfontsize + 2},
                     },
                 },
@@ -226,7 +226,7 @@ class ChartJSAdapter(OutputAdapter):
                 "labels": df["t"].to_list(),
                 "datasets": [
                     {
-                        "label": "Biotrockenmasse c(x)",
+                        "label": "cell dry weight c(x)",
                         "yAxisID": "yL",
                         "fill": False,
                         "lineTension": 0.2,
@@ -236,7 +236,7 @@ class ChartJSAdapter(OutputAdapter):
                         "data": df["c_x"].to_list(),
                     },
                     {
-                        "label": "Produktkonz. c(p)",
+                        "label": "product c(p)",
                         "yAxisID": "yL",
                         "fill": False,
                         "lineTension": 0.2,
@@ -300,7 +300,7 @@ class ChartJSAdapter(OutputAdapter):
                     "legend": {"position": "bottom"},
                     "title": {
                         "display": True,
-                        "text": "Produkte und Volumen",
+                        "text": "Products and volume",
                         "font": {"size": labelfontsize + 2},
                     },
                 },
@@ -323,7 +323,7 @@ class ChartJSAdapter(OutputAdapter):
                         "data": df["OUR"].to_list(),
                     },
                     {
-                        "label": "Respiratorischer Quotient (RQ)",
+                        "label": "respiratory quotient (RQ)",
                         "yAxisID": "yR",
                         "fill": False,
                         "lineTension": 0.2,
@@ -377,7 +377,7 @@ class ChartJSAdapter(OutputAdapter):
                     "legend": {"position": "bottom"},
                     "title": {
                         "display": True,
-                        "text": "Abgasanalyse",
+                        "text": "Offgas",
                         "font": {"size": labelfontsize + 2},
                     },
                 },
