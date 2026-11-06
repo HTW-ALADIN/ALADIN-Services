@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class InputKeys(str, Enum):
     model = "Model",
     phase = "Phase",

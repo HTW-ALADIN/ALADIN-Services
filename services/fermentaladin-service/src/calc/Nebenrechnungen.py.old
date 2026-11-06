@@ -2,9 +2,10 @@ def Nebenrechnungen(Mpars_in, df_Fpar_in):
     # Mpars is of datatype series
     # df_Fpar_in is of datatype dataframe
     import logging
-    from calc.cardinal_pH_T import cardinal_pH_T # calculate mu_max from given pH and T
-    import numpy as np
     import math
+
+    import numpy as np
+
 
     #############################################################
     # Nebenrechnungen

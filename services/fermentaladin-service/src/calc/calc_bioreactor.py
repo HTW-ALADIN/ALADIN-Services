@@ -1,12 +1,14 @@
-import pandas as pd
 import json
-import numpy as np
-from scipy.integrate import solve_ivp  # solve odes
-from DataModels.input_definition import InputKeys
-from calc.Nebenrechnungen import Nebenrechnungen
-from calc.Fx_ODE_Bioreaktor import Bioreaktor_ODE  # hier wird das Differentialgleichungssystem definiert
 import logging
 import pathlib
+
+import numpy as np
+import pandas as pd
+from scipy.integrate import solve_ivp  # solve odes
+
+from calc.Fx_ODE_Bioreaktor import Bioreaktor_ODE  # hier wird das Differentialgleichungssystem definiert
+from calc.Nebenrechnungen import Nebenrechnungen
+from DataModels.input_definition import InputKeys
 
 #MODEL_PATH = "./DataModels/model_db.json" # path to JSON in which Model Parameters are stored
 MODEL_PATH = pathlib.Path(__file__).parent.parent / "DataModels" / "model_db.json"
@@ -78,7 +80,7 @@ def calculate(ferm_param_in_df: pd.DataFrame) -> pd.DataFrame:
             c_DO_0 = y[-1, 4]  # noqa: F821
             O2_Out = y[-1, 5]  # noqa: F821  # Konz. O2 in Abluft
             CO2_Out = y[-1, 6]  # noqa: F821  # Konz. CO2 in Abluft
-            V_L=y[-1,7]
+            V_L = y[-1, 7] # noqa: F821
 
             y0 = [
                 c_x_0,
@@ -148,9 +150,9 @@ def calculate(ferm_param_in_df: pd.DataFrame) -> pd.DataFrame:
     #######################################
     # #Weitere Variablen berechnen
     #######################################
-    V_start = (
-        np.zeros(len(t_ges)) + V_Start_eff #ferm_param_df[InputKeys.V_Start][0]
-    )  # Platzhalter für Fermentationsvolumen in L
+    #V_start = (
+    #    np.zeros(len(t_ges)) + V_Start_eff #ferm_param_df[InputKeys.V_Start][0]
+    #)  # Platzhalter für Fermentationsvolumen in L
     Begasungsrate = Q_Air
     c_ox_sat_DO = ferm_param_df[InputKeys.c_o2_sat][0]  # Sauerstofflöslichkeit zu Beginn der Fermentation um DO zu berechnen
 

@@ -1,6 +1,5 @@
 # calculates µ_max at a given model, pH and Temperature (T)
 # Berechnung der spezifischen Wachstumsrate nach dem Kardinalmodell
-import logging
 
 def cardinal_pH_T (Mpars, pH, T) -> float:
     
@@ -15,7 +14,7 @@ def cardinal_pH_T (Mpars, pH, T) -> float:
     # Temperatur- und pH-Abhängigkeit
     
     if (pH <= pH_min) or (pH >= pH_max):
-        gamma_pH = 0;
+        gamma_pH = 0
     else:
         gamma_pH = ((pH - pH_min) * (pH - pH_max))/((pH-pH_min)*(pH-pH_max)-((pH-pH_opt)**2))
 
