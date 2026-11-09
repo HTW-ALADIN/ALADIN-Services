@@ -93,7 +93,7 @@ class ChartJSAdapter(OutputAdapter):
                         "min": 0,
                         "title": {
                             "display": True,
-                            "text": "c(C-Source) [g"+cdot+"L"+hochminus1+"]",
+                            "text": "c(C-Source) [g" + cdot + "L" + hochminus1 + "]",
                             "font": {"size": labelfontsize},
                         },
                     },
@@ -105,7 +105,7 @@ class ChartJSAdapter(OutputAdapter):
                         "min": 0,
                         "title": {
                             "display": True,
-                            "text": "c(N-Source) [g"+cdot+"L"+hochminus1+"]",
+                            "text": "c(N-Source) [g" + cdot + "L" + hochminus1 + "]",
                             "font": {"size": labelfontsize},
                             "color": petrol,
                         },
