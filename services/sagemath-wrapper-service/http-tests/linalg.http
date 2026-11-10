@@ -1,0 +1,270 @@
+### SageMath Wrapper — Linear Algebra REST API tests
+#
+# Prerequisites:
+#   1. Start the service:  make docker-run  (or  sage -python -m uvicorn src.api.main:app --port 8000)
+#   2. These .http files work with VS Code's "REST Client" extension.
+#
+# Test matrix used throughout:
+#   A = [[1, 2],   det(A) = -2
+#        [3, 4]]
+#   B = [[1, 0, 0],   det(B) = 1  (identity)
+#        [0, 1, 0],
+#        [0, 0, 1]]
+
+@baseUrl = http://localhost:8000
+
+# ==========================================================================
+# /v1/linalg/determinant
+# ==========================================================================
+
+###
+# @name determinant_2x2
+# Determinant of a 2×2 matrix [[1,2],[3,4]] → -2
+POST {{baseUrl}}/v1/linalg/determinant
+Content-Type: application/json
+
+{"matrix": [[1, 2], [3, 4]]}
+
+###
+# @name determinant_identity_3x3
+# Determinant of a 3×3 identity matrix → 1
+POST {{baseUrl}}/v1/linalg/determinant
+Content-Type: application/json
+
+{"matrix": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}
+
+###
+# @name determinant_singular
+# Singular matrix (2×2, rows linearly dependent) → error 400
+POST {{baseUrl}}/v1/linalg/determinant
+Content-Type: application/json
+
+{"matrix": [[1, 2], [2, 4]]}
+
+###
+# @name determinant_non_square
+# Non-square matrix → error 400 (SageMath will reject it)
+POST {{baseUrl}}/v1/linalg/determinant
+Content-Type: application/json
+
+{"matrix": [[1, 2, 3], [4, 5, 6]]}
+
+# ==========================================================================
+# /v1/linalg/inverse
+# ==========================================================================
+
+###
+# @name inverse_2x2
+# Inverse of [[1,2],[3,4]]
+POST {{baseUrl}}/v1/linalg/inverse
+Content-Type: application/json
+
+{"matrix": [[1, 2], [3, 4]]}
+
+# ==========================================================================
+# /v1/linalg/eigenvalues
+# ==========================================================================
+
+###
+# @name eigenvalues_2x2
+# Eigenvalues of [[1,2],[3,4]]
+POST {{baseUrl}}/v1/linalg/eigenvalues
+Content-Type: application/json
+
+{"matrix": [[1, 2], [3, 4]]}
+
+# ==========================================================================
+# /v1/linalg/solve   (linear system A·x = b)
+# ==========================================================================
+
+###
+# @name solve_2x2
+# Solve [[3,2],[1,2]]·[x,y] = [1,1]  →  x = 0, y = 0.5
+POST {{baseUrl}}/v1/linalg/solve
+Content-Type: application/json
+
+{"a": [[3, 2], [1, 2]], "b": [1, 1]}
+
+# ==========================================================================
+# /v1/linalg/rank   (template-based endpoint)
+# ==========================================================================
+
+###
+# @name rank_2x2
+# Rank of [[1,2],[3,4]] → 2
+POST {{baseUrl}}/v1/linalg/rank
+Content-Type: application/json
+
+{"matrix": [[1, 2], [3, 4]]}
+
+###
+# @name rank_singular
+# Rank of [[1,2],[2,4]] (singular) → 1
+POST {{baseUrl}}/v1/linalg/rank
+Content-Type: application/json
+
+{"matrix": [[1, 2], [2, 4]]}
+
+# ==========================================================================
+# /v1/linalg/qr   (QR decomposition)
+# ==========================================================================
+
+###
+# @name qr_2x2
+# QR decomposition of [[1,2],[3,4]]
+POST {{baseUrl}}/v1/linalg/qr
+Content-Type: application/json
+
+{"matrix": [[1, 2], [3, 4]]}
+
+# ==========================================================================
+# /v1/linalg/lu   (LU decomposition)
+# ==========================================================================
+
+###
+# @name lu_2x2
+# LU decomposition of [[1,2],[3,4]]
+POST {{baseUrl}}/v1/linalg/lu
+Content-Type: application/json
+
+{"matrix": [[1, 2], [3, 4]]}
+
+# ==========================================================================
+# /v1/linalg/cholesky
+# ==========================================================================
+
+###
+# @name cholesky_2x2
+# Cholesky decomposition of [[4,2],[2,3]]  (positive definite)
+POST {{baseUrl}}/v1/linalg/cholesky
+Content-Type: application/json
+
+{"matrix": [[4, 2], [2, 3]]}
+
+# ==========================================================================
+# /v1/linalg/svd   (Singular Value Decomposition)
+# ==========================================================================
+
+###
+# @name svd_2x2
+# SVD of [[1,2],[3,4]]
+POST {{baseUrl}}/v1/linalg/svd
+Content-Type: application/json
+
+{"matrix": [[1, 2], [3, 4]]}
+
+# ==========================================================================
+# /v1/linalg/matrix-exp   (Matrix exponential)
+# ==========================================================================
+
+###
+# @name matrix_exp_2x2
+# Matrix exponential of [[1,2],[3,4]]
+POST {{baseUrl}}/v1/linalg/matrix-exp
+Content-Type: application/json
+
+{"matrix": [[1, 2], [3, 4]]}
+
+# ==========================================================================
+# /v1/linalg/right-kernel   (Nullspace / right kernel)
+# ==========================================================================
+
+###
+# @name right_kernel
+# Right kernel of [[1,2],[2,4]]  (singular → non-trivial kernel)
+POST {{baseUrl}}/v1/linalg/right-kernel
+Content-Type: application/json
+
+{"matrix": [[1, 2], [2, 4]]}
+
+# ==========================================================================
+# /v1/linalg/left-kernel
+# ==========================================================================
+
+###
+# @name left_kernel
+# Left kernel of [[1,2],[2,4]]
+POST {{baseUrl}}/v1/linalg/left-kernel
+Content-Type: application/json
+
+{"matrix": [[1, 2], [2, 4]]}
+
+# ==========================================================================
+# /v1/linalg/charpoly   (Characteristic polynomial)
+# ==========================================================================
+
+###
+# @name charpoly_2x2
+# Characteristic polynomial of [[1,2],[3,4]]
+POST {{baseUrl}}/v1/linalg/charpoly
+Content-Type: application/json
+
+{"matrix": [[1, 2], [3, 4]]}
+
+# ==========================================================================
+# /v1/linalg/kernel   (template: kernel basis matrix)
+# ==========================================================================
+
+###
+# @name kernel_template
+# Kernel basis of [[1,2],[2,4]]  (template-based)
+POST {{baseUrl}}/v1/linalg/kernel
+Content-Type: application/json
+
+{"matrix": [[1, 2], [2, 4]]}
+
+# ==========================================================================
+# /v1/linalg/echelon_form   (template: row echelon form)
+# ==========================================================================
+
+###
+# @name echelon_form
+# Row echelon form of [[1,2],[3,4]]
+POST {{baseUrl}}/v1/linalg/echelon-form
+Content-Type: application/json
+
+{"matrix": [[1, 2], [3, 4]]}
+
+# ==========================================================================
+# /v1/linalg/matrix_vector_product   (template: A·v)
+# ==========================================================================
+
+###
+# @name matrix_vector_product
+# [[1,2],[3,4]] · [1,1]  =  [3, 7]
+POST {{baseUrl}}/v1/linalg/matrix-vector-product
+Content-Type: application/json
+
+{"matrix": [[1, 2], [3, 4]], "vector": [1, 1]}
+
+# ==========================================================================
+# /v1/linalg/vector_matrix_product   (template: v·A)
+# ==========================================================================
+
+###
+# @name vector_matrix_product
+# [1,1] · [[1,2],[3,4]]  =  [4, 6]
+POST {{baseUrl}}/v1/linalg/vector-matrix-product
+Content-Type: application/json
+
+{"vector": [1, 1], "matrix": [[1, 2], [3, 4]]}
+
+# ==========================================================================
+# Error cases
+# ==========================================================================
+
+###
+# @name missing_required_field
+# 422 — required field "matrix" is missing
+POST {{baseUrl}}/v1/linalg/determinant
+Content-Type: application/json
+
+{}
+
+###
+# @name wrong_type
+# 422 — "matrix" should be an array, not a string
+POST {{baseUrl}}/v1/linalg/determinant
+Content-Type: application/json
+
+{"matrix": "not-a-matrix"}

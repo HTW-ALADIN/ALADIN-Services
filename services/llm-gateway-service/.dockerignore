@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+.nyc_output
+.git
+.DS_Store
+.env
+*.openapi.json
+*.openapi.yaml

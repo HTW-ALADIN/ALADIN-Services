@@ -1,0 +1,139 @@
+name: text-template-service
+
+on:
+  push:
+    branches: ["master"]
+    paths:
+      - "services/text-template-service/**"
+      - ".github/workflows/service-text-template-service.yml"
+  pull_request:
+    branches: ["master"]
+    paths:
+      - "services/text-template-service/**"
+      - ".github/workflows/service-text-template-service.yml"
+
+defaults:
+  run:
+    working-directory: services/text-template-service
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/text-template-service
+      - run: make lint
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/text-template-service
+      - run: make test
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/text-template-service
+      - run: make build
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.86.0
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov@0.6.21
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/text-template-service
+      - run: make coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-text-template-service
+          path: services/text-template-service/coverage.lcov
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: services/text-template-service/coverage.lcov
+          flags: text-template-service
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+        if: always()
+
+  openapi:
+    name: Generate OpenAPI
+    runs-on: ubuntu-latest
+    needs: [build, coverage]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/text-template-service
+      - run: make generate-openapi
+      - name: Check committed OpenAPI document
+        run: git diff --exit-code -- openapi/openapi.yaml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openapi-spec-text-template-service
+          path: services/text-template-service/openapi/openapi.yaml
+
+  container:
+    name: Build and smoke-test container
+    runs-on: ubuntu-latest
+    needs: openapi
+    steps:
+      - uses: actions/checkout@v4
+      - run: make docker-smoke
+
+  publish:
+    name: Publish container
+    runs-on: ubuntu-latest
+    needs: container
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/text-template-service
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: services/text-template-service
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}

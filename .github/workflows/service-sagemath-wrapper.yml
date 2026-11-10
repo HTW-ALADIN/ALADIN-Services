@@ -1,0 +1,141 @@
+name: sagemath-wrapper
+
+on:
+  push:
+    branches: ["master"]
+    paths:
+      - "services/sagemath-wrapper-service/**"
+  pull_request:
+    branches: ["master"]
+    paths:
+      - "services/sagemath-wrapper-service/**"
+
+defaults:
+  run:
+    working-directory: services/sagemath-wrapper-service
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Install dependencies
+        run: uv sync --all-extras --frozen
+      - name: Lint
+        run: make lint
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Install dependencies
+        run: uv sync --all-extras --frozen
+      - name: Run tests
+        run: make test
+      - name: Run Docker/SageMath smoke test
+        # `make test` excludes both `integration` and `docker`-marked tests,
+        # so nothing above actually imports SageMath or exercises the built
+        # image. This builds a throwaway image and runs a real Sage
+        # computation through it (see tests/contract/test_docker_smoke.py),
+        # catching Sage-import/resource-limit/Dockerfile regressions before
+        # the `build` job pushes an image to the registry.
+        run: uv run pytest -m docker tests/contract/test_docker_smoke.py -v
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: services/sagemath-wrapper-service/coverage.xml
+          flags: sagemath-wrapper
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+        if: always()
+
+  generate-openapi:
+    name: Generate OpenAPI Spec
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Install dependencies
+        run: uv sync --all-extras --frozen
+      - name: Generate OpenAPI spec
+        run: make generate-openapi
+      - name: Upload OpenAPI spec
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-spec-sagemath-wrapper
+          path: services/sagemath-wrapper-service/openapi/openapi.yaml
+
+  build:
+    name: Build, Smoke Test, and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/sagemath-wrapper
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+      - name: Build Docker image (local only, not pushed yet)
+        uses: docker/build-push-action@v6
+        with:
+          context: services/sagemath-wrapper-service
+          push: false
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+      - name: Start container for smoke test
+        run: |
+          image="$(echo "${{ steps.meta.outputs.tags }}" | head -n1)"
+          docker run -d --name sagemath-smoke -p 8000:8000 "$image"
+      - name: Wait for health endpoint
+        run: |
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8000/healthz 2>/dev/null | grep -q '"status":"ok"'; then
+              echo "Container is healthy"
+              exit 0
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+          echo "Container did not become healthy"
+          exit 1
+      - name: Cleanup smoke test container
+        if: always()
+        run: docker rm -f sagemath-smoke || true
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push smoke-tested Docker image
+        # Push the exact locally-built+tested image tags (no rebuild), so
+        # the published artifact is guaranteed to be the one that just
+        # passed the health check above.
+        run: |
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && docker push "$tag"
+          done <<< "${{ steps.meta.outputs.tags }}"

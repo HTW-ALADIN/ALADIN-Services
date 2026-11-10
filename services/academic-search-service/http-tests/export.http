@@ -1,0 +1,20 @@
+@baseUrl = http://localhost:8003
+
+### Export an inline paper list to BibTeX
+POST {{baseUrl}}/v1/export
+Content-Type: application/json
+
+{
+  "papers": [
+    {
+      "id": "sha256:example",
+      "provider": "openalex",
+      "backend": "scimesh",
+      "title": "Attention Is All You Need",
+      "year": 2017,
+      "doi": "10.48550/arXiv.1706.03762",
+      "authors": [{ "name": "Ashish Vaswani" }]
+    }
+  ],
+  "format": "bibtex"
+}

@@ -1,0 +1,1124 @@
+openapi: 3.1.0
+info:
+  title: SageMath Wrapper Service
+  version: 0.1.0
+paths:
+  /v1/linalg/determinant:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Determinant
+      operationId: linalg_determinant_v1_linalg_determinant_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/determinant_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Determinant V1 Linalg Determinant Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/inverse:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Inverse
+      operationId: linalg_inverse_v1_linalg_inverse_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/inverse_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Inverse V1 Linalg Inverse Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/eigenvalues:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Eigenvalues
+      operationId: linalg_eigenvalues_v1_linalg_eigenvalues_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/eigenvalues_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Eigenvalues V1 Linalg Eigenvalues Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/solve:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Solve
+      operationId: linalg_solve_v1_linalg_solve_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/src__api__dynamic_routes__linalg__solve_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Solve V1 Linalg Solve Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/qr:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Qr
+      operationId: linalg_qr_v1_linalg_qr_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/qr_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Qr V1 Linalg Qr Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/lu:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Lu
+      operationId: linalg_lu_v1_linalg_lu_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/lu_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Lu V1 Linalg Lu Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/cholesky:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Cholesky
+      operationId: linalg_cholesky_v1_linalg_cholesky_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/cholesky_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Cholesky V1 Linalg Cholesky Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/svd:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Svd
+      operationId: linalg_svd_v1_linalg_svd_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/svd_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Svd V1 Linalg Svd Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/matrix-exp:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Matrix-Exp
+      operationId: linalg_matrix_exp_v1_linalg_matrix_exp_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/matrix-exp_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Matrix Exp V1 Linalg Matrix Exp Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/right-kernel:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Right-Kernel
+      operationId: linalg_right_kernel_v1_linalg_right_kernel_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/right-kernel_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Right Kernel V1 Linalg Right Kernel Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/left-kernel:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Left-Kernel
+      operationId: linalg_left_kernel_v1_linalg_left_kernel_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/left-kernel_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Left Kernel V1 Linalg Left Kernel Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/charpoly:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Charpoly
+      operationId: linalg_charpoly_v1_linalg_charpoly_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/charpoly_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Charpoly V1 Linalg Charpoly Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/kernel:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Kernel
+      operationId: linalg_kernel_v1_linalg_kernel_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/kernel_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Kernel V1 Linalg Kernel Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/echelon_form:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Echelon Form
+      operationId: linalg_echelon_form_v1_linalg_echelon_form_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/echelon_form_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Echelon Form V1 Linalg Echelon Form Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/rank:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Rank
+      operationId: linalg_rank_v1_linalg_rank_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/rank_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Rank V1 Linalg Rank Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/matrix_vector_product:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Matrix Vector Product
+      operationId: linalg_matrix_vector_product_v1_linalg_matrix_vector_product_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/matrix_vector_product_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Matrix Vector Product V1 Linalg Matrix Vector
+                  Product Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/vector_matrix_product:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Vector Matrix Product
+      operationId: linalg_vector_matrix_product_v1_linalg_vector_matrix_product_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/vector_matrix_product_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Vector Matrix Product V1 Linalg Vector Matrix
+                  Product Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/eigenvectors_left:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Eigenvectors Left
+      operationId: linalg_eigenvectors_left_v1_linalg_eigenvectors_left_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/eigenvectors_left_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Eigenvectors Left V1 Linalg Eigenvectors Left
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/eigenvectors_right:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Eigenvectors Right
+      operationId: linalg_eigenvectors_right_v1_linalg_eigenvectors_right_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/eigenvectors_right_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Eigenvectors Right V1 Linalg Eigenvectors Right
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/linalg/evaluate:
+    post:
+      tags:
+      - operations
+      summary: Linalg.Evaluate
+      operationId: linalg_evaluate_v1_linalg_evaluate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/src__api__dynamic_routes__linalg__evaluate_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Linalg Evaluate V1 Linalg Evaluate Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/maxima/evaluate:
+    post:
+      tags:
+      - operations
+      summary: Maxima.Evaluate
+      operationId: maxima_evaluate_v1_maxima_evaluate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/src__api__dynamic_routes__maxima__evaluate_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Maxima Evaluate V1 Maxima Evaluate Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/optimize/milp:
+    post:
+      tags:
+      - operations
+      summary: Optimize.Milp
+      operationId: optimize_milp_v1_optimize_milp_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/milp_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Optimize Milp V1 Optimize Milp Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/optimize/find-root:
+    post:
+      tags:
+      - operations
+      summary: Optimize.Find-Root
+      operationId: optimize_find_root_v1_optimize_find_root_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/find-root_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Optimize Find Root V1 Optimize Find Root Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/optimize/minimize:
+    post:
+      tags:
+      - operations
+      summary: Optimize.Minimize
+      operationId: optimize_minimize_v1_optimize_minimize_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/minimize_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Optimize Minimize V1 Optimize Minimize Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/sat/solve:
+    post:
+      tags:
+      - operations
+      summary: Sat.Solve
+      operationId: sat_solve_v1_sat_solve_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/src__api__dynamic_routes__sat__solve_request'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Sat Solve V1 Sat Solve Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /healthz:
+    get:
+      summary: Healthz
+      operationId: healthz_healthz_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+components:
+  schemas:
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    charpoly_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.charpoly_request
+    cholesky_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.cholesky_request
+    determinant_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.determinant_request
+    echelon_form_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.echelon_form_request
+    eigenvalues_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.eigenvalues_request
+    eigenvectors_left_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.eigenvectors_left_request
+    eigenvectors_right_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.eigenvectors_right_request
+    find-root_request:
+      properties:
+        expression:
+          type: string
+          title: Expression
+        variable:
+          type: string
+          title: Variable
+        a:
+          type: number
+          title: A
+        b:
+          type: number
+          title: B
+      type: object
+      required:
+      - expression
+      - variable
+      - a
+      - b
+      title: optimize.find-root_request
+    inverse_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.inverse_request
+    kernel_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.kernel_request
+    left-kernel_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.left-kernel_request
+    lu_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.lu_request
+    matrix-exp_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.matrix-exp_request
+    matrix_vector_product_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+        vector:
+          items:
+            type: number
+          type: array
+          title: Vector
+      type: object
+      required:
+      - matrix
+      - vector
+      title: linalg.matrix_vector_product_request
+    milp_request:
+      properties:
+        variables:
+          items:
+            type: string
+          type: array
+          title: Variables
+        objective:
+          additionalProperties:
+            type: number
+          type: object
+          title: Objective
+        maximize:
+          type: boolean
+          title: Maximize
+          default: true
+        constraints:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Constraints
+        var_types:
+          anyOf:
+          - additionalProperties:
+              type: string
+              enum:
+              - real
+              - integer
+            type: object
+          - type: 'null'
+          title: Var Types
+        solver:
+          type: string
+          enum:
+          - GLPK
+          - PPL
+          - CBC
+          - InteractiveLP
+          - CPLEX
+          - CVXOPT
+          title: Solver
+          default: GLPK
+        nonnegative:
+          anyOf:
+          - {}
+          - type: 'null'
+          title: Nonnegative
+      type: object
+      required:
+      - variables
+      - objective
+      - constraints
+      title: optimize.milp_request
+    minimize_request:
+      properties:
+        expression:
+          type: string
+          title: Expression
+        variables:
+          items:
+            type: string
+          type: array
+          title: Variables
+        x0:
+          items:
+            type: number
+          type: array
+          title: X0
+      type: object
+      required:
+      - expression
+      - variables
+      - x0
+      title: optimize.minimize_request
+    qr_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.qr_request
+    rank_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.rank_request
+    right-kernel_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.right-kernel_request
+    src__api__dynamic_routes__linalg__evaluate_request:
+      properties:
+        matrices:
+          anyOf:
+          - additionalProperties:
+              items:
+                items:
+                  type: number
+                type: array
+              type: array
+            type: object
+          - type: 'null'
+          title: Matrices
+        vectors:
+          anyOf:
+          - additionalProperties:
+              items:
+                type: number
+              type: array
+            type: object
+          - type: 'null'
+          title: Vectors
+        expression:
+          type: string
+          title: Expression
+      type: object
+      required:
+      - expression
+      title: linalg.evaluate_request
+    src__api__dynamic_routes__linalg__solve_request:
+      properties:
+        a:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: A
+        b:
+          items:
+            type: number
+          type: array
+          title: B
+      type: object
+      required:
+      - a
+      - b
+      title: linalg.solve_request
+    src__api__dynamic_routes__maxima__evaluate_request:
+      properties:
+        expression:
+          type: string
+          title: Expression
+        operation:
+          type: string
+          enum:
+          - simplify
+          - differentiate
+          - integrate
+          - solve
+          - limit
+          - series
+          - laplace
+          title: Operation
+          default: simplify
+        variable:
+          type: string
+          title: Variable
+          default: x
+        bounds:
+          anyOf:
+          - items:
+              type: number
+            type: array
+          - type: 'null'
+          title: Bounds
+      type: object
+      required:
+      - expression
+      title: maxima.evaluate_request
+    src__api__dynamic_routes__sat__solve_request:
+      properties:
+        clauses:
+          items:
+            items:
+              type: integer
+            type: array
+          type: array
+          title: Clauses
+        solver:
+          type: string
+          enum:
+          - picosat
+          - cryptominisat
+          - glucose
+          title: Solver
+          default: picosat
+      type: object
+      required:
+      - clauses
+      title: sat.solve_request
+    svd_request:
+      properties:
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - matrix
+      title: linalg.svd_request
+    vector_matrix_product_request:
+      properties:
+        vector:
+          items:
+            type: number
+          type: array
+          title: Vector
+        matrix:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+          title: Matrix
+      type: object
+      required:
+      - vector
+      - matrix
+      title: linalg.vector_matrix_product_request

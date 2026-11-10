@@ -1,0 +1,199 @@
+### Text Edit Distance - Health Check
+GET http://localhost:8000/health
+
+### Discovery - List all text algorithms
+GET http://localhost:8000/v1/text/algorithms
+
+### Levenshtein (RapidFuzz default)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "levenshtein",
+  "params": {},
+  "inputs": [
+    { "id": "p1", "a": "kitten", "b": "sitting" },
+    { "id": "p2", "a": "flaw", "b": "lawn" }
+  ]
+}
+
+### Levenshtein (textdistance)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "levenshtein",
+  "params": {},
+  "inputs": [
+    { "id": "p1", "a": "kitten", "b": "sitting" }
+  ]
+}
+
+### Levenshtein (jellyfish)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "levenshtein",
+  "params": {},
+  "inputs": [
+    { "id": "p1", "a": "kitten", "b": "sitting" }
+  ]
+}
+
+### Damerau-Levenshtein (RapidFuzz)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "damerau_levenshtein",
+  "params": {},
+  "inputs": [
+    { "id": "p1", "a": "jellyfish", "b": "jellyfihs" }
+  ]
+}
+
+### Hamming distance (RapidFuzz)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "hamming",
+  "params": {},
+  "inputs": [
+    { "id": "p1", "a": "karolin", "b": "kathrin" }
+  ]
+}
+
+### Jaro-Winkler similarity (RapidFuzz)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "jaro_winkler",
+  "params": {},
+  "inputs": [
+    { "id": "p1", "a": "MARTHA", "b": "MARHTA" }
+  ]
+}
+
+### OSA (Optimal String Alignment)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "osa",
+  "params": {},
+  "inputs": [
+    { "id": "p1", "a": "ca", "b": "abc" }
+  ]
+}
+
+### Indel (LCS-based distance)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "indel",
+  "params": {},
+  "inputs": [
+    { "id": "p1", "a": "kitten", "b": "sitting" }
+  ]
+}
+
+### LCS extraction (textdistance)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "lcs",
+  "params": {},
+  "inputs": [
+    { "id": "p1", "a": "kitten", "b": "sitting" }
+  ]
+}
+
+### Needleman-Wunsch global alignment
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "needleman_wunsch",
+  "params": { "gap_cost": 1.0 },
+  "inputs": [
+    { "id": "p1", "a": "kitten", "b": "sitting" }
+  ]
+}
+
+### Smith-Waterman local alignment
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "smith_waterman",
+  "params": {},
+  "inputs": [
+    { "id": "p1", "a": "kitten", "b": "sitting" }
+  ]
+}
+
+### Token set similarity (Jaccard)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "token_set_similarity",
+  "params": { "metric": "jaccard" },
+  "inputs": [
+    { "id": "p1", "a": "hello world", "b": "world hello" }
+  ]
+}
+
+### Normalized Compression Distance (NCD)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "ncd",
+  "params": { "qval": 1, "compressor": "zlib" },
+  "inputs": [
+    { "id": "p1", "a": "kitten", "b": "sitting" }
+  ]
+}
+
+### Phonetic encoding (Soundex)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "phonetic_encoding",
+  "params": { "scheme": "soundex" },
+  "inputs": [
+    { "id": "w1", "text": "Jellyfish" },
+    { "id": "w2", "text": "Jelyfsh" }
+  ]
+}
+
+### Long sequence alignment (edlib)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "long_sequence_alignment",
+  "params": { "mode": "NW", "task": "distance" },
+  "inputs": [
+    { "id": "p1", "a": "kitten", "b": "sitting" }
+  ]
+}
+
+### Diff/Patch (diff-match-patch)
+POST http://localhost:8000/v1/text/distance
+Content-Type: application/json
+
+{
+  "algorithm": "diff_patch",
+  "params": {},
+  "inputs": [
+    { "id": "p1", "a": "The quick brown fox", "b": "The slow brown fox" }
+  ]
+}

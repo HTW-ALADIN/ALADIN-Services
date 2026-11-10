@@ -1,12 +1,12 @@
-import logging
-
-
 def Nebenrechnungen(Mpars_in, df_Fpar_in):
     # Mpars is of datatype series
     # df_Fpar_in is of datatype dataframe
+    import logging
     import math
 
     import numpy as np
+
+    from calc.cardinal_pH_T import cardinal_pH_T  # calculate mu_max from given pH and T
 
     #############################################################
     # Nebenrechnungen
@@ -31,8 +31,6 @@ def Nebenrechnungen(Mpars_in, df_Fpar_in):
         Mpars_out["Y_CO2_P"] = 1 * 10 ** (-25)
         # avoid division by Zero by setting parameter to a very small number
 
-    ##globale Variablen zuweisen
-    V_L_0 = df_Fpar_in["V_L"][0]  # Startvolumen in L TODO- erötern: maximales Arbeitsvolumen oder Startvolumen
     #############################################################
     # Berechnung der Sauerstofflöslichkeit zu Beginn jeder Phase
     #############################################################
@@ -41,8 +39,8 @@ def Nebenrechnungen(Mpars_in, df_Fpar_in):
     T_Std = 25 + 273.15  # Standardtemperatur in K;
     T = df_Fpar_in.at[0, "T"] + 273.15  # Fermentationstemperatur in K;
     kH_pc_T = kH_pc_Std * math.exp(-1700 * (1.0 / T - 1 / T_Std))
-    c_O2_sat = df_Fpar_in["Druck"] + 1.013  # Druck in bara
-    c_O2_sat = c_O2_sat * 0.20946 / kH_pc_T * MW_O2  # Löslichkeit O2 in g/L
+    c_O2_sat = (df_Fpar_in["Druck"] + 1.013) * 0.20946 / kH_pc_T * MW_O2  # Löslichkeit O2 in g/L
+    logging.debug(f"c_O2_sat={c_O2_sat}")
     df_Fpar_out["c_O2_sat"] = c_O2_sat
     #############################################################
 
@@ -58,9 +56,10 @@ def Nebenrechnungen(Mpars_in, df_Fpar_in):
     #############################################################
 
     # Berechnung der Tank cross-sectional area
-    V_T = 0.1  # m³ - Totalvolumen des Tanks
+    V_T = 0.150  # m³ - Totalvolumen des Tanks
+    d_to_D = 1 / 3  # Impeller diameter to tank diameter
     d_T = (V_T / 3 * 4 / math.pi) ** (1 / 3)  # Tank diameter in m
-    d_I = d_T * 1 / 3  # Diameter Impeller at a given d_T/d_I of 1/3
+    d_I = d_T * d_to_D  # Diameter Impeller at a given d_T/d_I of 1/3
     A_T = math.pi / 4 * d_T**2  # calc cross sectional area of tank in m²
 
     # Berechung der Leerrohrgeschwindigkeit
@@ -78,9 +77,15 @@ def Nebenrechnungen(Mpars_in, df_Fpar_in):
     )  # calculation Power input ungassed by Phase in Watt
     d = 1 + (K_A * v_g) / math.sqrt(g * d_I)
     Pg = P / np.sqrt(d)
-    V_L_m3 = V_L_0 / 1000  # Medienvolumen in m³
-    kLa = 0.026 * (Pg / V_L_m3) ** 0.4 * v_g**0.5 * 3600  # calc kLa in 1/h
+    kLa = (
+        0.026 * (Pg / V_T) ** 0.4 * v_g**0.5 * 3600
+    )  # calc kLa in 1/h; kLa is assumed to be independent of volume change so the total reactor volume is used here
+    logging.debug(f"OTR(max)={kLa * c_O2_sat / 32 * 1000} in mmol/L*h")
+
     df_Fpar_out["kLa"] = kLa
-    logging.debug(f"kLa: {df_Fpar_out['kLa']}")
+    # logging.debug(f"kLa: {df_Fpar_out["kLa"]}")
+
+    # Berechnung von µmax bei gegebenem pH un Temp.
+    Mpars_out["mumax"] = cardinal_pH_T(Mpars_in, df_Fpar_in["pH"][0], df_Fpar_in["T"][0])
 
     return [Mpars_out, df_Fpar_out]

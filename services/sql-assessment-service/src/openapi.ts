@@ -132,6 +132,63 @@ import path from 'path';
  *             orders:
  *               order_date: "Order Date"
  *
+ *     LlmGatewayConfig:
+ *       type: object
+ *       description: >
+ *         Per-request LLM gateway connection details. When present, LLM-based
+ *         description variants are generated via the supplied gateway instead
+ *         of the template engine. The service never reads gateway location or
+ *         credentials from its own environment; the apiKey is sent as an
+ *         Authorization: Bearer header on every outbound call and is never
+ *         logged.
+ *       required:
+ *         - endpoint
+ *         - apiKey
+ *       properties:
+ *         endpoint:
+ *           type: string
+ *           description: >
+ *             Base URL of an llm-gateway-service-compatible API. The client
+ *             appends /generate.
+ *           example: http://llm-gateway:8080
+ *         apiKey:
+ *           type: string
+ *           description: Bearer token sent to the gateway on every outbound call.
+ *           example: sk-...
+ *         provider:
+ *           type: string
+ *           description: >
+ *             Provider id override (e.g. "openai"). Defaults to "openai" when
+ *             omitted.
+ *           example: openai
+ *         model:
+ *           type: string
+ *           description: >
+ *             Model id override (e.g. "gpt-4o-mini"). Defaults to
+ *             "gpt-4o-mini" when omitted.
+ *           example: gpt-4o-mini
+ *         customProvider:
+ *           type: object
+ *           description: >
+ *             Optional inline OpenAI-compatible endpoint. When present, the
+ *             gateway routes the request directly to baseUrl with the given
+ *             apiKey, bypassing its own provider registration — so callers can
+ *             use any provider without pre-registering it.
+ *           required:
+ *             - baseUrl
+ *             - apiKey
+ *           properties:
+ *             baseUrl:
+ *               type: string
+ *               description: >
+ *                 Base URL of an OpenAI-compatible API. The gateway appends
+ *                 /chat/completions.
+ *               example: https://api.openai.com/v1
+ *             apiKey:
+ *               type: string
+ *               description: Provider-specific token for the custom endpoint.
+ *               example: sk-provider-key
+ *
  *     # -----------------------------------------------------------------------
  *     # Database endpoint schemas
  *     # -----------------------------------------------------------------------
@@ -202,6 +259,16 @@ import path from 'path';
  *             type: string
  *           description: Predicate operation types to use (e.g. "=", ">", "LIKE").
  *
+ *     DescriptionStrategy:
+ *       type: string
+ *       enum: [template, entityRelationship, schemaBased, creative, hybrid]
+ *       description: >
+ *         A task-description variant. Maps 1:1 to a TaskResponse description
+ *         field: template → templateBasedDescription, entityRelationship →
+ *         gptEntityRelationshipDescription, schemaBased →
+ *         gptSchemaBasedDescription, creative → gptCreativeDescription,
+ *         hybrid → hybridDescription.
+ *
  *     GenerateTaskRequest:
  *       type: object
  *       required:
@@ -215,15 +282,28 @@ import path from 'path';
  *         languageCode:
  *           type: string
  *           example: en
+ *         llmGateway:
+ *           $ref: '#/components/schemas/LlmGatewayConfig'
+ *         descriptionStrategy:
+ *           $ref: '#/components/schemas/DescriptionStrategy'
+ *           description: >
+ *             Single description variant to generate. Convenience alternative
+ *             to descriptionStrategies.
+ *         descriptionStrategies:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/DescriptionStrategy'
+ *           description: >
+ *             Description variants to generate. When neither this nor
+ *             descriptionStrategy is supplied, all variants are generated
+ *             (backward compatible); otherwise only the requested variants
+ *             are generated and the remaining response description fields are
+ *             omitted. Unrecognised values are ignored.
  *
  *     TaskResponse:
  *       type: object
  *       required:
  *         - query
- *         - templateBasedDescription
- *         - gptEntityRelationshipDescription
- *         - gptSchemaBasedDescription
- *         - hybridDescription
  *       properties:
  *         query:
  *           type: string
@@ -231,19 +311,34 @@ import path from 'path';
  *           example: SELECT name FROM customers WHERE age > 30
  *         templateBasedDescription:
  *           type: string
- *           description: AST-template-generated natural-language description.
+ *           description: >
+ *             AST-template-generated natural-language description. Present
+ *             when the template strategy was requested (or no strategies were
+ *             supplied).
  *         gptEntityRelationshipDescription:
  *           type: string
- *           description: LLM-generated description using entity-relationship context (multi-step).
+ *           description: >
+ *             LLM-generated description using entity-relationship context
+ *             (multi-step). Present when the entityRelationship strategy was
+ *             requested (or no strategies were supplied).
  *         gptSchemaBasedDescription:
  *           type: string
- *           description: LLM-generated description using the raw schema (default GPT option).
+ *           description: >
+ *             LLM-generated description using the raw schema (default GPT
+ *             option). Present when the schemaBased strategy was requested
+ *             (or no strategies were supplied).
  *         hybridDescription:
  *           type: string
- *           description: Hybrid (template + LLM) natural-language description.
+ *           description: >
+ *             Hybrid (template + LLM) natural-language description. Present
+ *             when the hybrid strategy was requested (or no strategies were
+ *             supplied).
  *         gptCreativeDescription:
  *           type: string
- *           description: LLM-generated creative description (temperature 0.7). May be absent.
+ *           description: >
+ *             LLM-generated creative description (temperature 0.7). Present
+ *             when the creative strategy was requested (or no strategies were
+ *             supplied).
  *
  *     # -----------------------------------------------------------------------
  *     # Description endpoint schemas
@@ -268,6 +363,8 @@ import path from 'path';
  *           type: string
  *           description: BCP 47 language code for the generated description. Defaults to "en".
  *           example: en
+ *         llmGateway:
+ *           $ref: '#/components/schemas/LlmGatewayConfig'
  *
  *     DescriptionResponse:
  *       type: object
@@ -347,6 +444,8 @@ import path from 'path';
  *           type: string
  *           enum: [default, creative, multi-step]
  *           description: GPT option when generationStrategy is llm. Defaults to default.
+ *         llmGateway:
+ *           $ref: '#/components/schemas/LlmGatewayConfig'
  *
  *     GradeResponse:
  *       type: object

@@ -1,0 +1,6 @@
+{
+	"node-option": ["import=tsx"],
+	"spec": "test/**/*.test.ts",
+	"ignore": "test/integration/real-provider.test.ts",
+	"timeout": 10000
+}

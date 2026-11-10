@@ -6,6 +6,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+*.bak
 
 # Secrets
 .env
@@ -30,10 +31,12 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+.ruff_cache/
 *.egg-info/
 dist/
 htmlcov/
 .coverage
+coverage.xml
 
 # ── Java / Kotlin ────────────────────────────────────────────────────────────
 target/
@@ -60,3 +63,6 @@ coverage/
 
 
 .vscode
+
+# kilo
+.kilo

@@ -1,0 +1,52 @@
+# Local development compose file for llm-gateway-service.
+#
+# Builds and runs the HTTP API (Fastify) from source via the service's
+# existing Dockerfile, so you can exercise it exactly like a deployed
+# instance — including manual requests from `http-tests/*.http` — without
+# installing Node locally.
+#
+# Usage:
+#   docker compose -f docker.dev.compose.yml up --build
+#
+# The API listens on http://localhost:8002 (Swagger UI at /docs).
+#
+# Environment:
+#   - LLM_GATEWAY_BASE_URL / LLM_GATEWAY_API_KEY configure the *gateway*
+#     path (POST /generate, /embeddings without a `customProvider` override).
+#     Not required for testing the `customProvider` bypass path, since that
+#     endpoint's connection details are sent inline in each request body.
+#   - `.env` (gitignored) is loaded if present, mainly so the same file used
+#     by `npm run test:integration:real` (API_KEY / BASE_ENDPOINT for a real
+#     custom provider) is available inside the container too, e.g. for
+#     scripted calls that read process.env instead of hardcoding values in
+#     the request body.
+services:
+  llm-gateway-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: llm-gateway-service-dev
+    ports:
+      - '127.0.0.1:8002:8002'
+    environment:
+      PORT: '8002'
+      HOST: '0.0.0.0'
+      LLM_GATEWAY_BASE_URL: ${LLM_GATEWAY_BASE_URL:-http://localhost:4001/v1}
+      LLM_GATEWAY_API_KEY: ${LLM_GATEWAY_API_KEY:-}
+      LLM_GATEWAY_ADMIN_BASE_URL: ${LLM_GATEWAY_ADMIN_BASE_URL:-}
+      LLM_GATEWAY_ADMIN_TOKEN: ${LLM_GATEWAY_ADMIN_TOKEN:-}
+    env_file:
+      - path: ./.env
+        required: false
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:8002/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

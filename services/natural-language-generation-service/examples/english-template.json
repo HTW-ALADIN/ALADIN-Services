@@ -1,0 +1,12 @@
+{
+	"mode": "template_generation",
+	"backend": "rosaenlg",
+	"language": "en_US",
+	"input": {
+		"template": "- const person = { name: name };\nmixin personRef(obj, params)\n  | #{obj.name}\nmixin personRefexpr(obj, params)\n  | they\n- person.ref = personRef\n- person.refexpr = personRefexpr\np\n  synz\n    syn\n      | Hello #[+value(person)]. #[+value(person)] are ready.\n    syn\n      | Hi #[+value(person)]. #[+value(person)] are ready.",
+		"data": {
+			"name": "Alice"
+		},
+		"seed": 0
+	}
+}

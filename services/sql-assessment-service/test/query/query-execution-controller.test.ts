@@ -62,7 +62,10 @@ function mockRes(): {
 
 const VALID_CONNECTION = {
 	type: 'postgres' as const,
-	host: 'localhost',
+	// Use a public, non-loopback/private host: validateConnectionInfo() blocks
+	// internal connection targets (SSRF protection), so 'localhost' would be
+	// rejected before the request ever reaches the service under test.
+	host: 'db.example.com',
 	port: 5432,
 	username: 'user',
 	password: 'pass',

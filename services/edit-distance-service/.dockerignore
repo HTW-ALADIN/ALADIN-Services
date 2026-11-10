@@ -1,0 +1,23 @@
+# Git
+.git
+.gitignore
+
+# Docker
+docker-compose*.yml
+Dockerfile
+README.md
+
+# Build artifacts
+*.openapi.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv
+venv
+*.egg-info/
+.pytest_cache/
+
+# Node (monorepo noise)
+node_modules/
