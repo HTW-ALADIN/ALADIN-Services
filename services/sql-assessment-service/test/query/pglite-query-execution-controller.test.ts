@@ -142,6 +142,31 @@ describe('QueryExecutionController — PGlite path', () => {
 			expect(json).toHaveBeenCalledWith({ rows: [row], rowCount: 1 });
 		});
 
+		it.each([
+			['SELECT 42; SELECT 1;', 'MULTIPLE_STATEMENTS'],
+			['SELECT42; SELECT1', 'PARSE_ERROR'],
+			['SELECT 42; DELETE FROM products;', 'MULTIPLE_STATEMENTS'],
+			['WITH c AS (UPDATE products SET price = 0 RETURNING *) SELECT * FROM c;', 'NON_SELECT'],
+			["WITH c AS (INSERT INTO products (name, price) VALUES ('x', 1) RETURNING *) SELECT * FROM c;", 'NON_SELECT'],
+			['WITH c AS (DELETE FROM products WHERE id = 1 RETURNING *) SELECT * FROM c;', 'NON_SELECT'],
+			['SELECT 42 INTO created_table;', 'NON_SELECT'],
+		])('returns 400 without mutating data: %s', async (query, code) => {
+			const before = await pgliteDb.query('SELECT * FROM products ORDER BY id');
+			const { res, status, json } = mockRes();
+			await controller.executeQuery(
+				mockReq({ connectionInfo: VALID_PGLITE_CONN, query }),
+				res,
+			);
+			expect(status).toHaveBeenCalledWith(400);
+			expect(json).toHaveBeenCalledWith(expect.objectContaining({ code }));
+			expect((await pgliteDb.query('SELECT * FROM products ORDER BY id')).rows).toEqual(before.rows);
+			expect(
+				(await pgliteDb.query(
+					"SELECT tablename FROM pg_tables WHERE tablename = 'created_table'",
+				)).rows,
+			).toEqual([]);
+		});
+
 		it('returns 200 for a valid SELECT', async () => {
 			const { res, status } = mockRes();
 			await controller.executeQuery(

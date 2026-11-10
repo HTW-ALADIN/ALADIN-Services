@@ -78,6 +78,41 @@ describe('QueryExecutionService', () => {
         );
     });
 
+    describe.each(['PostgreSQL', 'PGlite'])('%s mutation rejection', (backend) => {
+        it.each([
+            ['SELECT 42; SELECT 1', 'MULTIPLE_STATEMENTS'],
+            ['SELECT 42; /* comment ; */ SELECT 1;', 'MULTIPLE_STATEMENTS'],
+            ['SELECT 42; -- comment ;\nSELECT 1;', 'MULTIPLE_STATEMENTS'],
+            ["SELECT 'semi;colon'; DROP TABLE products;", 'MULTIPLE_STATEMENTS'],
+            ['SELECT 42; DELETE FROM products;', 'MULTIPLE_STATEMENTS'],
+            ['SELECT42; SELECT1', 'PARSE_ERROR'],
+            ['SELECT 42 INTO created_table;', 'NON_SELECT'],
+            ['WITH c AS (UPDATE products SET id = 1 RETURNING *) SELECT * FROM c;', 'NON_SELECT'],
+            ['WITH c AS (INSERT INTO products (name) VALUES (\'x\') RETURNING *) SELECT * FROM c;', 'NON_SELECT'],
+            ['WITH c AS (DELETE FROM products WHERE id = 1 RETURNING id) SELECT * FROM c;', 'NON_SELECT'],
+            ['SELECT * FROM (WITH c AS (UPDATE products SET id = 1 RETURNING *) SELECT * FROM c) AS nested;', 'NON_SELECT'],
+        ])('rejects before touching the database: %s', async (sql, code) => {
+            const { execute, query, createQueryRunner, release } = createExecution(backend);
+            await expect(execute(sql)).rejects.toMatchObject({ code });
+            expect(query).not.toHaveBeenCalled();
+            if (backend === 'PostgreSQL') {
+                expect(createQueryRunner).not.toHaveBeenCalled();
+                expect(release).not.toHaveBeenCalled();
+            }
+        });
+
+        it.each([
+            'SELECT "insert" FROM products',
+            'SELECT 1 AS "into"',
+            'SELECT * FROM products AS "update"',
+            "SELECT 'delete' AS \"update\"",
+        ])('does not treat quoted identifiers as mutations: %s', async (sql) => {
+            const { execute, query } = createExecution(backend);
+            await expect(execute(sql)).resolves.toBeDefined();
+            expect(query).toHaveBeenCalledOnce();
+        });
+    });
+
     describe('executeQuery — happy path', () => {
 
         it('returns rows and correct rowCount for a simple SELECT *', async () => {

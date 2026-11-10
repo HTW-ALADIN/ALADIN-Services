@@ -4,6 +4,13 @@ import { QueryExecutionResult } from '../shared/interfaces/http';
 import { t, SupportedLanguage } from '../shared/i18n';
 
 /**
+ * AST node types that can mutate data even when the statement root is a
+ * SELECT — e.g. data-modifying CTEs and `SELECT ... INTO`.
+ */
+const MUTATING_NODE_TYPES = new Set(['insert', 'update', 'delete', 'into']);
+
+
+/**
  * Executes a raw SQL SELECT query against a live DataSource and returns the
  * result rows together with the row count.
  *
@@ -134,6 +141,34 @@ export class QueryExecutionService {
 				t('QUERY_NON_SELECT', lang, type),
 				'NON_SELECT',
 			);
+		}
+
+		this.assertNoMutations(statement, lang);
+	}
+
+	/**
+	 * Rejects mutations that hide beneath a SELECT root: data-modifying CTEs
+	 * (`WITH ... AS (UPDATE ...) SELECT ...`) and `SELECT ... INTO`.
+	 *
+	 * Walks the AST iteratively so deeply nested queries cannot overflow the
+	 * call stack.  `node-sql-parser` emits `into: { type: 'into' }` only when
+	 * the clause is actually present; the default `into` node has no `type`.
+	 */
+	private assertNoMutations(statement: AST, lang: SupportedLanguage): void {
+		const stack: unknown[] = [statement];
+		while (stack.length > 0) {
+			const node = stack.pop();
+			if (!node || typeof node !== 'object') continue;
+
+			const { type } = node as { type?: unknown };
+			if (typeof type === 'string' && MUTATING_NODE_TYPES.has(type)) {
+				throw new QueryExecutionError(
+					t('QUERY_NON_SELECT', lang, type),
+					'NON_SELECT',
+				);
+			}
+
+			for (const child of Object.values(node)) stack.push(child);
 		}
 	}
 }
