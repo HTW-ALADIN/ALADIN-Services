@@ -171,14 +171,15 @@ describe('QueryExecutionService', () => {
             expect(release).toHaveBeenCalledOnce();
         });
 
-        it('runs PGlite queries in a read-only transaction', async () => {
+        it('runs PGlite queries in a read-only transaction and rolls back', async () => {
             const readOnlyService = new QueryExecutionService();
             const txQuery = vi.fn()
                 .mockResolvedValueOnce(undefined)
                 .mockResolvedValueOnce({ rows: [{ answer: 42 }] });
+            const rollback = vi.fn().mockResolvedValue(undefined);
             const transaction = vi.fn(
                 async (callback: (tx: unknown) => Promise<unknown>) =>
-                    callback({ query: txQuery }),
+                    callback({ query: txQuery, rollback }),
             );
 
             await expect(
@@ -188,6 +189,7 @@ describe('QueryExecutionService', () => {
             expect(transaction).toHaveBeenCalledOnce();
             expect(txQuery).toHaveBeenNthCalledWith(1, 'SET TRANSACTION READ ONLY');
             expect(txQuery).toHaveBeenNthCalledWith(2, 'SELECT 42 AS answer');
+            expect(rollback).toHaveBeenCalledOnce();
         });
     });
 

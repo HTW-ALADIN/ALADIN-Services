@@ -96,7 +96,10 @@ export class QueryExecutionService {
 	 * database.  Enforces the same SELECT-only constraint as `executeQuery`.
 	 *
 	 * PGlite serialises `db.transaction()` calls internally, so the shared
-	 * instance can safely hold a short-lived read-only transaction.
+	 * instance can safely hold a short-lived read-only transaction.  The
+	 * transaction is always rolled back: a read-only transaction still permits
+	 * session settings and writes to temporary tables, and PGlite would commit
+	 * them if the callback returned normally.
 	 *
 	 * @param query - Raw SQL string to execute.
 	 * @param db    - Live PGlite instance.
@@ -122,7 +125,12 @@ export class QueryExecutionService {
 			const result = this.enforceReadOnly
 				? await db.transaction(async (tx: any) => {
 					await tx.query('SET TRANSACTION READ ONLY');
-					return tx.query(trimmed);
+					const queryResult = await tx.query(trimmed);
+					// PGlite commits when the callback resolves, which would
+					// persist session settings and temporary-table writes that
+					// a read-only transaction still permits.  Roll back instead.
+					await tx.rollback();
+					return queryResult;
 				})
 				: await db.query(trimmed);
 			const rows = result.rows as Record<string, unknown>[];

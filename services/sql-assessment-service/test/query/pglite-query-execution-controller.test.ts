@@ -187,6 +187,58 @@ describe('QueryExecutionController — PGlite path', () => {
 			expect(sequence.rows).toEqual([{ last_value: 1, is_called: false }]);
 		});
 
+		it('rolls back session settings so they do not leak to later requests', async () => {
+			const first = mockRes();
+			await controller.executeQuery(
+				mockReq({
+					connectionInfo: VALID_PGLITE_CONN,
+					query: "SELECT set_config('search_path', 'pg_catalog', false) AS path;",
+				}),
+				first.res,
+			);
+			expect(first.status).toHaveBeenCalledWith(200);
+
+			const second = mockRes();
+			await controller.executeQuery(
+				mockReq({
+					connectionInfo: VALID_PGLITE_CONN,
+					query: 'SELECT id, name FROM products ORDER BY id;',
+				}),
+				second.res,
+			);
+			expect(second.status).toHaveBeenCalledWith(200);
+			expect(second.json).toHaveBeenCalledWith({
+				rows: [
+					{ id: 1, name: 'Widget' },
+					{ id: 2, name: 'Gadget' },
+				],
+				rowCount: 2,
+			});
+		});
+
+		it('rolls back temporary-table writes performed by functions', async () => {
+			await pgliteDb.exec(`
+				CREATE TEMP TABLE scratch (id integer);
+				CREATE FUNCTION write_scratch() RETURNS integer LANGUAGE SQL AS $$
+					INSERT INTO scratch VALUES (1);
+					SELECT count(*)::integer FROM scratch;
+				$$;
+			`);
+			const { res, status, json } = mockRes();
+			await controller.executeQuery(
+				mockReq({
+					connectionInfo: VALID_PGLITE_CONN,
+					query: 'SELECT write_scratch() AS n;',
+				}),
+				res,
+			);
+			expect(status).toHaveBeenCalledWith(200);
+			expect(json).toHaveBeenCalledWith({ rows: [{ n: 1 }], rowCount: 1 });
+			expect(
+				(await pgliteDb.query('SELECT count(*)::integer AS n FROM scratch')).rows,
+			).toEqual([{ n: 0 }]);
+		});
+
 		it('returns 200 for a valid SELECT', async () => {
 			const { res, status } = mockRes();
 			await controller.executeQuery(
