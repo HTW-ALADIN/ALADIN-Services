@@ -124,6 +124,24 @@ describe('QueryExecutionController — PGlite path', () => {
 	// -----------------------------------------------------------------------
 
 	describe('executeQuery — PGlite integration', () => {
+		it.each([
+			['SELECT 42 AS answer;', { answer: 42 }],
+			['SELECT 6 * 7 AS answer; -- trailing ;', { answer: 42 }],
+			['/* leading ; */ SELECT 42 AS answer; /* trailing ; */', { answer: 42 }],
+			["SELECT 'it''s; safe' AS answer;", { answer: "it's; safe" }],
+			['SELECT $$semi;colon$$ AS answer;', { answer: 'semi;colon' }],
+			['SELECT 42 AS "semi;colon";', { 'semi;colon': 42 }],
+			['SELECT 42 AS answer;;', { answer: 42 }],
+		])('executes a terminated SELECT: %s', async (query, row) => {
+			const { res, status, json } = mockRes();
+			await controller.executeQuery(
+				mockReq({ connectionInfo: VALID_PGLITE_CONN, query }),
+				res,
+			);
+			expect(status).toHaveBeenCalledWith(200);
+			expect(json).toHaveBeenCalledWith({ rows: [row], rowCount: 1 });
+		});
+
 		it('returns 200 for a valid SELECT', async () => {
 			const { res, status } = mockRes();
 			await controller.executeQuery(

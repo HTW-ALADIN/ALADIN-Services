@@ -117,16 +117,19 @@ export class QueryExecutionService {
 			);
 		}
 
-		// node-sql-parser returns an array for multi-statement input.
-		if (Array.isArray(ast)) {
+		// node-sql-parser returns an array both for multi-statement input and
+		// for a single statement that ends with a terminator (e.g. `SELECT 1;`).
+		const statements = Array.isArray(ast) ? ast : [ast];
+		if (statements.length > 1) {
 			throw new QueryExecutionError(
 				t('QUERY_MULTIPLE_STATEMENTS', lang),
 				'MULTIPLE_STATEMENTS',
 			);
 		}
 
-		if (!ast || ast.type !== 'select') {
-			const type = ast?.type ?? 'unknown';
+		const statement = statements[0];
+		if (!statement || statement.type !== 'select') {
+			const type = statement?.type ?? 'unknown';
 			throw new QueryExecutionError(
 				t('QUERY_NON_SELECT', lang, type),
 				'NON_SELECT',

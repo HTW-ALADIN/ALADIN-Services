@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { IMemoryDb, IBackup } from 'pg-mem';
 import { DataSource } from 'typeorm';
 import { createTestDb } from '../helpers/pg-mem-factory';
@@ -27,10 +27,57 @@ afterAll(async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Shared execution harness
+// ---------------------------------------------------------------------------
+
+function createExecution(backend: string) {
+    const rows = [{ answer: 42 }];
+    const query = vi.fn().mockResolvedValue(backend === 'PGlite' ? { rows } : rows);
+    const release = vi.fn().mockResolvedValue(undefined);
+    const createQueryRunner = vi.fn().mockReturnValue({ query, release });
+    const execute = (sql: string) => backend === 'PGlite'
+        ? service.executeQueryOnPGlite(sql, { query })
+        : service.executeQuery(sql, { createQueryRunner } as unknown as DataSource);
+    return { execute, query, createQueryRunner, release };
+}
+
+// ---------------------------------------------------------------------------
 // Happy-path execution
 // ---------------------------------------------------------------------------
 
 describe('QueryExecutionService', () => {
+    describe.each(['PostgreSQL', 'PGlite'])('%s SELECT terminator handling', (backend) => {
+        it.each([
+            'SELECT 42 AS answer',
+            'SELECT 6 * 7 AS answer;',
+            ' \n SELECT 42 AS answer; \t ',
+            '/* leading ; */ SELECT 42 AS answer /* before ; */; -- trailing ;',
+            'SELECT 42 AS answer; /* trailing ; SELECT 1; */',
+            'SELECT 42 AS answer -- comment ;\n;',
+            "SELECT 'semi;colon' AS answer;",
+            "SELECT 'it''s; safe' AS answer;",
+            'SELECT $$semi;colon$$ AS answer;',
+            'SELECT 42 AS "semi;colon";',
+            'WITH c AS (SELECT 42 AS answer) SELECT * FROM c;',
+            'SELECT 42 AS answer UNION ALL SELECT 1 AS answer;',
+            'SELECT 42 AS answer;;',
+        ])('accepts one SELECT without rewriting SQL: %s', async (sql) => {
+            const { execute, query, release } = createExecution(backend);
+            await expect(execute(sql)).resolves.toEqual({ rows: [{ answer: 42 }], rowCount: 1 });
+            expect(query).toHaveBeenCalledExactlyOnceWith(sql.trim());
+            if (backend === 'PostgreSQL') expect(release).toHaveBeenCalledOnce();
+        });
+
+        it.each([';', ';;', '-- comment only;', '/* comment only; */'])(
+            'rejects a query with no statement: %s',
+            async (sql) => {
+                const { execute, query } = createExecution(backend);
+                await expect(execute(sql)).rejects.toMatchObject({ code: 'NON_SELECT' });
+                expect(query).not.toHaveBeenCalled();
+            },
+        );
+    });
+
     describe('executeQuery — happy path', () => {
 
         it('returns rows and correct rowCount for a simple SELECT *', async () => {
