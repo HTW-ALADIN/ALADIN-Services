@@ -9,6 +9,16 @@ import { t, SupportedLanguage } from '../shared/i18n';
  */
 const MUTATING_NODE_TYPES = new Set(['insert', 'update', 'delete', 'into']);
 
+export interface QueryExecutionServiceOptions {
+	/**
+	 * Run every query inside a read-only transaction so the database itself
+	 * rejects writes that the AST check cannot see (e.g. `SELECT nextval(...)`
+	 * or a volatile function).  Production backends (PostgreSQL and PGlite)
+	 * support `SET TRANSACTION READ ONLY`; disable only for engines that do
+	 * not, such as the pg-mem test adapter.
+	 */
+	enforceReadOnly?: boolean;
+}
 
 /**
  * Executes a raw SQL SELECT query against a live DataSource and returns the
@@ -19,12 +29,17 @@ const MUTATING_NODE_TYPES = new Set(['insert', 'update', 'delete', 'into']);
  *  - Ensure only SELECT statements are accepted (INSERT / UPDATE / DELETE /
  *    DDL are rejected before hitting the database).
  *  - Execute the query via a TypeORM QueryRunner so the DataSource lifecycle
- *    (connection pool) is respected.
+ *    (connection pool) is respected, inside a read-only transaction.
  *  - Translate database-level errors into a structured error with a
  *    human-readable, localised message.
  */
 export class QueryExecutionService {
 	private readonly parser = new Parser();
+	private readonly enforceReadOnly: boolean;
+
+	constructor(options: QueryExecutionServiceOptions = {}) {
+		this.enforceReadOnly = options.enforceReadOnly ?? true;
+	}
 
 	/**
 	 * Executes the given SQL query and returns the rows.
@@ -50,7 +65,13 @@ export class QueryExecutionService {
 		this.assertSelectOnly(trimmed, lang);
 
 		const queryRunner = dataSource.createQueryRunner();
+		let inTransaction = false;
 		try {
+			if (this.enforceReadOnly) {
+				await queryRunner.startTransaction();
+				inTransaction = true;
+				await queryRunner.query('SET TRANSACTION READ ONLY');
+			}
 			const rows: Record<string, unknown>[] = await queryRunner.query(trimmed);
 			return { rows, rowCount: rows.length };
 		} catch (err) {
@@ -63,6 +84,9 @@ export class QueryExecutionService {
 				'EXECUTION_FAILED',
 			);
 		} finally {
+			if (inTransaction) {
+				await queryRunner.rollbackTransaction().catch(() => undefined);
+			}
 			await queryRunner.release();
 		}
 	}
@@ -70,6 +94,9 @@ export class QueryExecutionService {
 	/**
 	 * Executes the given SQL SELECT query against an in-process PGlite
 	 * database.  Enforces the same SELECT-only constraint as `executeQuery`.
+	 *
+	 * PGlite serialises `db.transaction()` calls internally, so the shared
+	 * instance can safely hold a short-lived read-only transaction.
 	 *
 	 * @param query - Raw SQL string to execute.
 	 * @param db    - Live PGlite instance.
@@ -92,7 +119,12 @@ export class QueryExecutionService {
 		this.assertSelectOnly(trimmed, lang);
 
 		try {
-			const result = await db.query(trimmed);
+			const result = this.enforceReadOnly
+				? await db.transaction(async (tx: any) => {
+					await tx.query('SET TRANSACTION READ ONLY');
+					return tx.query(trimmed);
+				})
+				: await db.query(trimmed);
 			const rows = result.rows as Record<string, unknown>[];
 			return { rows, rowCount: rows.length };
 		} catch (err) {

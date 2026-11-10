@@ -167,6 +167,26 @@ describe('QueryExecutionController — PGlite path', () => {
 			).toEqual([]);
 		});
 
+		it('enforces read-only at the database level for volatile functions', async () => {
+			await pgliteDb.exec('CREATE SEQUENCE readonly_probe_seq');
+			const { res, status, json } = mockRes();
+			await controller.executeQuery(
+				mockReq({
+					connectionInfo: VALID_PGLITE_CONN,
+					query: "SELECT nextval('readonly_probe_seq') AS value;",
+				}),
+				res,
+			);
+			expect(status).toHaveBeenCalledWith(500);
+			expect(json).toHaveBeenCalledWith(
+				expect.objectContaining({ code: 'EXECUTION_FAILED' }),
+			);
+			const sequence = await pgliteDb.query(
+				'SELECT last_value, is_called FROM readonly_probe_seq',
+			);
+			expect(sequence.rows).toEqual([{ last_value: 1, is_called: false }]);
+		});
+
 		it('returns 200 for a valid SELECT', async () => {
 			const { res, status } = mockRes();
 			await controller.executeQuery(

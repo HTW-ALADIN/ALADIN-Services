@@ -58,7 +58,8 @@ beforeAll(async () => {
 beforeEach(() => {
     backup.restore();
     databaseMetadata.set(DB_KEY, []);
-    service = new QueryExecutionService();
+    // pg-mem does not implement `SET TRANSACTION READ ONLY`.
+    service = new QueryExecutionService({ enforceReadOnly: false });
     controller = new QueryExecutionController(service);
 });
 

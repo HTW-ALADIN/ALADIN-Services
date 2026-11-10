@@ -19,7 +19,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
     backup.restore();
-    service = new QueryExecutionService();
+    // pg-mem does not implement `SET TRANSACTION READ ONLY`, so the pg-mem
+    // suites opt out; dedicated tests below cover the read-only transaction.
+    service = new QueryExecutionService({ enforceReadOnly: false });
 });
 
 afterAll(async () => {
@@ -110,6 +112,82 @@ describe('QueryExecutionService', () => {
             const { execute, query } = createExecution(backend);
             await expect(execute(sql)).resolves.toBeDefined();
             expect(query).toHaveBeenCalledOnce();
+        });
+    });
+
+    describe('read-only transaction enforcement', () => {
+        it('runs PostgreSQL queries in a read-only transaction and rolls back', async () => {
+            const readOnlyService = new QueryExecutionService();
+            const query = vi.fn().mockResolvedValue([{ answer: 42 }]);
+            const startTransaction = vi.fn().mockResolvedValue(undefined);
+            const rollbackTransaction = vi.fn().mockResolvedValue(undefined);
+            const release = vi.fn().mockResolvedValue(undefined);
+            const createQueryRunner = vi.fn().mockReturnValue({
+                query,
+                startTransaction,
+                rollbackTransaction,
+                release,
+            });
+
+            await expect(
+                readOnlyService.executeQuery(
+                    'SELECT 42 AS answer',
+                    { createQueryRunner } as unknown as DataSource,
+                ),
+            ).resolves.toEqual({ rows: [{ answer: 42 }], rowCount: 1 });
+
+            expect(startTransaction).toHaveBeenCalledOnce();
+            expect(query).toHaveBeenNthCalledWith(1, 'SET TRANSACTION READ ONLY');
+            expect(query).toHaveBeenNthCalledWith(2, 'SELECT 42 AS answer');
+            expect(rollbackTransaction).toHaveBeenCalledOnce();
+            expect(release).toHaveBeenCalledOnce();
+        });
+
+        it('rolls back and reports EXECUTION_FAILED when the database rejects a write', async () => {
+            const readOnlyService = new QueryExecutionService();
+            const query = vi.fn()
+                .mockResolvedValueOnce(undefined)
+                .mockRejectedValueOnce(
+                    new Error('cannot execute nextval() in a read-only transaction'),
+                );
+            const startTransaction = vi.fn().mockResolvedValue(undefined);
+            const rollbackTransaction = vi.fn().mockResolvedValue(undefined);
+            const release = vi.fn().mockResolvedValue(undefined);
+            const createQueryRunner = vi.fn().mockReturnValue({
+                query,
+                startTransaction,
+                rollbackTransaction,
+                release,
+            });
+
+            await expect(
+                readOnlyService.executeQuery(
+                    "SELECT nextval('seq')",
+                    { createQueryRunner } as unknown as DataSource,
+                ),
+            ).rejects.toMatchObject({ code: 'EXECUTION_FAILED' });
+
+            expect(rollbackTransaction).toHaveBeenCalledOnce();
+            expect(release).toHaveBeenCalledOnce();
+        });
+
+        it('runs PGlite queries in a read-only transaction', async () => {
+            const readOnlyService = new QueryExecutionService();
+            const txQuery = vi.fn()
+                .mockResolvedValueOnce(undefined)
+                .mockResolvedValueOnce({ rows: [{ answer: 42 }] });
+            const transaction = vi.fn(
+                async (callback: (tx: unknown) => Promise<unknown>) =>
+                    callback({ query: txQuery }),
+            );
+
+            await expect(
+                readOnlyService.executeQueryOnPGlite('SELECT 42 AS answer', { transaction }),
+            ).resolves.toEqual({ rows: [{ answer: 42 }], rowCount: 1 });
+
+            expect(transaction).toHaveBeenCalledOnce();
+            expect(txQuery).toHaveBeenNthCalledWith(1, 'SET TRANSACTION READ ONLY');
+            expect(txQuery).toHaveBeenNthCalledWith(2, 'SELECT 42 AS answer');
         });
     });
 
