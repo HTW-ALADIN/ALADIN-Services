@@ -1,0 +1,50 @@
+{
+  "description": "a single node of type wolke: the file is fine, the notation does not know the type. In addition the rest of the reference solution counts as missing, and without a paired label the diff asks about the task",
+  "covers": [
+    "FK-2.4"
+  ],
+  "classes": {
+    "ohne Katalogeintrag": {
+      "instances": 1,
+      "claims": 1,
+      "consequences": 0
+    },
+    "entity_missing": {
+      "instances": 2,
+      "claims": 8,
+      "consequences": 6
+    },
+    "relationship_missing": {
+      "instances": 1,
+      "claims": 3,
+      "consequences": 2
+    },
+    "no_name_fits": {
+      "instances": 1,
+      "claims": 0,
+      "consequences": 0
+    },
+    "unknown_type_or_value": {
+      "instances": 1,
+      "claims": 0,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 5,
+    "deductions": {
+      "entity_missing": 3,
+      "relationship_missing": 2,
+      "no_name_fits": 0,
+      "unknown_type_or_value": 0
+    }
+  },
+  "sentences": [
+    "Kein Bezeichner passt zur Musterlösung; ist das die richtige Aufgabe?",
+    "Unbekannter Typ oder Wert: Knoten 'kunde': unbekannter Knotentyp 'wolke'",
+    "Abweichung an »Kunde« »Kunde« ohne Katalogeintrag: nicht automatisch bewertet",
+    "Entität »Auto« fehlt -- damit auch Attribut »FIN«, Attribut »Marke« und zwei Kanten",
+    "Entität »Kunde« fehlt -- damit auch Attribut »Name« und eine Kante",
+    "Beziehung »mietet« fehlt zwischen »Auto« und »Kunde« -- damit auch zwei Kanten"
+  ]
+}

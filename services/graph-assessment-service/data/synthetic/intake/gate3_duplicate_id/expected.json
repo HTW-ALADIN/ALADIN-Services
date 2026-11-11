@@ -1,0 +1,23 @@
+{
+  "description": "two nodes with the same id -- gate 3 checks what the schema cannot express",
+  "covers": [
+    "FK-1.1"
+  ],
+  "rejected": "doppelte id 'kunde'",
+  "classes": {
+    "submission_rejected": {
+      "instances": 1,
+      "claims": 0,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {
+      "submission_rejected": 0
+    }
+  },
+  "sentences": [
+    "Die Einsendung wird abgewiesen: submission.json: nodes[1]: doppelte id 'kunde'"
+  ]
+}

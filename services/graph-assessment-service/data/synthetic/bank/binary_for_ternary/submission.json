@@ -1,0 +1,418 @@
+{
+  "schema": "erd_schlageter.v1",
+  "graph": {},
+  "nodes": [
+    {
+      "id": "bank",
+      "type": "entity",
+      "label": "Bank"
+    },
+    {
+      "id": "filiale",
+      "type": "entity",
+      "label": "Filiale",
+      "weak": true
+    },
+    {
+      "id": "mitarbeiter",
+      "type": "entity",
+      "label": "Mitarbeiter"
+    },
+    {
+      "id": "kunde",
+      "type": "entity",
+      "label": "Kunde"
+    },
+    {
+      "id": "konto",
+      "type": "entity",
+      "label": "Konto"
+    },
+    {
+      "id": "hat",
+      "type": "relationship",
+      "label": "hat"
+    },
+    {
+      "id": "gehoert_zu",
+      "type": "relationship",
+      "label": "gehört zu"
+    },
+    {
+      "id": "leitet",
+      "type": "relationship",
+      "label": "leitet"
+    },
+    {
+      "id": "besitzt",
+      "type": "relationship",
+      "label": "besitzt"
+    },
+    {
+      "id": "fuehrt",
+      "type": "relationship",
+      "label": "führt"
+    },
+    {
+      "id": "bank_name",
+      "type": "attribute",
+      "label": "Name",
+      "key": "primary"
+    },
+    {
+      "id": "filiale_nr",
+      "type": "attribute",
+      "label": "FilialNr",
+      "key": "partial"
+    },
+    {
+      "id": "filiale_ort",
+      "type": "attribute",
+      "label": "Ort"
+    },
+    {
+      "id": "mitarbeiter_persnr",
+      "type": "attribute",
+      "label": "PersNr",
+      "key": "primary"
+    },
+    {
+      "id": "mitarbeiter_name",
+      "type": "attribute",
+      "label": "Name"
+    },
+    {
+      "id": "kunde_nr",
+      "type": "attribute",
+      "label": "KundenNr",
+      "key": "primary"
+    },
+    {
+      "id": "konto_nr",
+      "type": "attribute",
+      "label": "KontoNr",
+      "key": "primary"
+    },
+    {
+      "id": "konto_saldo",
+      "type": "attribute",
+      "label": "Saldo"
+    },
+    {
+      "id": "bedient",
+      "type": "relationship",
+      "label": "bedient"
+    },
+    {
+      "id": "prueft",
+      "type": "relationship",
+      "label": "prüft"
+    }
+  ],
+  "edges": [
+    {
+      "endpoints": [
+        {
+          "id": "bank"
+        },
+        {
+          "id": "bank_name"
+        }
+      ]
+    },
+    {
+      "endpoints": [
+        {
+          "id": "filiale"
+        },
+        {
+          "id": "filiale_nr"
+        }
+      ]
+    },
+    {
+      "endpoints": [
+        {
+          "id": "filiale"
+        },
+        {
+          "id": "filiale_ort"
+        }
+      ]
+    },
+    {
+      "endpoints": [
+        {
+          "id": "mitarbeiter"
+        },
+        {
+          "id": "mitarbeiter_persnr"
+        }
+      ]
+    },
+    {
+      "endpoints": [
+        {
+          "id": "mitarbeiter"
+        },
+        {
+          "id": "mitarbeiter_name"
+        }
+      ]
+    },
+    {
+      "endpoints": [
+        {
+          "id": "kunde"
+        },
+        {
+          "id": "kunde_nr"
+        }
+      ]
+    },
+    {
+      "endpoints": [
+        {
+          "id": "konto"
+        },
+        {
+          "id": "konto_nr"
+        }
+      ]
+    },
+    {
+      "endpoints": [
+        {
+          "id": "konto"
+        },
+        {
+          "id": "konto_saldo"
+        }
+      ]
+    },
+    {
+      "endpoints": [
+        {
+          "id": "bank"
+        },
+        {
+          "id": "hat"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "1",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "filiale"
+        },
+        {
+          "id": "hat"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "n",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "filiale"
+        },
+        {
+          "id": "gehoert_zu"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "1",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "mitarbeiter"
+        },
+        {
+          "id": "gehoert_zu"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "n",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "mitarbeiter"
+        },
+        {
+          "id": "leitet"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "1",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "mitarbeiter"
+        },
+        {
+          "id": "leitet"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "n",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "kunde"
+        },
+        {
+          "id": "besitzt"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "1",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "konto"
+        },
+        {
+          "id": "besitzt"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "n",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "bank"
+        },
+        {
+          "id": "fuehrt"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "1",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "konto"
+        },
+        {
+          "id": "fuehrt"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "n",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "mitarbeiter"
+        },
+        {
+          "id": "bedient"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "n",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "kunde"
+        },
+        {
+          "id": "bedient"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "m",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "mitarbeiter"
+        },
+        {
+          "id": "prueft"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "n",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "konto"
+        },
+        {
+          "id": "prueft"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "m",
+          ""
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "schema": "erd_schlageter.v1",
+  "nodes": [
+    {
+      "id": "K",
+      "type": "entity",
+      "label": "Kunde"
+    },
+    {
+      "id": "A",
+      "type": "entity",
+      "label": "Auto"
+    },
+    {
+      "id": "M",
+      "type": "relationship",
+      "label": "mietet"
+    },
+    {
+      "id": "KN",
+      "type": "attribute",
+      "label": "Name",
+      "key": "primary"
+    },
+    {
+      "id": "AF",
+      "type": "attribute",
+      "label": "FIN",
+      "key": "primary"
+    },
+    {
+      "id": "AM",
+      "type": "attribute",
+      "label": "Marke"
+    }
+  ],
+  "edges": [
+    {
+      "endpoints": [
+        {
+          "id": "K"
+        },
+        {
+          "id": "M"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "n",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "A"
+        },
+        {
+          "id": "M"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "1",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "K"
+        },
+        {
+          "id": "KN"
+        }
+      ]
+    },
+    {
+      "endpoints": [
+        {
+          "id": "A"
+        },
+        {
+          "id": "AF"
+        }
+      ]
+    },
+    {
+      "endpoints": [
+        {
+          "id": "A"
+        },
+        {
+          "id": "AM"
+        }
+      ]
+    }
+  ]
+}

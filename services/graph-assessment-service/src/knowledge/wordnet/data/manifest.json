@@ -1,0 +1,12 @@
+{
+  "lexicons": {
+    "odenet:1.4": {
+      "lmf_file": "5a26d97a0081996db4cd621638a8a9b0da09aa25",
+      "lmf_sha256": "d55407c48056ab3bc20d14d4d376de1799541fa0c9e34a82617dbb531c67ba2b",
+      "synsets": 36268,
+      "version": "1.4",
+      "license": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "fetched": "2026-09-21"
+    }
+  }
+}

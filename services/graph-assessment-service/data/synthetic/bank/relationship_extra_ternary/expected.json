@@ -1,0 +1,20 @@
+{
+  "description": "a ternary relationship »eröffnet« (Filiale, Kunde, Konto) that the reference solution does not have. The catalog has no class of its own for it (only FK-3.6, in the missing direction); the signature falls back to FK-4.3 relationship extra",
+  "covers": [],
+  "classes": {
+    "relationship_extra": {
+      "instances": 1,
+      "claims": 4,
+      "consequences": 3
+    }
+  },
+  "points": {
+    "total": 1,
+    "deductions": {
+      "relationship_extra": 1
+    }
+  },
+  "sentences": [
+    "Beziehung »eröffnet« zwischen »Filiale«, »Konto« und »Kunde« ist zu viel -- damit auch drei Kanten"
+  ]
+}

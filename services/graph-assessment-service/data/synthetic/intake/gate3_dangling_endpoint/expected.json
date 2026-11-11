@@ -1,0 +1,23 @@
+{
+  "description": "an edge to an id that does not exist -- gate 3 rejects",
+  "covers": [
+    "FK-1.1"
+  ],
+  "rejected": "'gibt_es_nicht' ist kein bekannter Knoten",
+  "classes": {
+    "submission_rejected": {
+      "instances": 1,
+      "claims": 0,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {
+      "submission_rejected": 0
+    }
+  },
+  "sentences": [
+    "Die Einsendung wird abgewiesen: submission.json: edges[0].endpoints[1]: 'gibt_es_nicht' ist kein bekannter Knoten"
+  ]
+}

@@ -1,0 +1,9 @@
+# built locally by "python -m src.knowledge.wordnet" (about 44 MB)
+src/knowledge/wordnet/data/wn.db
+
+# raw OdeNet LMF download, cached by the same step (about 2.4 MB);
+# manifest.json keeps its SHA-256
+src/knowledge/wordnet/data/downloads/
+
+# written by a run when config.COLLECT_GLOSSARY is on
+glossary/

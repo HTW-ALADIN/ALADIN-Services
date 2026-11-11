@@ -1,0 +1,22 @@
+{
+  "description": "FilialNr is marked as primary key; the partial key is expected -- the reverse direction of key_wrong, the same class 'key kind wrong'",
+  "covers": [
+    "FK-5.4"
+  ],
+  "classes": {
+    "key_wrong": {
+      "instances": 1,
+      "claims": 1,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {
+      "key_wrong": 0
+    }
+  },
+  "sentences": [
+    "Attribut »FilialNr«: die Schlüsselart sollte partial sein"
+  ]
+}

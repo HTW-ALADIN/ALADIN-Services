@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "diff_ops.schema.json",
+  "type": "array",
+  "items": {
+    "oneOf": [
+      { "$ref": "#/$defs/node_op" },
+      { "$ref": "#/$defs/edge_op" }
+    ]
+  },
+
+  "$defs": {
+
+    "node_op": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "id"],
+      "properties": {
+        "op": { "enum": ["add", "remove", "modify"] },
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "$ref": "#/$defs/node_type" },
+        "properties": { "$ref": "#/$defs/node_properties" },
+        "ref_id": { "type": "string", "minLength": 1 },
+        "assumed": { "$ref": "#/$defs/assumed" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "op": { "const": "add" } }, "required": ["op"] },
+          "then": { "required": ["type"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "remove" } }, "required": ["op"] },
+          "then": { "not": { "required": ["properties"] } }
+        }
+      ]
+    },
+
+    "edge_op": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "endpoints"],
+      "properties": {
+        "op": { "enum": ["add", "remove", "modify"] },
+        "endpoints": { "$ref": "#/$defs/id_pair" },
+        "properties": { "$ref": "#/$defs/edge_properties" },
+        "ref_endpoints": { "$ref": "#/$defs/id_pair" },
+        "assumed": { "$ref": "#/$defs/assumed" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "op": { "const": "remove" } }, "required": ["op"] },
+          "then": { "not": { "required": ["properties"] } }
+        }
+      ]
+    },
+
+    "id_pair": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "type": "string", "minLength": 1 }
+    },
+
+    "node_type": {
+      "enum": ["entity", "relationship", "isa", "attribute"]
+    },
+
+    "node_properties": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string" },
+        "key": { "enum": ["none", "primary", "partial"] },
+        "weak": { "type": "boolean" }
+      }
+    },
+
+    "edge_properties": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cardinality": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "enum": ["1", "n", "m", ""] }
+        },
+        "supertype": { "type": "boolean" }
+      }
+    },
+
+    "assumed": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "group": { "$ref": "#/$defs/group" },
+        "pair": { "$ref": "#/$defs/id_pair" },
+        "source": { "enum": ["interchangeable", "region", "owner"] }
+      },
+      "oneOf": [
+        { "required": ["group"] },
+        { "required": ["pair", "source"] }
+      ]
+    },
+
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["refs", "candidates", "pairs"],
+      "properties": {
+        "refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "candidates": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "pairs": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } }
+      }
+    }
+  }
+}

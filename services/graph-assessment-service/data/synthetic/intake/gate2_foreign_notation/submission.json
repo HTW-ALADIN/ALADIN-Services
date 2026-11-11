@@ -1,0 +1,11 @@
+{
+  "schema": "uml.v1",
+  "nodes": [
+    {
+      "id": "kunde",
+      "type": "entity",
+      "label": "Kunde"
+    }
+  ],
+  "edges": []
+}

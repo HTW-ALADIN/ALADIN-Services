@@ -1,0 +1,22 @@
+{
+  "description": "FilialNr at the weak entity Filiale carries no key kind; partial is expected",
+  "covers": [
+    "FK-5.2"
+  ],
+  "classes": {
+    "key_missing_partial": {
+      "instances": 1,
+      "claims": 1,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {
+      "key_missing_partial": 0
+    }
+  },
+  "sentences": [
+    "Attribut »FilialNr« ist nicht als Partial Key gekennzeichnet"
+  ]
+}

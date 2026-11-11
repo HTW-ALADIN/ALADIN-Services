@@ -1,0 +1,40 @@
+{
+  "name": "erd_schlageter",
+  "graph_class": "MultiGraph",
+
+  "node_types": {
+    "entity":       { "name": "Entität",  "properties": { "weak": { "type": "boolean", "default": false } } },
+    "relationship": { "name": "Beziehung" },
+    "isa":          { "name": "IS-A" },
+    "attribute":    { "name": "Attribut", "properties": { "key": { "enum": ["none", "primary", "partial"], "default": "none" } } }
+  },
+
+  "edge_properties": {
+    "cardinality": {
+      "tuple": [
+        { "enum": ["1", "n", "m", ""] },
+        { "enum": ["1", "n", "m", ""] }
+      ]
+    },
+    "supertype":   { "type": "boolean", "default": false }
+  },
+  "equivalents": [ ["n", "m"] ],
+
+  "allowed_edges": [
+    { "between": [ ["entity", "relationship", "attribute"], ["attribute"] ] },
+    { "between": [ ["entity"], ["relationship"] ], "properties": ["cardinality"] },
+    { "between": [ ["entity"], ["isa"] ],          "properties": ["supertype"] }
+  ],
+
+  "units": [
+    { "anchor": "entity",       "references": [] },
+    { "anchor": "isa",          "references": [ { "role": "involved",    "target": ["entity"] } ] },
+    { "anchor": "relationship", "references": [ { "role": "participant", "target": ["entity"] } ] },
+    { "anchor": "attribute",    "references": [ { "role": "owner",       "target": ["entity", "relationship", "attribute"] } ],
+      "adornment": true }
+  ],
+
+  "regeln": {
+    "connected": true
+  }
+}

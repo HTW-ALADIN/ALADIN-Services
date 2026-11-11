@@ -1,0 +1,36 @@
+{
+  "description": "an entity with the property farbe: the file is fine, the notation does not know the property on this node type",
+  "covers": [
+    "FK-2.4"
+  ],
+  "classes": {
+    "entity_missing": {
+      "instances": 1,
+      "claims": 8,
+      "consequences": 7
+    },
+    "attribute_missing": {
+      "instances": 1,
+      "claims": 2,
+      "consequences": 1
+    },
+    "unknown_type_or_value": {
+      "instances": 1,
+      "claims": 0,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 5,
+    "deductions": {
+      "entity_missing": 3,
+      "attribute_missing": 2,
+      "unknown_type_or_value": 0
+    }
+  },
+  "sentences": [
+    "Unbekannter Typ oder Wert: Knoten 'kunde': 'farbe' steht nicht an einem Knoten vom Typ 'entity'",
+    "Entität »Auto« fehlt -- damit auch Attribut »FIN«, Attribut »Marke«, Beziehung »mietet« und vier Kanten",
+    "Attribut »Name« fehlt an »Kunde«"
+  ]
+}

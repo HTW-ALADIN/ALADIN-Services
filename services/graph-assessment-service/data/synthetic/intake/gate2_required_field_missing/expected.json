@@ -1,0 +1,23 @@
+{
+  "description": "a node without type -- the exchange format requires it, gate 2 rejects",
+  "covers": [
+    "FK-1.1"
+  ],
+  "rejected": "'type' is a required property",
+  "classes": {
+    "submission_rejected": {
+      "instances": 1,
+      "claims": 0,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {
+      "submission_rejected": 0
+    }
+  },
+  "sentences": [
+    "Die Einsendung wird abgewiesen: submission.json: $.nodes[0]: 'type' is a required property"
+  ]
+}

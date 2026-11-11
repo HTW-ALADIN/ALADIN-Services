@@ -1,0 +1,28 @@
+{
+  "description": "instead of the ternary relationship »betreut« two binary ones: Mitarbeiter--bedient--Kunde and Mitarbeiter--prüft--Konto. Found via the compound piece (declaration sub_verbund, src/transform/match.py): the two binary relationships are each a piece of their own, because they only touch via paired entities, and are read as one between the three anchors -- conditionally equivalent, not allowed, so an error",
+  "covers": [
+    "FK-6.13"
+  ],
+  "transformations": [
+    {
+      "name": "binary_for_ternary",
+      "variant": ""
+    }
+  ],
+  "classes": {
+    "binary_for_ternary": {
+      "instances": 1,
+      "claims": 10,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {
+      "binary_for_ternary": 0
+    }
+  },
+  "sentences": [
+    "»bedient« und »prüft« sind als binäre Beziehungen modelliert; erwartet ist die eine Beziehung »betreut« zwischen »Konto«, »Kunde« und »Mitarbeiter«"
+  ]
+}

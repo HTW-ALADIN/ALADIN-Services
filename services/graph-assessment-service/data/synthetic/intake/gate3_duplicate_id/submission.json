@@ -1,0 +1,16 @@
+{
+  "schema": "erd_schlageter.v1",
+  "nodes": [
+    {
+      "id": "kunde",
+      "type": "entity",
+      "label": "Kunde"
+    },
+    {
+      "id": "kunde",
+      "type": "entity",
+      "label": "Kunde (nochmal)"
+    }
+  ],
+  "edges": []
+}

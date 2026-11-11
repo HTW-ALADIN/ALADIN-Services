@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "nodes", "edges"],
+  "properties": {
+    "schema": { "const": "erd_schlageter.v1" },
+    "graph":  { "type": "object" },
+
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id":    { "type": "string", "minLength": 1 },
+          "type":  { "type": "string" },
+          "label": { "type": "string" }
+        }
+      }
+    },
+
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["endpoints"],
+        "properties": {
+          "endpoints": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id"],
+              "properties": { "id": { "type": "string", "minLength": 1 } }
+            }
+          },
+          "properties": { "type": "object" }
+        }
+      }
+    }
+  }
+}

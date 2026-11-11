@@ -1,0 +1,22 @@
+{
+  "description": "the ternary relationship »betreut« (Mitarbeiter, Kunde, Konto) is missing together with its three edges",
+  "covers": [
+    "FK-3.6"
+  ],
+  "classes": {
+    "ternary_relationship_missing": {
+      "instances": 1,
+      "claims": 4,
+      "consequences": 3
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {
+      "ternary_relationship_missing": 0
+    }
+  },
+  "sentences": [
+    "Ternäre Beziehung »betreut« fehlt zwischen »Konto«, »Kunde« und »Mitarbeiter« -- damit auch drei Kanten"
+  ]
+}

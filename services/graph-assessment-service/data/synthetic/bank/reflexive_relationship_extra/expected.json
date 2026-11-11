@@ -1,0 +1,22 @@
+{
+  "description": "a second reflexive relationship »vertritt« at Mitarbeiter that the reference solution does not have",
+  "covers": [
+    "FK-4.5"
+  ],
+  "classes": {
+    "reflexive_relationship_extra": {
+      "instances": 1,
+      "claims": 3,
+      "consequences": 2
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {
+      "reflexive_relationship_extra": 0
+    }
+  },
+  "sentences": [
+    "Reflexive Beziehung »vertritt« an »Mitarbeiter« ist zu viel -- damit auch zwei Kanten"
+  ]
+}

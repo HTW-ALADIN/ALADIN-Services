@@ -1,0 +1,22 @@
+{
+  "schema": "erd_schlageter.v1",
+  "nodes": [
+    {
+      "id": "kunde",
+      "type": "entity",
+      "label": "Kunde"
+    }
+  ],
+  "edges": [
+    {
+      "endpoints": [
+        {
+          "id": "kunde"
+        },
+        {
+          "id": "gibt_es_nicht"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "schema": "umformungen.v1",
+  "notation": "erd_schlageter",
+
+  "umformungen": [
+    {
+      "name": "attribute_for_isa",
+      "kind": "piece",
+      "anker": 1,
+      "ref": {"isa": 1, "entity": 2},
+      "sub": {"attribute": 1},
+      "aequivalent": "n. n.",
+      "allowed": false
+    },
+    {
+      "name": "relation_for_isa",
+      "variante": "entity",
+      "kind": "piece",
+      "anker": 1,
+      "ref": {"isa": 1, "entity": 2},
+      "sub": {"entity": 1, "relationship": 1, "attribute": "*"},
+      "aequivalent": "n. n.",
+      "allowed": false
+    },
+    {
+      "name": "attribute_for_relationship",
+      "variante": "ohne_attribut",
+      "kind": "piece",
+      "anker": 1,
+      "ref": {"relationship": 1, "entity": 1},
+      "sub": {"attribute": 1},
+      "ref_ohne": {"entity": {"weak": [true]}},
+      "aequivalent": "n. n.",
+      "allowed": false
+    },
+    {
+      "name": "attribute_for_relationship",
+      "variante": "schwache_entity",
+      "kind": "piece",
+      "anker": 1,
+      "ref": {"relationship": 1, "entity": 1, "attribute": "*"},
+      "sub": {"attribute": 1},
+      "ref_mit": {"entity": {"weak": [true]}},
+      "aequivalent": "n. n.",
+      "allowed": false
+    },
+    {
+      "name": "attribute_for_entity",
+      "kind": "piece",
+      "anker": 1,
+      "ref": {"relationship": 1, "entity": 1, "attribute": 1},
+      "sub": {"attribute": 1},
+      "ref_ohne": {"entity": {"weak": [true]}},
+      "ref_kanten": {"stueck": {"cardinality": ["1", ""]}, "anker": {"cardinality": ["n", ""]}},
+      "aequivalent": "ja",
+      "allowed": true
+    },
+    {
+      "name": "isa_for_relationship",
+      "kind": "piece",
+      "anker": 2,
+      "ref": {"relationship": 1, "attribute": "*"},
+      "sub": {"isa": 1},
+      "aequivalent": "n. n.",
+      "allowed": false
+    },
+    {
+      "name": "entity_for_attribute",
+      "kind": "piece",
+      "anker": 1,
+      "ref": {"attribute": 1},
+      "sub": {"entity": 1, "relationship": 1, "attribute": 1},
+      "ref_ohne": {"attribute": {"key": ["primary", "partial"]}},
+      "sub_kanten": {"stueck": {"cardinality": ["1", ""]}, "anker": {"cardinality": ["n", ""]}},
+      "bezeichner_gleich": true,
+      "aequivalent": "ja",
+      "allowed": true
+    },
+    {
+      "name": "relationship_for_attribute",
+      "kind": "piece",
+      "anker": 1,
+      "anker_sub": 2,
+      "ref": {"attribute": 1},
+      "sub": {"relationship": 1},
+      "ref_ohne": {"attribute": {"key": ["primary", "partial"]}},
+      "sub_kanten": {"zusatz": {"cardinality": ["1", ""]}, "anker": {"cardinality": ["n", ""]}},
+      "bezeichner_gleich": true,
+      "aequivalent": "ja",
+      "allowed": true
+    },
+    {
+      "name": "entity_for_relationship",
+      "variante": "ohne_schluessel",
+      "kind": "piece",
+      "anker": 2,
+      "ref": {"relationship": 1, "attribute": "*"},
+      "sub": {"entity": 1, "relationship": 2, "attribute": "*"},
+      "sub_ohne": {"attribute": {"key": ["primary", "partial"]}},
+      "bezeichner_gleich": true,
+      "aequivalent": "ja",
+      "allowed": true
+    },
+    {
+      "name": "entity_for_relationship",
+      "variante": "mit_schluessel",
+      "kind": "piece",
+      "anker": 2,
+      "ref": {"relationship": 1, "attribute": "*"},
+      "sub": {"entity": 1, "relationship": 2, "attribute": "*"},
+      "sub_mit": {"attribute": {"key": ["primary", "partial"]}},
+      "aequivalent": "nein",
+      "allowed": false
+    },
+    {
+      "name": "entity_for_reflexive_relationship",
+      "kind": "piece",
+      "anker": 1,
+      "ref": {"relationship": 1, "attribute": "*"},
+      "sub": {"entity": 1, "relationship": 2, "attribute": "*"},
+      "aequivalent": "n. n.",
+      "allowed": false
+    },
+    {
+      "name": "binary_for_ternary",
+      "kind": "piece",
+      "anker": 3,
+      "ref": {"relationship": 1, "attribute": "*"},
+      "sub": {"relationship": "2+", "attribute": "*"},
+      "sub_verbund": true,
+      "aequivalent": "n. n.",
+      "allowed": false
+    },
+    {
+      "name": "relationship_for_entity",
+      "variante": "ohne_schluessel",
+      "kind": "piece",
+      "anker": 2,
+      "ref": {"entity": 1, "relationship": 2, "attribute": "*"},
+      "sub": {"relationship": 1, "attribute": "*"},
+      "ref_ohne": {"attribute": {"key": ["primary", "partial"]}},
+      "bezeichner_gleich": true,
+      "aequivalent": "ja",
+      "allowed": true
+    },
+    {
+      "name": "relationship_for_entity",
+      "variante": "mit_schluessel",
+      "kind": "piece",
+      "anker": 2,
+      "ref": {"entity": 1, "relationship": 2, "attribute": "*"},
+      "sub": {"relationship": 1, "attribute": "*"},
+      "ref_mit": {"attribute": {"key": ["primary", "partial"]}},
+      "aequivalent": "nein",
+      "allowed": false
+    }
+  ]
+}

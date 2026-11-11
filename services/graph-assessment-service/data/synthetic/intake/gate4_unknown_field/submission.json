@@ -1,0 +1,12 @@
+{
+  "schema": "erd_schlageter.v1",
+  "nodes": [
+    {
+      "id": "kunde",
+      "type": "entity",
+      "label": "Kunde",
+      "farbe": "rot"
+    }
+  ],
+  "edges": []
+}

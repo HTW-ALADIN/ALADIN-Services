@@ -1,0 +1,28 @@
+{
+  "description": "instead of the reflexive relationship »leitet« a second entity »Vorgesetzter« with two relationships to Mitarbeiter -- the same entity type in two roles",
+  "covers": [
+    "FK-6.12"
+  ],
+  "transformations": [
+    {
+      "name": "entity_for_reflexive_relationship",
+      "variant": ""
+    }
+  ],
+  "classes": {
+    "entity_for_reflexive_relationship": {
+      "instances": 1,
+      "claims": 10,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {
+      "entity_for_reflexive_relationship": 0
+    }
+  },
+  "sentences": [
+    "»Vorgesetzter« mit »ernennt« und »untersteht« ist als Entität modelliert; erwartet ist die reflexive Beziehung »leitet« an »Mitarbeiter«"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "description": "schema names a different notation -- gate 2 checks the file against the exchange format",
+  "covers": [
+    "FK-1.1"
+  ],
+  "rejected": "$.schema: 'erd_schlageter.v1' was expected",
+  "classes": {
+    "submission_rejected": {
+      "instances": 1,
+      "claims": 0,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {
+      "submission_rejected": 0
+    }
+  },
+  "sentences": [
+    "Die Einsendung wird abgewiesen: submission.json: $.schema: 'erd_schlageter.v1' was expected"
+  ]
+}

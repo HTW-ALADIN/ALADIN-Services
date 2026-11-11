@@ -1,0 +1,416 @@
+{
+  "schema": "fehlerkatalog.v2",
+  "notation": "erd_schlageter",
+  "bewertung": {
+    "vorbehalt": "voll",
+    "max": {
+      "autovermietung": 30,
+      "krankenhaus": null
+    }
+  },
+  "ordnungen": {
+    "cardinality": [
+      [
+        "1"
+      ],
+      [
+        "n",
+        "m"
+      ]
+    ]
+  },
+  "klassen": [
+    {
+      "id": "submission_rejected",
+      "kennung": "FK-1.1",
+      "name": "Formatverstoß",
+      "erkennung": "einlesen",
+      "feedback": "Die Einsendung wird abgewiesen: {grund}"
+    },
+    {
+      "id": "empty_graph",
+      "kennung": "FK-1.2",
+      "name": "Einsendung nicht bewertbar",
+      "erkennung": "einlesen",
+      "feedback": "Die Einsendung ist leer und wird nicht bewertet"
+    },
+    {
+      "id": "wrong_diagram_kind",
+      "kennung": "FK-1.3",
+      "name": "Falsche Gattung",
+      "erkennung": "einlesen",
+      "feedback": "Die Einsendung ist kein lesbares ER-Diagramm: {grund}"
+    },
+    {
+      "id": "edge_not_allowed",
+      "kennung": "FK-2.1",
+      "name": "Unzulässige Verbindung",
+      "erkennung": "validate",
+      "feedback": "Unzulässige Verbindung: {grund}"
+    },
+    {
+      "id": "graph_disconnected",
+      "kennung": "FK-2.2",
+      "name": "Diagramm zerfällt",
+      "erkennung": "validate",
+      "feedback": "Das Diagramm zerfällt: {grund}"
+    },
+    {
+      "id": "required_property_missing",
+      "kennung": "FK-2.3",
+      "name": "Pflichtangabe fehlt",
+      "erkennung": "validate",
+      "feedback": "Pflichtangabe fehlt: {grund}"
+    },
+    {
+      "id": "unknown_type_or_value",
+      "kennung": "FK-2.4",
+      "name": "Unbekannter Typ oder Wert",
+      "erkennung": "validate",
+      "feedback": "Unbekannter Typ oder Wert: {grund}"
+    },
+    {
+      "id": "attribute_missing",
+      "kennung": "FK-3.1",
+      "name": "Attribut fehlt",
+      "erkennung": "signature",
+      "feedback": "Attribut {ref} fehlt an {owner}",
+      "punkte": {
+        "abzug": 2,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "entity_missing",
+      "kennung": "FK-3.2",
+      "name": "Entity fehlt",
+      "erkennung": "signature",
+      "feedback": "Entität {ref} fehlt{folge}",
+      "punkte": {
+        "abzug": 3,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "relationship_missing",
+      "kennung": "FK-3.3",
+      "name": "Relationship fehlt",
+      "erkennung": "signature",
+      "feedback": "Beziehung {ref} fehlt zwischen {nachbarn}{folge}",
+      "punkte": {
+        "abzug": 2,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "isa_missing",
+      "kennung": "FK-3.4",
+      "name": "IS-A fehlt",
+      "erkennung": "signature",
+      "feedback": "IS-A {ref} fehlt zwischen {nachbarn}{folge}",
+      "punkte": {
+        "abzug": 2,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "reflexive_relationship_missing",
+      "kennung": "FK-3.5",
+      "name": "Reflexive Relationship fehlt",
+      "erkennung": "signature",
+      "feedback": "Reflexive Beziehung {ref} an {nachbarn} fehlt{folge}"
+    },
+    {
+      "id": "ternary_relationship_missing",
+      "kennung": "FK-3.6",
+      "name": "Ternäre Relationship fehlt",
+      "erkennung": "signature",
+      "feedback": "Ternäre Beziehung {ref} fehlt zwischen {nachbarn}{folge}"
+    },
+    {
+      "id": "attribute_extra",
+      "kennung": "FK-4.1",
+      "name": "Attribut zuviel",
+      "erkennung": "signature",
+      "feedback": "Attribut {sub} an {owner} ist zu viel"
+    },
+    {
+      "id": "entity_extra",
+      "kennung": "FK-4.2",
+      "name": "Entity zuviel",
+      "erkennung": "signature",
+      "feedback": "Entität {sub} ist zu viel{folge}"
+    },
+    {
+      "id": "relationship_extra",
+      "kennung": "FK-4.3",
+      "name": "Relationship zuviel",
+      "erkennung": "signature",
+      "feedback": "Beziehung {sub} zwischen {nachbarn} ist zu viel{folge}",
+      "punkte": {
+        "abzug": 1,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "isa_extra",
+      "kennung": "FK-4.4",
+      "name": "IS-A zuviel",
+      "erkennung": "signature",
+      "feedback": "IS-A {sub} zwischen {nachbarn} ist zu viel{folge}",
+      "punkte": {
+        "abzug": 1,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "reflexive_relationship_extra",
+      "kennung": "FK-4.5",
+      "name": "Reflexive Relationship zuviel",
+      "erkennung": "signature",
+      "feedback": "Reflexive Beziehung {sub} an {nachbarn} ist zu viel{folge}"
+    },
+    {
+      "id": "key_missing_primary",
+      "kennung": "FK-5.1",
+      "name": "Primary Key nicht gekennzeichnet",
+      "erkennung": "signature",
+      "feedback": "Attribut {sub} ist nicht als Primary Key gekennzeichnet",
+      "punkte": {
+        "abzug": 6,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "key_missing_partial",
+      "kennung": "FK-5.2",
+      "name": "Partial Key nicht gekennzeichnet",
+      "erkennung": "signature",
+      "feedback": "Attribut {sub} ist nicht als Partial Key gekennzeichnet"
+    },
+    {
+      "id": "key_extra",
+      "kennung": "FK-5.3",
+      "name": "Schlüssel zuviel",
+      "erkennung": "signature",
+      "feedback": "Attribut {sub} ist als Schlüssel gekennzeichnet, sollte aber keiner sein"
+    },
+    {
+      "id": "key_wrong",
+      "kennung": "FK-5.4",
+      "name": "Schlüsselart falsch",
+      "erkennung": "signature",
+      "feedback": "Attribut {sub}: die Schlüsselart sollte {soll} sein"
+    },
+    {
+      "id": "weak_missing",
+      "kennung": "FK-5.5",
+      "name": "Weak Entity nicht gekennzeichnet",
+      "erkennung": "signature",
+      "feedback": "Entität {sub} ist nicht als schwach gekennzeichnet"
+    },
+    {
+      "id": "weak_extra",
+      "kennung": "FK-5.6",
+      "name": "Weak Entity fälschlich gekennzeichnet",
+      "erkennung": "signature",
+      "feedback": "Entität {sub} ist fälschlich als schwach gekennzeichnet"
+    },
+    {
+      "id": "cardinality_missing",
+      "kennung": "FK-5.7",
+      "name": "Kardinalität fehlt",
+      "erkennung": "signature",
+      "feedback": "Kardinalität zwischen {sub} fehlt; erwartet ist {soll}"
+    },
+    {
+      "id": "cardinality_too_narrow",
+      "kennung": "FK-5.8",
+      "name": "Kardinalität zu eng",
+      "erkennung": "signature",
+      "feedback": "Kardinalität an {sub} ist zu eng: {stellen}",
+      "punkte": {
+        "abzug": 1,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "cardinality_too_loose",
+      "kennung": "FK-5.9",
+      "name": "Kardinalität zu locker",
+      "erkennung": "signature",
+      "feedback": "Kardinalität an {sub} ist zu locker: {stellen}",
+      "punkte": {
+        "abzug": 1,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "cardinality_swapped",
+      "kennung": "FK-5.10",
+      "name": "Kardinalität vertauscht",
+      "erkennung": "signature",
+      "feedback": "Kardinalitäten an {sub} sind vertauscht: {stellen}",
+      "punkte": {
+        "abzug": 1,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "supertype_changed",
+      "kennung": "FK-5.11",
+      "name": "IS-A-Richtung falsch",
+      "erkennung": "signature",
+      "feedback": "IS-A zwischen {sub}: Ober- und Untertyp sind vertauscht"
+    },
+    {
+      "id": "relation_for_isa",
+      "kennung": "FK-6.1",
+      "name": "Relationship statt IS-A",
+      "erkennung": "pattern",
+      "feedback": "{sub_entity} mit {sub_relationship} an {anker} ist als eigene Entität modelliert; erwartet ist IS-A mit {ref_entity}",
+      "punkte": {
+        "abzug": 1,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "attribute_for_isa",
+      "kennung": "FK-6.2",
+      "name": "Attribut statt IS-A",
+      "erkennung": "pattern",
+      "feedback": "{sub_attribute} an {anker} ist als Attribut modelliert; erwartet ist IS-A mit {ref_entity}",
+      "punkte": {
+        "abzug": 2,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "attribute_for_relationship",
+      "kennung": "FK-6.3",
+      "name": "Attribut statt Relationship",
+      "erkennung": "pattern",
+      "feedback": "{sub_attribute} an {anker} ist als Attribut modelliert; erwartet ist die Beziehung {ref_relationship} zu {ref_entity}"
+    },
+    {
+      "id": "entity_for_relationship",
+      "kennung": "FK-6.4",
+      "name": "Entity statt Relationship",
+      "erkennung": "pattern",
+      "feedback": "{sub_entity} ist als Entität modelliert; erwartet ist die Beziehung {ref_relationship} zwischen {anker} mit denselben Attributen",
+      "punkte": {
+        "abzug": 1,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "isa_for_relationship",
+      "kennung": "FK-6.5",
+      "name": "IS-A statt Relationship",
+      "erkennung": "pattern",
+      "feedback": "{anker} sind über IS-A verbunden; erwartet ist die Beziehung {ref_relationship}"
+    },
+    {
+      "id": "attribute_for_entity",
+      "kennung": "FK-6.6",
+      "name": "Attribut statt Entity",
+      "erkennung": "pattern",
+      "feedback": "{sub_attribute} an {anker} ist als Attribut modelliert; erwartet ist die Entität {ref_entity} mit der Beziehung {ref_relationship}"
+    },
+    {
+      "id": "relationship_for_entity",
+      "kennung": "FK-6.7",
+      "name": "Relationship statt Entity",
+      "erkennung": "pattern",
+      "feedback": "{sub_relationship} zwischen {anker} ist als Beziehung modelliert; erwartet ist die Entität {ref_entity} mit {ref_relationship}"
+    },
+    {
+      "id": "entity_for_attribute",
+      "kennung": "FK-6.8",
+      "name": "Entity statt Attribut",
+      "erkennung": "pattern",
+      "feedback": "{sub_entity} mit {sub_relationship} ist als Entität modelliert; erwartet ist das Attribut {ref_attribute} an {anker}"
+    },
+    {
+      "id": "relationship_for_attribute",
+      "kennung": "FK-6.9",
+      "name": "Relationship statt Attribut",
+      "erkennung": "pattern",
+      "feedback": "Beziehung {sub_relationship} steht für das Attribut {ref_attribute} an {anker}"
+    },
+    {
+      "id": "attribute_misplaced",
+      "kennung": "FK-6.10",
+      "name": "Attribut falsch angehängt",
+      "erkennung": "pattern",
+      "feedback": "Attribut {sub} hängt am falschen Besitzer; erwartet ist es an {ref}",
+      "punkte": {
+        "abzug": 2,
+        "modus": "je_set"
+      }
+    },
+    {
+      "id": "relationship_rewired",
+      "kennung": "FK-6.11",
+      "name": "Relationship falsch angehängt",
+      "erkennung": "pattern",
+      "feedback": "{typ} {sub} ist falsch angebunden: {stellen}"
+    },
+    {
+      "id": "entity_for_reflexive_relationship",
+      "kennung": "FK-6.12",
+      "name": "Entity statt reflexiver Relationship",
+      "erkennung": "pattern",
+      "feedback": "{sub_entity} mit {sub_relationship} ist als Entität modelliert; erwartet ist die reflexive Beziehung {ref_relationship} an {anker}"
+    },
+    {
+      "id": "binary_for_ternary",
+      "kennung": "FK-6.13",
+      "name": "Binär statt ternär",
+      "erkennung": "pattern",
+      "feedback": "{sub_relationship} sind als binäre Beziehungen modelliert; erwartet ist die eine Beziehung {ref_relationship} zwischen {anker}"
+    },
+    {
+      "id": "type_changed",
+      "kennung": "FK-6.14",
+      "name": "Typwechsel",
+      "erkennung": "signature",
+      "feedback": "{typ} {sub} ist als {ist} modelliert; erwartet ist {soll}"
+    },
+    {
+      "id": "edge_extra",
+      "kennung": "FK-7.1",
+      "name": "Kante zuviel",
+      "erkennung": "signature",
+      "feedback": "Kante zwischen {sub} ist zu viel"
+    },
+    {
+      "id": "edge_missing",
+      "kennung": "FK-7.2",
+      "name": "Kante fehlt",
+      "erkennung": "signature",
+      "feedback": "Kante zwischen {ref} fehlt"
+    },
+    {
+      "id": "label_differs",
+      "kennung": "FK-8.1",
+      "name": "Bezeichner abweichend",
+      "erkennung": "glossary",
+      "feedback": "{sub} haben wir als {ref} gelesen; meint das dasselbe?"
+    },
+    {
+      "id": "label_missing",
+      "kennung": "FK-8.2",
+      "name": "Bezeichner fehlt",
+      "erkennung": "glossary",
+      "feedback": "{typ} {sub} trägt keinen Bezeichner; gemeint ist wohl {ref}"
+    },
+    {
+      "id": "no_name_fits",
+      "kennung": "FK-8.3",
+      "name": "Falsche Aufgabe",
+      "erkennung": "glossary",
+      "feedback": "Kein Bezeichner passt zur Musterlösung; ist das die richtige Aufgabe?"
+    }
+  ]
+}

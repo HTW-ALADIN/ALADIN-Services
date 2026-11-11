@@ -1,0 +1,28 @@
+{
+  "description": "instead of the intermediate entity Filiale (with partial key) and its two relationships one relationship Bank--arbeitet bei--Mitarbeiter; the reference entity carries a key, so variant mit_schluessel: not equivalent, an error. Found because the pairing leaves a relationship open whose participants are not paired (src/mapping/regions.py, build.py: whole units) -- otherwise the pair »hat« to »arbeitet bei« would hide the piece",
+  "covers": [
+    "FK-6.7"
+  ],
+  "transformations": [
+    {
+      "name": "relationship_for_entity",
+      "variant": "mit_schluessel"
+    }
+  ],
+  "classes": {
+    "relationship_for_entity": {
+      "instances": 1,
+      "claims": 14,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {
+      "relationship_for_entity": 0
+    }
+  },
+  "sentences": [
+    "»arbeitet bei« zwischen »Bank« und »Mitarbeiter« ist als Beziehung modelliert; erwartet ist die Entität »Filiale« mit »gehört zu« und »hat«"
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "schema": "erd_schlageter.v1",
+  "nodes": [
+    {
+      "id": "kunde",
+      "type": "entity",
+      "label": "Kunde"
+    },
+    {
+      "id": "auto",
+      "type": "entity",
+      "label": "Auto"
+    },
+    {
+      "id": "mietet",
+      "type": "relationship",
+      "label": "mietet"
+    },
+    {
+      "id": "kunde_name",
+      "type": "attribute",
+      "label": "Name",
+      "key": "primary"
+    },
+    {
+      "id": "auto_fin",
+      "type": "attribute",
+      "label": "FIN",
+      "key": "primary"
+    },
+    {
+      "id": "auto_marke",
+      "type": "attribute",
+      "label": "Marke"
+    }
+  ],
+  "edges": [
+    {
+      "endpoints": [
+        {
+          "id": "kunde"
+        },
+        {
+          "id": "mietet"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "n",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "auto"
+        },
+        {
+          "id": "mietet"
+        }
+      ],
+      "properties": {
+        "cardinality": [
+          "1",
+          ""
+        ]
+      }
+    },
+    {
+      "endpoints": [
+        {
+          "id": "kunde"
+        },
+        {
+          "id": "kunde_name"
+        }
+      ]
+    },
+    {
+      "endpoints": [
+        {
+          "id": "auto"
+        },
+        {
+          "id": "auto_fin"
+        }
+      ]
+    },
+    {
+      "endpoints": [
+        {
+          "id": "auto"
+        },
+        {
+          "id": "auto_marke"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "description": "bytes instead of text (a PNG header) -- gate 1 cannot read the file",
+  "covers": [
+    "FK-1.3"
+  ],
+  "rejected": "keine Textdatei",
+  "classes": {
+    "wrong_diagram_kind": {
+      "instances": 1,
+      "claims": 0,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {
+      "wrong_diagram_kind": 0
+    }
+  },
+  "sentences": [
+    "Die Einsendung ist kein lesbares ER-Diagramm: submission.json: keine Textdatei"
+  ]
+}

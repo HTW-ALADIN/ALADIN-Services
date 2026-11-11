@@ -1,0 +1,30 @@
+{
+  "description": "the reference solution with an edge Kunde--Auto: the file is fine, the notation is not. Gate 4 does not reject, it reports -- the violation stands next to the diff",
+  "covers": [
+    "FK-2.1",
+    "FK-7.1"
+  ],
+  "classes": {
+    "edge_extra": {
+      "instances": 1,
+      "claims": 1,
+      "consequences": 0
+    },
+    "edge_not_allowed": {
+      "instances": 1,
+      "claims": 0,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {
+      "edge_extra": 0,
+      "edge_not_allowed": 0
+    }
+  },
+  "sentences": [
+    "Unzulässige Verbindung: Kante kunde-auto: zwischen 'entity' und 'entity' ist keine Kante erlaubt",
+    "Kante zwischen »Auto« und »Kunde« ist zu viel"
+  ]
+}

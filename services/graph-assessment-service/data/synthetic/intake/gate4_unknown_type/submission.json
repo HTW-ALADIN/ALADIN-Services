@@ -1,0 +1,11 @@
+{
+  "schema": "erd_schlageter.v1",
+  "nodes": [
+    {
+      "id": "kunde",
+      "type": "wolke",
+      "label": "Kunde"
+    }
+  ],
+  "edges": []
+}
