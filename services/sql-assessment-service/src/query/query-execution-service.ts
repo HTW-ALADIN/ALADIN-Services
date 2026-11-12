@@ -9,6 +9,36 @@ import { t, SupportedLanguage } from '../shared/i18n';
  */
 const MUTATING_NODE_TYPES = new Set(['insert', 'update', 'delete', 'into']);
 
+/**
+ * Sequence functions are not transactional: their increments survive a
+ * rollback, and read-only transactions still permit them on temporary
+ * sequences.  Reject them before they touch the database.
+ */
+const UNSAFE_FUNCTION_NAMES = new Set(['nextval', 'setval']);
+
+/**
+ * Force the extended query protocol.
+ *
+ * `pg` uses the simple query protocol for plain strings, and that protocol
+ * accepts multiple `;`-separated commands.  A parser/protocol mismatch such as
+ * `SELECT 'x\'; COMMIT; DELETE FROM products; --'` would otherwise commit the
+ * read-only transaction and run the DELETE.  The extended protocol rejects
+ * multiple commands in a single prepared statement.
+ */
+function extendedQuery(text: string): string {
+	return { text, queryMode: 'extended' } as unknown as string;
+}
+
+/** Returns the lower-cased function name of a node-sql-parser function node. */
+function getFunctionName(node: unknown): string | undefined {
+	const { name } = node as { name?: unknown };
+	if (!name || typeof name !== 'object') return undefined;
+	const parts = (name as { name?: unknown }).name;
+	if (!Array.isArray(parts) || parts.length === 0) return undefined;
+	const last = parts[parts.length - 1] as { value?: unknown } | undefined;
+	return typeof last?.value === 'string' ? last.value.toLowerCase() : undefined;
+}
+
 export interface QueryExecutionServiceOptions {
 	/**
 	 * Run every query inside a read-only transaction so the database itself
@@ -72,7 +102,9 @@ export class QueryExecutionService {
 				inTransaction = true;
 				await queryRunner.query('SET TRANSACTION READ ONLY');
 			}
-			const rows: Record<string, unknown>[] = await queryRunner.query(trimmed);
+			const rows: Record<string, unknown>[] = await queryRunner.query(
+				extendedQuery(trimmed),
+			);
 			return { rows, rowCount: rows.length };
 		} catch (err) {
 			const detail =
@@ -99,7 +131,9 @@ export class QueryExecutionService {
 	 * instance can safely hold a short-lived read-only transaction.  The
 	 * transaction is always rolled back: a read-only transaction still permits
 	 * session settings and writes to temporary tables, and PGlite would commit
-	 * them if the callback returned normally.
+	 * them if the callback returned normally.  PGlite also always uses the
+	 * extended query protocol, which rejects multiple commands in one
+	 * statement.
 	 *
 	 * @param query - Raw SQL string to execute.
 	 * @param db    - Live PGlite instance.
@@ -187,8 +221,13 @@ export class QueryExecutionService {
 	}
 
 	/**
-	 * Rejects mutations that hide beneath a SELECT root: data-modifying CTEs
-	 * (`WITH ... AS (UPDATE ...) SELECT ...`) and `SELECT ... INTO`.
+	 * Rejects side effects that hide beneath a SELECT root:
+	 *
+	 *  - data-modifying CTEs (`WITH ... AS (UPDATE ...) SELECT ...`)
+	 *  - `SELECT ... INTO`
+	 *  - sequence functions (`nextval` / `setval`), whose increments are not
+	 *    transactional and therefore survive a rollback even on temporary
+	 *    sequences, which read-only transactions permit
 	 *
 	 * Walks the AST iteratively so deeply nested queries cannot overflow the
 	 * call stack.  `node-sql-parser` emits `into: { type: 'into' }` only when
@@ -206,6 +245,16 @@ export class QueryExecutionService {
 					t('QUERY_NON_SELECT', lang, type),
 					'NON_SELECT',
 				);
+			}
+
+			if (type === 'function') {
+				const name = getFunctionName(node);
+				if (name && UNSAFE_FUNCTION_NAMES.has(name)) {
+					throw new QueryExecutionError(
+						t('QUERY_UNSAFE_FUNCTION', lang, name),
+						'NON_SELECT',
+					);
+				}
 			}
 
 			for (const child of Object.values(node)) stack.push(child);

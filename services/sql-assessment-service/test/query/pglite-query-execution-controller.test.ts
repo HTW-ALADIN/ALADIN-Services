@@ -168,23 +168,21 @@ describe('QueryExecutionController — PGlite path', () => {
 		});
 
 		it('enforces read-only at the database level for volatile functions', async () => {
-			await pgliteDb.exec('CREATE SEQUENCE readonly_probe_seq');
 			const { res, status, json } = mockRes();
 			await controller.executeQuery(
 				mockReq({
 					connectionInfo: VALID_PGLITE_CONN,
-					query: "SELECT nextval('readonly_probe_seq') AS value;",
+					query: 'SELECT lo_create(0) AS value;',
 				}),
 				res,
 			);
 			expect(status).toHaveBeenCalledWith(500);
 			expect(json).toHaveBeenCalledWith(
-				expect.objectContaining({ code: 'EXECUTION_FAILED' }),
+				expect.objectContaining({
+					code: 'EXECUTION_FAILED',
+					message: expect.stringContaining('read-only'),
+				}),
 			);
-			const sequence = await pgliteDb.query(
-				'SELECT last_value, is_called FROM readonly_probe_seq',
-			);
-			expect(sequence.rows).toEqual([{ last_value: 1, is_called: false }]);
 		});
 
 		it('rolls back session settings so they do not leak to later requests', async () => {
@@ -237,6 +235,47 @@ describe('QueryExecutionController — PGlite path', () => {
 			expect(
 				(await pgliteDb.query('SELECT count(*)::integer AS n FROM scratch')).rows,
 			).toEqual([{ n: 0 }]);
+		});
+
+		it('rejects multi-command SQL smuggled through a string literal', async () => {
+			const before = await pgliteDb.query('SELECT * FROM products ORDER BY id');
+			const { res, status, json } = mockRes();
+			await controller.executeQuery(
+				mockReq({
+					connectionInfo: VALID_PGLITE_CONN,
+					query: "SELECT 'x\\'; COMMIT; DELETE FROM products; --'",
+				}),
+				res,
+			);
+			expect(status).toHaveBeenCalledWith(500);
+			expect(json).toHaveBeenCalledWith(
+				expect.objectContaining({ code: 'EXECUTION_FAILED' }),
+			);
+			expect(
+				(await pgliteDb.query('SELECT * FROM products ORDER BY id')).rows,
+			).toEqual(before.rows);
+		});
+
+		it.each([
+			"SELECT nextval('readonly_probe_temp_seq') AS value;",
+			"SELECT setval('readonly_probe_temp_seq', 10) AS value;",
+			"SELECT pg_catalog.nextval('readonly_probe_temp_seq') AS value;",
+		])('rejects sequence-mutating functions before execution: %s', async (query) => {
+			await pgliteDb.exec('CREATE TEMP SEQUENCE readonly_probe_temp_seq');
+			const { res, status, json } = mockRes();
+			await controller.executeQuery(
+				mockReq({ connectionInfo: VALID_PGLITE_CONN, query }),
+				res,
+			);
+			expect(status).toHaveBeenCalledWith(400);
+			expect(json).toHaveBeenCalledWith(
+				expect.objectContaining({ code: 'NON_SELECT' }),
+			);
+			expect(
+				(await pgliteDb.query(
+					'SELECT last_value, is_called FROM readonly_probe_temp_seq',
+				)).rows,
+			).toEqual([{ last_value: 1, is_called: false }]);
 		});
 
 		it('returns 200 for a valid SELECT', async () => {

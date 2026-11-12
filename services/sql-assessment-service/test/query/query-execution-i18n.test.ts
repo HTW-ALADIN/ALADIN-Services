@@ -263,6 +263,18 @@ describe('QueryExecutionService i18n — thrown error messages', () => {
         ).rejects.toThrow('Nur SELECT-Abfragen');
     });
 
+    it('throws English QUERY_UNSAFE_FUNCTION for nextval', async () => {
+        await expect(
+            service.executeQuery("SELECT nextval('probe')", dataSource, 'en')
+        ).rejects.toThrow(t('QUERY_UNSAFE_FUNCTION', 'en', 'nextval'));
+    });
+
+    it('throws German QUERY_UNSAFE_FUNCTION for nextval when lang is "de"', async () => {
+        await expect(
+            service.executeQuery("SELECT nextval('probe')", dataSource, 'de')
+        ).rejects.toThrow(t('QUERY_UNSAFE_FUNCTION', 'de', 'nextval'));
+    });
+
     it('throws English EXECUTION_FAILED for a SELECT on a non-existent table', async () => {
         await expect(
             service.executeQuery(

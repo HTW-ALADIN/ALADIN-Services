@@ -32,6 +32,10 @@ afterAll(async () => {
 // Shared execution harness
 // ---------------------------------------------------------------------------
 
+function executedText(value: unknown): string {
+    return typeof value === 'string' ? value : (value as { text: string }).text;
+}
+
 function createExecution(backend: string) {
     const rows = [{ answer: 42 }];
     const query = vi.fn().mockResolvedValue(backend === 'PGlite' ? { rows } : rows);
@@ -66,7 +70,8 @@ describe('QueryExecutionService', () => {
         ])('accepts one SELECT without rewriting SQL: %s', async (sql) => {
             const { execute, query, release } = createExecution(backend);
             await expect(execute(sql)).resolves.toEqual({ rows: [{ answer: 42 }], rowCount: 1 });
-            expect(query).toHaveBeenCalledExactlyOnceWith(sql.trim());
+            expect(query).toHaveBeenCalledOnce();
+            expect(executedText(query.mock.calls[0][0])).toBe(sql.trim());
             if (backend === 'PostgreSQL') expect(release).toHaveBeenCalledOnce();
         });
 
@@ -93,6 +98,10 @@ describe('QueryExecutionService', () => {
             ['WITH c AS (INSERT INTO products (name) VALUES (\'x\') RETURNING *) SELECT * FROM c;', 'NON_SELECT'],
             ['WITH c AS (DELETE FROM products WHERE id = 1 RETURNING id) SELECT * FROM c;', 'NON_SELECT'],
             ['SELECT * FROM (WITH c AS (UPDATE products SET id = 1 RETURNING *) SELECT * FROM c) AS nested;', 'NON_SELECT'],
+            ["SELECT nextval('probe')", 'NON_SELECT'],
+            ["SELECT pg_catalog.nextval('probe')", 'NON_SELECT'],
+            ["SELECT setval('probe', 1)", 'NON_SELECT'],
+            ["SELECT * FROM products WHERE id = nextval('probe')", 'NON_SELECT'],
         ])('rejects before touching the database: %s', async (sql, code) => {
             const { execute, query, createQueryRunner, release } = createExecution(backend);
             await expect(execute(sql)).rejects.toMatchObject({ code });
@@ -108,10 +117,20 @@ describe('QueryExecutionService', () => {
             'SELECT 1 AS "into"',
             'SELECT * FROM products AS "update"',
             "SELECT 'delete' AS \"update\"",
+            'SELECT nextval FROM products',
+            'SELECT "nextval" FROM products',
         ])('does not treat quoted identifiers as mutations: %s', async (sql) => {
             const { execute, query } = createExecution(backend);
             await expect(execute(sql)).resolves.toBeDefined();
             expect(query).toHaveBeenCalledOnce();
+        });
+
+        it.each([
+            ["SELECT currval('probe')", 'non-mutating sequence read'],
+            ["SELECT lastval()", 'non-mutating sequence read'],
+        ])('allows %s (%s)', async (sql) => {
+            const { execute } = createExecution(backend);
+            await expect(execute(sql)).resolves.toBeDefined();
         });
     });
 
@@ -138,9 +157,39 @@ describe('QueryExecutionService', () => {
 
             expect(startTransaction).toHaveBeenCalledOnce();
             expect(query).toHaveBeenNthCalledWith(1, 'SET TRANSACTION READ ONLY');
-            expect(query).toHaveBeenNthCalledWith(2, 'SELECT 42 AS answer');
+            expect(query).toHaveBeenNthCalledWith(2, {
+                text: 'SELECT 42 AS answer',
+                queryMode: 'extended',
+            });
             expect(rollbackTransaction).toHaveBeenCalledOnce();
             expect(release).toHaveBeenCalledOnce();
+        });
+
+        it('executes user SQL through the extended query protocol', async () => {
+            const readOnlyService = new QueryExecutionService();
+            const payload = "SELECT 'x\\'; COMMIT; DELETE FROM products; --'";
+            const query = vi.fn()
+                .mockResolvedValueOnce(undefined)
+                .mockResolvedValueOnce([{ answer: 42 }]);
+            const startTransaction = vi.fn().mockResolvedValue(undefined);
+            const rollbackTransaction = vi.fn().mockResolvedValue(undefined);
+            const release = vi.fn().mockResolvedValue(undefined);
+            const createQueryRunner = vi.fn().mockReturnValue({
+                query,
+                startTransaction,
+                rollbackTransaction,
+                release,
+            });
+
+            await readOnlyService.executeQuery(
+                payload,
+                { createQueryRunner } as unknown as DataSource,
+            );
+
+            expect(query).toHaveBeenNthCalledWith(2, {
+                text: payload,
+                queryMode: 'extended',
+            });
         });
 
         it('rolls back and reports EXECUTION_FAILED when the database rejects a write', async () => {
@@ -148,7 +197,7 @@ describe('QueryExecutionService', () => {
             const query = vi.fn()
                 .mockResolvedValueOnce(undefined)
                 .mockRejectedValueOnce(
-                    new Error('cannot execute nextval() in a read-only transaction'),
+                    new Error('cannot execute lo_create() in a read-only transaction'),
                 );
             const startTransaction = vi.fn().mockResolvedValue(undefined);
             const rollbackTransaction = vi.fn().mockResolvedValue(undefined);
@@ -162,7 +211,7 @@ describe('QueryExecutionService', () => {
 
             await expect(
                 readOnlyService.executeQuery(
-                    "SELECT nextval('seq')",
+                    'SELECT lo_create(0)',
                     { createQueryRunner } as unknown as DataSource,
                 ),
             ).rejects.toMatchObject({ code: 'EXECUTION_FAILED' });
