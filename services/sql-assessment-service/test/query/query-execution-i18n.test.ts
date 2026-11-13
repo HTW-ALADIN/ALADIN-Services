@@ -61,7 +61,8 @@ beforeAll(async () => {
 beforeEach(() => {
     backup.restore();
     databaseMetadata.set(DB_KEY, []);
-    service = new QueryExecutionService();
+    // pg-mem does not implement `SET TRANSACTION READ ONLY`.
+    service = new QueryExecutionService({ enforceReadOnly: false });
     controller = new QueryExecutionController(service);
 });
 
@@ -260,6 +261,30 @@ describe('QueryExecutionService i18n — thrown error messages', () => {
                 'de'
             )
         ).rejects.toThrow('Nur SELECT-Abfragen');
+    });
+
+    it('throws English QUERY_UNSAFE_FUNCTION for nextval', async () => {
+        await expect(
+            service.executeQuery("SELECT nextval('probe')", dataSource, 'en')
+        ).rejects.toThrow(t('QUERY_UNSAFE_FUNCTION', 'en', 'nextval'));
+    });
+
+    it('throws German QUERY_UNSAFE_FUNCTION for nextval when lang is "de"', async () => {
+        await expect(
+            service.executeQuery("SELECT nextval('probe')", dataSource, 'de')
+        ).rejects.toThrow(t('QUERY_UNSAFE_FUNCTION', 'de', 'nextval'));
+    });
+
+    it('throws QUERY_AMBIGUOUS_STRING for backslash-escaped quotes (en)', async () => {
+        await expect(
+            service.executeQuery("SELECT 'it\\'s'", dataSource, 'en')
+        ).rejects.toThrow(t('QUERY_AMBIGUOUS_STRING', 'en'));
+    });
+
+    it('throws QUERY_AMBIGUOUS_STRING for backslash-escaped quotes (de)', async () => {
+        await expect(
+            service.executeQuery("SELECT 'it\\'s'", dataSource, 'de')
+        ).rejects.toThrow(t('QUERY_AMBIGUOUS_STRING', 'de'));
     });
 
     it('throws English EXECUTION_FAILED for a SELECT on a non-existent table', async () => {

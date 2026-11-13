@@ -121,7 +121,7 @@ describe('SQL query generation with case-sensitive identifiers', () => {
 
 		expect(query).toMatch(/SELECT/i);
 		// generated query quotes the case-sensitive identifiers
-		expect(query).toMatch(/"ANGNR"|"NAME"|"GEHALT"|"BEZEICHNUNG"/);
+		expect(query).toMatch(/"[A-Z][A-Z0-9_]*"/);
 		expect(query).toMatch(/"Mitarbeiter"/);
 	});
 

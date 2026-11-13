@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { IMemoryDb, IBackup } from 'pg-mem';
 import { DataSource } from 'typeorm';
 import { createTestDb } from '../helpers/pg-mem-factory';
@@ -19,7 +19,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
     backup.restore();
-    service = new QueryExecutionService();
+    // pg-mem does not implement `SET TRANSACTION READ ONLY`, so the pg-mem
+    // suites opt out; dedicated tests below cover the read-only transaction.
+    service = new QueryExecutionService({ enforceReadOnly: false });
 });
 
 afterAll(async () => {
@@ -27,10 +29,234 @@ afterAll(async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Shared execution harness
+// ---------------------------------------------------------------------------
+
+function executedText(value: unknown): string {
+    return typeof value === 'string' ? value : (value as { text: string }).text;
+}
+
+function createExecution(backend: string) {
+    const rows = [{ answer: 42 }];
+    const query = vi.fn().mockResolvedValue(backend === 'PGlite' ? { rows } : rows);
+    const release = vi.fn().mockResolvedValue(undefined);
+    const createQueryRunner = vi.fn().mockReturnValue({ query, release });
+    const execute = (sql: string) => backend === 'PGlite'
+        ? service.executeQueryOnPGlite(sql, { query })
+        : service.executeQuery(sql, { createQueryRunner } as unknown as DataSource);
+    return { execute, query, createQueryRunner, release };
+}
+
+// ---------------------------------------------------------------------------
 // Happy-path execution
 // ---------------------------------------------------------------------------
 
 describe('QueryExecutionService', () => {
+    describe.each(['PostgreSQL', 'PGlite'])('%s SELECT terminator handling', (backend) => {
+        it.each([
+            'SELECT 42 AS answer',
+            'SELECT 6 * 7 AS answer;',
+            ' \n SELECT 42 AS answer; \t ',
+            '/* leading ; */ SELECT 42 AS answer /* before ; */; -- trailing ;',
+            'SELECT 42 AS answer; /* trailing ; SELECT 1; */',
+            'SELECT 42 AS answer -- comment ;\n;',
+            "SELECT 'semi;colon' AS answer;",
+            "SELECT 'it''s; safe' AS answer;",
+            'SELECT $$semi;colon$$ AS answer;',
+            'SELECT 42 AS "semi;colon";',
+            'WITH c AS (SELECT 42 AS answer) SELECT * FROM c;',
+            'SELECT 42 AS answer UNION ALL SELECT 1 AS answer;',
+            'SELECT 42 AS answer;;',
+        ])('accepts one SELECT without rewriting SQL: %s', async (sql) => {
+            const { execute, query, release } = createExecution(backend);
+            await expect(execute(sql)).resolves.toEqual({ rows: [{ answer: 42 }], rowCount: 1 });
+            expect(query).toHaveBeenCalledOnce();
+            expect(executedText(query.mock.calls[0][0])).toBe(sql.trim());
+            if (backend === 'PostgreSQL') expect(release).toHaveBeenCalledOnce();
+        });
+
+        it.each([';', ';;', '-- comment only;', '/* comment only; */'])(
+            'rejects a query with no statement: %s',
+            async (sql) => {
+                const { execute, query } = createExecution(backend);
+                await expect(execute(sql)).rejects.toMatchObject({ code: 'NON_SELECT' });
+                expect(query).not.toHaveBeenCalled();
+            },
+        );
+    });
+
+    describe.each(['PostgreSQL', 'PGlite'])('%s mutation rejection', (backend) => {
+        it.each([
+            ['SELECT 42; SELECT 1', 'MULTIPLE_STATEMENTS'],
+            ['SELECT 42; /* comment ; */ SELECT 1;', 'MULTIPLE_STATEMENTS'],
+            ['SELECT 42; -- comment ;\nSELECT 1;', 'MULTIPLE_STATEMENTS'],
+            ["SELECT 'semi;colon'; DROP TABLE products;", 'MULTIPLE_STATEMENTS'],
+            ['SELECT 42; DELETE FROM products;', 'MULTIPLE_STATEMENTS'],
+            ['SELECT42; SELECT1', 'PARSE_ERROR'],
+            ['SELECT 42 INTO created_table;', 'NON_SELECT'],
+            ['WITH c AS (UPDATE products SET id = 1 RETURNING *) SELECT * FROM c;', 'NON_SELECT'],
+            ['WITH c AS (INSERT INTO products (name) VALUES (\'x\') RETURNING *) SELECT * FROM c;', 'NON_SELECT'],
+            ['WITH c AS (DELETE FROM products WHERE id = 1 RETURNING id) SELECT * FROM c;', 'NON_SELECT'],
+            ['SELECT * FROM (WITH c AS (UPDATE products SET id = 1 RETURNING *) SELECT * FROM c) AS nested;', 'NON_SELECT'],
+            ["SELECT nextval('probe')", 'NON_SELECT'],
+            ["SELECT pg_catalog.nextval('probe')", 'NON_SELECT'],
+            ["SELECT setval('probe', 1)", 'NON_SELECT'],
+            ["SELECT * FROM products WHERE id = nextval('probe')", 'NON_SELECT'],
+            ["SELECT 'x\\', nextval($$probe$$) --'", 'PARSE_ERROR'],
+            ["SELECT 'x\\'; COMMIT; DELETE FROM products; --'", 'PARSE_ERROR'],
+            ["SELECT 'it\\'s'", 'PARSE_ERROR'],
+        ])('rejects before touching the database: %s', async (sql, code) => {
+            const { execute, query, createQueryRunner, release } = createExecution(backend);
+            await expect(execute(sql)).rejects.toMatchObject({ code });
+            expect(query).not.toHaveBeenCalled();
+            if (backend === 'PostgreSQL') {
+                expect(createQueryRunner).not.toHaveBeenCalled();
+                expect(release).not.toHaveBeenCalled();
+            }
+        });
+
+        it.each([
+            'SELECT "insert" FROM products',
+            'SELECT 1 AS "into"',
+            'SELECT * FROM products AS "update"',
+            "SELECT 'delete' AS \"update\"",
+            'SELECT nextval FROM products',
+            'SELECT "nextval" FROM products',
+        ])('does not treat quoted identifiers as mutations: %s', async (sql) => {
+            const { execute, query } = createExecution(backend);
+            await expect(execute(sql)).resolves.toBeDefined();
+            expect(query).toHaveBeenCalledOnce();
+        });
+
+        it.each([
+            ["SELECT currval('probe')", 'non-mutating sequence read'],
+            ["SELECT lastval()", 'non-mutating sequence read'],
+        ])('allows %s (%s)', async (sql) => {
+            const { execute } = createExecution(backend);
+            await expect(execute(sql)).resolves.toBeDefined();
+        });
+
+        it.each([
+            "SELECT 'a\\b' AS value",
+            "SELECT 'a''b' AS value",
+            "SELECT 'a\\\\' AS value",
+            "SELECT 1 AS value -- don\\'t",
+            "SELECT $$a\\'b$$ AS value",
+        ])('allows backslashes that are not quote escapes: %s', async (sql) => {
+            const { execute } = createExecution(backend);
+            await expect(execute(sql)).resolves.toBeDefined();
+        });
+    });
+
+    describe('read-only transaction enforcement', () => {
+        it('runs PostgreSQL queries in a read-only transaction and rolls back', async () => {
+            const readOnlyService = new QueryExecutionService();
+            const query = vi.fn().mockResolvedValue([{ answer: 42 }]);
+            const startTransaction = vi.fn().mockResolvedValue(undefined);
+            const rollbackTransaction = vi.fn().mockResolvedValue(undefined);
+            const release = vi.fn().mockResolvedValue(undefined);
+            const createQueryRunner = vi.fn().mockReturnValue({
+                query,
+                startTransaction,
+                rollbackTransaction,
+                release,
+            });
+
+            await expect(
+                readOnlyService.executeQuery(
+                    'SELECT 42 AS answer',
+                    { createQueryRunner } as unknown as DataSource,
+                ),
+            ).resolves.toEqual({ rows: [{ answer: 42 }], rowCount: 1 });
+
+            expect(startTransaction).toHaveBeenCalledOnce();
+            expect(query).toHaveBeenNthCalledWith(1, 'SET TRANSACTION READ ONLY');
+            expect(query).toHaveBeenNthCalledWith(2, {
+                text: 'SELECT 42 AS answer',
+                queryMode: 'extended',
+            });
+            expect(rollbackTransaction).toHaveBeenCalledOnce();
+            expect(release).toHaveBeenCalledOnce();
+        });
+
+        it('executes user SQL through the extended query protocol', async () => {
+            const readOnlyService = new QueryExecutionService();
+            const query = vi.fn()
+                .mockResolvedValueOnce(undefined)
+                .mockResolvedValueOnce([{ answer: 42 }]);
+            const startTransaction = vi.fn().mockResolvedValue(undefined);
+            const rollbackTransaction = vi.fn().mockResolvedValue(undefined);
+            const release = vi.fn().mockResolvedValue(undefined);
+            const createQueryRunner = vi.fn().mockReturnValue({
+                query,
+                startTransaction,
+                rollbackTransaction,
+                release,
+            });
+
+            await readOnlyService.executeQuery(
+                'SELECT 42 AS answer',
+                { createQueryRunner } as unknown as DataSource,
+            );
+
+            expect(query).toHaveBeenNthCalledWith(2, {
+                text: 'SELECT 42 AS answer',
+                queryMode: 'extended',
+            });
+        });
+
+        it('rolls back and reports EXECUTION_FAILED when the database rejects a write', async () => {
+            const readOnlyService = new QueryExecutionService();
+            const query = vi.fn()
+                .mockResolvedValueOnce(undefined)
+                .mockRejectedValueOnce(
+                    new Error('cannot execute lo_create() in a read-only transaction'),
+                );
+            const startTransaction = vi.fn().mockResolvedValue(undefined);
+            const rollbackTransaction = vi.fn().mockResolvedValue(undefined);
+            const release = vi.fn().mockResolvedValue(undefined);
+            const createQueryRunner = vi.fn().mockReturnValue({
+                query,
+                startTransaction,
+                rollbackTransaction,
+                release,
+            });
+
+            await expect(
+                readOnlyService.executeQuery(
+                    'SELECT lo_create(0)',
+                    { createQueryRunner } as unknown as DataSource,
+                ),
+            ).rejects.toMatchObject({ code: 'EXECUTION_FAILED' });
+
+            expect(rollbackTransaction).toHaveBeenCalledOnce();
+            expect(release).toHaveBeenCalledOnce();
+        });
+
+        it('runs PGlite queries in a read-only transaction and rolls back', async () => {
+            const readOnlyService = new QueryExecutionService();
+            const txQuery = vi.fn()
+                .mockResolvedValueOnce(undefined)
+                .mockResolvedValueOnce({ rows: [] })
+                .mockResolvedValueOnce({ rows: [{ answer: 42 }] });
+            const rollback = vi.fn().mockResolvedValue(undefined);
+            const transaction = vi.fn(
+                async (callback: (tx: unknown) => Promise<unknown>) =>
+                    callback({ query: txQuery, rollback }),
+            );
+
+            await expect(
+                readOnlyService.executeQueryOnPGlite('SELECT 42 AS answer', { transaction }),
+            ).resolves.toEqual({ rows: [{ answer: 42 }], rowCount: 1 });
+
+            expect(transaction).toHaveBeenCalledOnce();
+            expect(txQuery).toHaveBeenNthCalledWith(1, 'SET TRANSACTION READ ONLY');
+            expect(txQuery.mock.calls[1][0]).toContain('pg_my_temp_schema');
+            expect(txQuery).toHaveBeenNthCalledWith(3, 'SELECT 42 AS answer');
+            expect(rollback).toHaveBeenCalledOnce();
+        });
+    });
+
     describe('executeQuery — happy path', () => {
 
         it('returns rows and correct rowCount for a simple SELECT *', async () => {

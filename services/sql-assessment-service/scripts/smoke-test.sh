@@ -189,6 +189,26 @@ INSERT INTO orders (product_id, quantity) VALUES (1, 5), (2, 3);'
         "$(jq -n --arg id "$PGLITE_DB_ID" \
             '{connectionInfo:{type:"pglite",databaseId:$id},query:"DELETE FROM products"}')"
 
+    # 6a. Multi-command payload must not escape the read-only transaction
+    local PAYLOAD="SELECT 'x\\'; COMMIT; DELETE FROM products; --'"
+    post "execute — multi-command payload (expect 400)" "400" \
+        "${BASE_URL}/api/query/execute" \
+        "$(jq -n --arg id "$PGLITE_DB_ID" --arg q "$PAYLOAD" \
+            '{connectionInfo:{type:"pglite",databaseId:$id},query:$q}')"
+
+    post_body_contains "execute — data intact after multi-command payload" "200" \
+        "${BASE_URL}/api/query/execute" \
+        "$(jq -n --arg id "$PGLITE_DB_ID" \
+            '{connectionInfo:{type:"pglite",databaseId:$id},query:"SELECT * FROM products ORDER BY id"}')" \
+        "Widget"
+
+    # 6b. A backslash-escaped quote must not hide a sequence function from the AST
+    local BS_PAYLOAD="SELECT 'x\\', nextval(\$\$readonly_probe_temp_seq\$\$) --'"
+    post "execute — backslash-hidden nextval (expect 400)" "400" \
+        "${BASE_URL}/api/query/execute" \
+        "$(jq -n --arg id "$PGLITE_DB_ID" --arg q "$BS_PAYLOAD" \
+            '{connectionInfo:{type:"pglite",databaseId:$id},query:$q}')"
+
     # 7. Non-existent table → 500
     post "execute — unknown table (expect 500)" "500" \
         "${BASE_URL}/api/query/execute" \
@@ -514,6 +534,40 @@ postgres_tests() {
     post "execute — SELECT 1" "200" \
         "${BASE_URL}/api/query/execute" \
         "$(jq -n --argjson conn "$CONN" '{connectionInfo:$conn,query:"SELECT 1 AS value"}')"
+
+    # Multi-command payload: rejected by the parser-level guard before it
+    # reaches PostgreSQL.  DELETE ... WHERE 1=0 keeps the smoke DB safe even
+    # if the guard regresses (the request would then return 200, failing).
+    local PAYLOAD="SELECT 'x\\'; COMMIT; DELETE FROM angest WHERE 1=0; --'"
+    post "execute — multi-command payload (expect 400)" "400" \
+        "${BASE_URL}/api/query/execute" \
+        "$(jq -n --argjson conn "$CONN" --arg q "$PAYLOAD" \
+            '{connectionInfo:$conn,query:$q}')"
+
+    post "execute — usable after multi-command payload" "200" \
+        "${BASE_URL}/api/query/execute" \
+        "$(jq -n --argjson conn "$CONN" \
+            '{connectionInfo:$conn,query:"SELECT COUNT(*) AS c FROM angest"}')"
+
+    # The extended protocol itself (TypeORM -> pg) must reject multi-command SQL.
+    local EXT_OUT EXT_EXIT=0
+    EXT_OUT=$(cd "$(dirname "$SCRIPT_DIR")" && \
+        SMOKE_PAYLOAD="$PAYLOAD" node scripts/verify-extended-protocol.js 2>&1) || EXT_EXIT=$?
+    if [[ "$EXT_EXIT" -eq 0 && "$EXT_OUT" == *"cannot insert multiple commands"* ]]; then
+        green "  PASS  extended protocol rejects multi-command SQL"
+        (( PASS++ )) || true
+    else
+        red   "  FAIL  extended protocol rejects multi-command SQL"
+        red   "         output: $EXT_OUT"
+        (( FAIL++ )) || true
+    fi
+
+    # A backslash-escaped quote must not hide a sequence function from the AST.
+    local BS_PAYLOAD="SELECT 'x\\', nextval(\$\$readonly_probe_temp_seq\$\$) --'"
+    post "execute — backslash-hidden nextval (expect 400)" "400" \
+        "${BASE_URL}/api/query/execute" \
+        "$(jq -n --argjson conn "$CONN" --arg q "$BS_PAYLOAD" \
+            '{connectionInfo:$conn,query:$q}')"
 
     # Prove we are actually talking to PostgreSQL (pg-specific system function)
     post_body_contains "execute — version() contains 'PostgreSQL'" "200" \

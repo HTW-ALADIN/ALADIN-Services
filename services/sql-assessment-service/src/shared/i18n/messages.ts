@@ -31,6 +31,8 @@ export type MessageKey =
 	| 'QUERY_PARSE_ERROR'
 	| 'QUERY_MULTIPLE_STATEMENTS'
 	| 'QUERY_NON_SELECT'
+	| 'QUERY_UNSAFE_FUNCTION'
+	| 'QUERY_AMBIGUOUS_STRING'
 	| 'QUERY_EXECUTION_FAILED'
 	| 'QUERY_UNEXPECTED_ERROR'
 	// ── grading ──────────────────────────────────────────────────────────────
@@ -146,6 +148,10 @@ export const MESSAGES: MessageCatalogue = {
 			'Only a single SELECT statement is allowed per request.',
 		QUERY_NON_SELECT:
 			'Only SELECT queries are permitted. Received statement type: "{{value}}".',
+		QUERY_UNSAFE_FUNCTION:
+			'The function "{{value}}" is not allowed in read-only queries.',
+		QUERY_AMBIGUOUS_STRING:
+			'String literals may not backslash-escape quotes; use doubled quotes (\'\') instead.',
 		QUERY_EXECUTION_FAILED: 'Query execution failed: {{value}}',
 		QUERY_UNEXPECTED_ERROR: 'Unexpected error: {{value}}',
 		// grading
@@ -288,6 +294,10 @@ export const MESSAGES: MessageCatalogue = {
 			'Pro Anfrage ist nur eine einzelne SELECT-Anweisung erlaubt.',
 		QUERY_NON_SELECT:
 			'Nur SELECT-Abfragen sind zulässig. Empfangener Anweisungstyp: "{{value}}".',
+		QUERY_UNSAFE_FUNCTION:
+			'Die Funktion "{{value}}" ist in schreibgeschützten Abfragen nicht erlaubt.',
+		QUERY_AMBIGUOUS_STRING:
+			'Zeichenkettenliterale dürfen Anführungszeichen nicht mit Backslashes escapen; verwenden Sie zwei einfache Anführungszeichen (\'\').',
 		QUERY_EXECUTION_FAILED: 'Abfrageausführung fehlgeschlagen: {{value}}',
 		QUERY_UNEXPECTED_ERROR: 'Unerwarteter Fehler: {{value}}',
 		// grading

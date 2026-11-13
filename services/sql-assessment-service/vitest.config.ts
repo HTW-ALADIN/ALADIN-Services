@@ -16,7 +16,10 @@ export default defineConfig({
 			exclude: ['src/index.ts', 'src/test-page/**'],
 			reporter: ['text', 'lcov'],
 		},
+		// PGlite starts a WASM Postgres instance per suite. Under parallel
+		// workers the initialisation + DDL in beforeAll hooks can exceed the
+		// default budget on slower CI runners, so allow generous headroom.
 		testTimeout: 8000,
-		hookTimeout: 8000,
+		hookTimeout: 30000,
 	},
 });
