@@ -39,6 +39,144 @@ function getFunctionName(node: unknown): string | undefined {
 	return typeof last?.value === 'string' ? last.value.toLowerCase() : undefined;
 }
 
+/**
+ * True when the character can be part of an unquoted identifier.  PostgreSQL
+ * allows `$` inside identifiers, so a `$tag$` sequence that follows an
+ * identifier character is not a dollar-quoted string opener.
+ */
+function isIdentifierChar(ch: string | undefined): boolean {
+	return ch !== undefined && /[A-Za-z0-9_$]/.test(ch);
+}
+
+/**
+ * Detects literals where a backslash escapes a quote.
+ *
+ * node-sql-parser treats `\'` as an escaped quote, but PostgreSQL with the
+ * default `standard_conforming_strings = on` closes the literal at that quote.
+ * The mismatch lets a query such as `SELECT 'x\', nextval($$seq$$) --'` hide a
+ * function call from the AST, so reject it instead of guessing which side is
+ * right.
+ *
+ * Comments and dollar-quoted strings are skipped; E-strings are not supported
+ * by the parser and therefore already end in `QUERY_PARSE_ERROR`.
+ */
+function hasAmbiguousBackslashEscape(sql: string): boolean {
+	let i = 0;
+	while (i < sql.length) {
+		const ch = sql[i];
+
+		if (ch === '-' && sql[i + 1] === '-') {
+			const newline = sql.indexOf('\n', i + 2);
+			if (newline === -1) return false;
+			i = newline + 1;
+			continue;
+		}
+
+		if (ch === '/' && sql[i + 1] === '*') {
+			let depth = 1;
+			i += 2;
+			while (i < sql.length && depth > 0) {
+				if (sql[i] === '/' && sql[i + 1] === '*') {
+					depth += 1;
+					i += 2;
+				} else if (sql[i] === '*' && sql[i + 1] === '/') {
+					depth -= 1;
+					i += 2;
+				} else {
+					i += 1;
+				}
+			}
+			continue;
+		}
+
+		if (ch === '$' && !isIdentifierChar(sql[i - 1])) {
+			const tag = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.slice(i));
+			if (tag) {
+				const end = sql.indexOf(tag[0], i + tag[0].length);
+				if (end === -1) return false;
+				i = end + tag[0].length;
+				continue;
+			}
+		}
+
+		if (ch === "'" || ch === '"') {
+			const quote = ch;
+			i += 1;
+			while (i < sql.length) {
+				if (sql[i] === '\\') {
+					let j = i;
+					while (j < sql.length && sql[j] === '\\') j += 1;
+					if ((j - i) % 2 === 1 && sql[j] === quote) return true;
+					i = j;
+					continue;
+				}
+				if (sql[i] === quote) {
+					if (sql[i + 1] === quote) {
+						i += 2;
+						continue;
+					}
+					i += 1;
+					break;
+				}
+				i += 1;
+			}
+			continue;
+		}
+
+		i += 1;
+	}
+	return false;
+}
+
+interface TempSequenceState {
+	name: string;
+	lastValue: number | string;
+	isCalled: boolean;
+}
+
+/**
+ * Captures the state of every temporary sequence in the current PGlite
+ * session.  Sequence increments are non-transactional, so they survive the
+ * rollback that discards temporary-table writes.
+ */
+async function snapshotTempSequences(tx: any): Promise<TempSequenceState[]> {
+	const { rows } = await tx.query(
+		`SELECT format('%I.%I', n.nspname, c.relname) AS name
+		 FROM pg_class c
+		 JOIN pg_namespace n ON n.oid = c.relnamespace
+		 WHERE c.relkind = 'S' AND n.oid = pg_my_temp_schema()
+		 ORDER BY c.oid`,
+	);
+	const snapshots: TempSequenceState[] = [];
+	for (const row of rows as { name: string }[]) {
+		const state = await tx.query(
+			`SELECT last_value, is_called FROM ${row.name}`,
+		);
+		const current = (
+			state.rows as { last_value: number | string; is_called: boolean }[]
+		)[0];
+		snapshots.push({
+			name: row.name,
+			lastValue: current.last_value,
+			isCalled: current.is_called,
+		});
+	}
+	return snapshots;
+}
+
+async function restoreTempSequences(
+	tx: any,
+	snapshots: TempSequenceState[],
+): Promise<void> {
+	for (const snapshot of snapshots) {
+		await tx.query('SELECT setval($1::regclass, $2, $3)', [
+			snapshot.name,
+			snapshot.lastValue,
+			snapshot.isCalled,
+		]);
+	}
+}
+
 export interface QueryExecutionServiceOptions {
 	/**
 	 * Run every query inside a read-only transaction so the database itself
@@ -159,11 +297,33 @@ export class QueryExecutionService {
 			const result = this.enforceReadOnly
 				? await db.transaction(async (tx: any) => {
 					await tx.query('SET TRANSACTION READ ONLY');
-					const queryResult = await tx.query(trimmed);
-					// PGlite commits when the callback resolves, which would
-					// persist session settings and temporary-table writes that
-					// a read-only transaction still permits.  Roll back instead.
+					const tempSequences = await snapshotTempSequences(tx);
+					if (tempSequences.length === 0) {
+						const queryResult = await tx.query(trimmed);
+						// PGlite commits when the callback resolves, which would
+						// persist session settings and temporary-table writes that
+						// a read-only transaction still permits.  Roll back instead.
+						await tx.rollback();
+						return queryResult;
+					}
+
+					// Functions can advance a temporary sequence, and sequence
+					// increments are non-transactional: they survive the rollback
+					// that removes the temporary-table writes.  Run the query
+					// behind a savepoint so the snapshot can be restored even when
+					// the query itself fails.
+					await tx.query('SAVEPOINT user_query');
+					let queryResult: any;
+					let queryError: unknown;
+					try {
+						queryResult = await tx.query(trimmed);
+					} catch (err) {
+						queryError = err;
+						await tx.query('ROLLBACK TO SAVEPOINT user_query');
+					}
+					await restoreTempSequences(tx, tempSequences);
 					await tx.rollback();
+					if (queryError) throw queryError;
 					return queryResult;
 				})
 				: await db.query(trimmed);
@@ -188,6 +348,13 @@ export class QueryExecutionService {
 	 * cannot be parsed as valid SQL.
 	 */
 	private assertSelectOnly(query: string, lang: SupportedLanguage): void {
+		if (hasAmbiguousBackslashEscape(query)) {
+			throw new QueryExecutionError(
+				t('QUERY_AMBIGUOUS_STRING', lang),
+				'PARSE_ERROR',
+			);
+		}
+
 		let ast: AST | AST[];
 		try {
 			ast = this.parser.astify(query, { database: 'PostgreSQL' });

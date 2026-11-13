@@ -102,6 +102,9 @@ describe('QueryExecutionService', () => {
             ["SELECT pg_catalog.nextval('probe')", 'NON_SELECT'],
             ["SELECT setval('probe', 1)", 'NON_SELECT'],
             ["SELECT * FROM products WHERE id = nextval('probe')", 'NON_SELECT'],
+            ["SELECT 'x\\', nextval($$probe$$) --'", 'PARSE_ERROR'],
+            ["SELECT 'x\\'; COMMIT; DELETE FROM products; --'", 'PARSE_ERROR'],
+            ["SELECT 'it\\'s'", 'PARSE_ERROR'],
         ])('rejects before touching the database: %s', async (sql, code) => {
             const { execute, query, createQueryRunner, release } = createExecution(backend);
             await expect(execute(sql)).rejects.toMatchObject({ code });
@@ -129,6 +132,17 @@ describe('QueryExecutionService', () => {
             ["SELECT currval('probe')", 'non-mutating sequence read'],
             ["SELECT lastval()", 'non-mutating sequence read'],
         ])('allows %s (%s)', async (sql) => {
+            const { execute } = createExecution(backend);
+            await expect(execute(sql)).resolves.toBeDefined();
+        });
+
+        it.each([
+            "SELECT 'a\\b' AS value",
+            "SELECT 'a''b' AS value",
+            "SELECT 'a\\\\' AS value",
+            "SELECT 1 AS value -- don\\'t",
+            "SELECT $$a\\'b$$ AS value",
+        ])('allows backslashes that are not quote escapes: %s', async (sql) => {
             const { execute } = createExecution(backend);
             await expect(execute(sql)).resolves.toBeDefined();
         });
@@ -167,7 +181,6 @@ describe('QueryExecutionService', () => {
 
         it('executes user SQL through the extended query protocol', async () => {
             const readOnlyService = new QueryExecutionService();
-            const payload = "SELECT 'x\\'; COMMIT; DELETE FROM products; --'";
             const query = vi.fn()
                 .mockResolvedValueOnce(undefined)
                 .mockResolvedValueOnce([{ answer: 42 }]);
@@ -182,12 +195,12 @@ describe('QueryExecutionService', () => {
             });
 
             await readOnlyService.executeQuery(
-                payload,
+                'SELECT 42 AS answer',
                 { createQueryRunner } as unknown as DataSource,
             );
 
             expect(query).toHaveBeenNthCalledWith(2, {
-                text: payload,
+                text: 'SELECT 42 AS answer',
                 queryMode: 'extended',
             });
         });
@@ -224,6 +237,7 @@ describe('QueryExecutionService', () => {
             const readOnlyService = new QueryExecutionService();
             const txQuery = vi.fn()
                 .mockResolvedValueOnce(undefined)
+                .mockResolvedValueOnce({ rows: [] })
                 .mockResolvedValueOnce({ rows: [{ answer: 42 }] });
             const rollback = vi.fn().mockResolvedValue(undefined);
             const transaction = vi.fn(
@@ -237,7 +251,8 @@ describe('QueryExecutionService', () => {
 
             expect(transaction).toHaveBeenCalledOnce();
             expect(txQuery).toHaveBeenNthCalledWith(1, 'SET TRANSACTION READ ONLY');
-            expect(txQuery).toHaveBeenNthCalledWith(2, 'SELECT 42 AS answer');
+            expect(txQuery.mock.calls[1][0]).toContain('pg_my_temp_schema');
+            expect(txQuery).toHaveBeenNthCalledWith(3, 'SELECT 42 AS answer');
             expect(rollback).toHaveBeenCalledOnce();
         });
     });

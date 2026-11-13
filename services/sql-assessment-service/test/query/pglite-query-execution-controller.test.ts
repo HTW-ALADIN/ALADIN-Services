@@ -247,9 +247,9 @@ describe('QueryExecutionController — PGlite path', () => {
 				}),
 				res,
 			);
-			expect(status).toHaveBeenCalledWith(500);
+			expect(status).toHaveBeenCalledWith(400);
 			expect(json).toHaveBeenCalledWith(
-				expect.objectContaining({ code: 'EXECUTION_FAILED' }),
+				expect.objectContaining({ code: 'PARSE_ERROR' }),
 			);
 			expect(
 				(await pgliteDb.query('SELECT * FROM products ORDER BY id')).rows,
@@ -276,6 +276,60 @@ describe('QueryExecutionController — PGlite path', () => {
 					'SELECT last_value, is_called FROM readonly_probe_temp_seq',
 				)).rows,
 			).toEqual([{ last_value: 1, is_called: false }]);
+		});
+
+		it('rejects backslash-escaped quotes that hide sequence calls', async () => {
+			await pgliteDb.exec('CREATE TEMP SEQUENCE hidden_probe_seq');
+			const { res, status, json } = mockRes();
+			await controller.executeQuery(
+				mockReq({
+					connectionInfo: VALID_PGLITE_CONN,
+					query: "SELECT 'x\\', nextval($$hidden_probe_seq$$) --'",
+				}),
+				res,
+			);
+			expect(status).toHaveBeenCalledWith(400);
+			expect(json).toHaveBeenCalledWith(
+				expect.objectContaining({ code: 'PARSE_ERROR' }),
+			);
+			expect(
+				(await pgliteDb.query(
+					'SELECT last_value, is_called FROM hidden_probe_seq',
+				)).rows,
+			).toEqual([{ last_value: 1, is_called: false }]);
+		});
+
+		it('restores temporary-sequence increments caused by functions', async () => {
+			await pgliteDb.exec(`
+				CREATE TEMP TABLE scratch_ids (id serial);
+				CREATE FUNCTION bump_scratch() RETURNS integer LANGUAGE SQL AS $$
+					INSERT INTO scratch_ids DEFAULT VALUES;
+					SELECT last_value::integer FROM scratch_ids_id_seq;
+				$$;
+			`);
+			const before = await pgliteDb.query(
+				'SELECT last_value, is_called FROM scratch_ids_id_seq',
+			);
+			const { res, status, json } = mockRes();
+			await controller.executeQuery(
+				mockReq({
+					connectionInfo: VALID_PGLITE_CONN,
+					query: 'SELECT bump_scratch() AS n;',
+				}),
+				res,
+			);
+			expect(status).toHaveBeenCalledWith(200);
+			expect(json).toHaveBeenCalledWith({ rows: [{ n: 1 }], rowCount: 1 });
+			expect(
+				(await pgliteDb.query(
+					'SELECT last_value, is_called FROM scratch_ids_id_seq',
+				)).rows,
+			).toEqual(before.rows);
+			expect(
+				(await pgliteDb.query(
+					'SELECT count(*)::integer AS n FROM scratch_ids',
+				)).rows,
+			).toEqual([{ n: 0 }]);
 		});
 
 		it('returns 200 for a valid SELECT', async () => {

@@ -275,6 +275,18 @@ describe('QueryExecutionService i18n — thrown error messages', () => {
         ).rejects.toThrow(t('QUERY_UNSAFE_FUNCTION', 'de', 'nextval'));
     });
 
+    it('throws QUERY_AMBIGUOUS_STRING for backslash-escaped quotes (en)', async () => {
+        await expect(
+            service.executeQuery("SELECT 'it\\'s'", dataSource, 'en')
+        ).rejects.toThrow(t('QUERY_AMBIGUOUS_STRING', 'en'));
+    });
+
+    it('throws QUERY_AMBIGUOUS_STRING for backslash-escaped quotes (de)', async () => {
+        await expect(
+            service.executeQuery("SELECT 'it\\'s'", dataSource, 'de')
+        ).rejects.toThrow(t('QUERY_AMBIGUOUS_STRING', 'de'));
+    });
+
     it('throws English EXECUTION_FAILED for a SELECT on a non-existent table', async () => {
         await expect(
             service.executeQuery(
