@@ -1,0 +1,18 @@
+@baseUrl = http://localhost:8004
+
+### Create a thread (replace graph_id)
+POST {{baseUrl}}/v1/threads
+Content-Type: application/json
+
+{
+  "graph_id": "gr_replace_me"
+}
+
+### Get thread state (replace thread_id)
+GET {{baseUrl}}/v1/threads/th_replace_me/state
+
+### Get thread history (replace thread_id)
+GET {{baseUrl}}/v1/threads/th_replace_me/history?limit=20
+
+### Delete a thread (replace thread_id)
+DELETE {{baseUrl}}/v1/threads/th_replace_me

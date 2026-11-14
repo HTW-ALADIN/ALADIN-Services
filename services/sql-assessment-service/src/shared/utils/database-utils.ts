@@ -1,5 +1,7 @@
-import { DataSource, QueryRunner } from 'typeorm';
+import { DataSource, QueryFailedError, QueryRunner } from 'typeorm';
+import { BroadcasterResult } from 'typeorm/subscriber/BroadcasterResult';
 import type { PGlite } from '@electric-sql/pglite';
+import { AST, Parser } from 'node-sql-parser';
 import { IAliasMap, IParsedTable } from '../interfaces/domain';
 
 /**
@@ -8,6 +10,108 @@ import { IAliasMap, IParsedTable } from '../interfaces/domain';
  * PGlite execution paths.
  */
 export type RowQueryFn = (sql: string) => Promise<any[]>;
+
+function assertReadOnlyStatement(sql: string): void {
+	const statement = sql.replace(
+		/^\s*EXPLAIN\s*\(\s*FORMAT\s+JSON\s*\)\s+/i,
+		'',
+	);
+	let ast: AST | AST[];
+	try {
+		ast = new Parser().astify(statement, { database: 'postgresql' });
+	} catch (error) {
+		if (statement === sql && /^\s*select\b/i.test(statement)) {
+			return;
+		}
+		throw error;
+	}
+	if (
+		Array.isArray(ast) ||
+		!ast ||
+		ast.type !== 'select' ||
+		(ast as any).into?.position
+	) {
+		throw new Error('Only a single SELECT without INTO is allowed');
+	}
+}
+
+export function makeReadOnlyRowQueryFn(dataSource: DataSource): RowQueryFn {
+	return async (sql: string) => {
+		assertReadOnlyStatement(sql);
+		const runner = dataSource.createQueryRunner();
+		try {
+			await runner.startTransaction();
+			await runner.query('SET TRANSACTION READ ONLY');
+			const connection = await runner.connect();
+			dataSource.logger.logQuery(sql, undefined, runner);
+			const beforeEvents = new BroadcasterResult();
+			runner.broadcaster.broadcastBeforeQueryEvent(beforeEvents, sql, undefined);
+			await beforeEvents.wait();
+			const afterEvents = new BroadcasterResult();
+			const startedAt = Date.now();
+			let result: { rows: any[] };
+			try {
+				result = await connection.query({ text: sql, queryMode: 'extended' });
+			} catch (error) {
+				const loggedError =
+					error instanceof Error || typeof error === 'string'
+						? error
+						: String(error);
+				dataSource.logger.logQueryError(loggedError, sql, undefined, runner);
+				runner.broadcaster.broadcastAfterQueryEvent(
+					afterEvents,
+					sql,
+					undefined,
+					false,
+					undefined,
+					undefined,
+					error,
+				);
+				await afterEvents.wait();
+				if (error instanceof Error) {
+					throw new QueryFailedError(sql, undefined, error);
+				}
+				throw error;
+			}
+			const elapsed = Date.now() - startedAt;
+			if (
+				dataSource.options.maxQueryExecutionTime &&
+				elapsed > dataSource.options.maxQueryExecutionTime
+			) {
+				dataSource.logger.logQuerySlow(elapsed, sql, undefined, runner);
+			}
+			runner.broadcaster.broadcastAfterQueryEvent(
+				afterEvents,
+				sql,
+				undefined,
+				true,
+				elapsed,
+				result,
+				undefined,
+			);
+			await afterEvents.wait();
+			return result.rows;
+		} finally {
+			try {
+				if (runner.isTransactionActive) await runner.rollbackTransaction();
+			} finally {
+				await runner.release();
+			}
+		}
+	};
+}
+
+export function makeReadOnlyPGliteRowQueryFn(db: PGlite): RowQueryFn {
+	return async (sql: string) => {
+		assertReadOnlyStatement(sql);
+		return db.transaction(async (tx) => {
+			await tx.query('SET TRANSACTION READ ONLY');
+			const result = await tx.query(sql);
+			await tx.rollback();
+			return result.rows as any[];
+		});
+	};
+}
 
 /**
  * Builds a {@link RowQueryFn} backed by a TypeORM {@link DataSource}.

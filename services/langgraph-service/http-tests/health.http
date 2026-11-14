@@ -1,0 +1,7 @@
+@baseUrl = http://localhost:8004
+
+### Health
+GET {{baseUrl}}/health
+
+### Readiness
+GET {{baseUrl}}/readyz
