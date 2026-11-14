@@ -118,9 +118,9 @@ export class InMemoryGraphService implements IGraphDB {
 			`MATCH (n) WHERE n._grs_internalId = $internalId RETURN properties(n) AS props`,
 			{ internalId }
 		);
-		const rows = result.toArray();
+		const rows = result.toArray() as { props: Record<string, unknown> }[];
 		if (!rows.length) return undefined;
-		return this.propsToNodeResult(rows[0].props as Record<string, unknown>);
+		return this.propsToNodeResult(rows[0].props);
 	}
 
 	public async deleteNode(
@@ -155,11 +155,8 @@ export class InMemoryGraphService implements IGraphDB {
 		const result = await this.db.executeCypher(
 			`MATCH (n:\`${DEFAULT_NODE_LABEL}\`) RETURN properties(n) AS props`
 		);
-		return result
-			.toArray()
-			.map((row) =>
-				this.propsToNodeResult(row.props as Record<string, unknown>)
-			);
+		const rows = result.toArray() as { props: Record<string, unknown> }[];
+		return rows.map((row) => this.propsToNodeResult(row.props));
 	}
 
 	public async deleteAllNodes(): Promise<DBGraphNodeResult[]> {
@@ -386,7 +383,8 @@ export class InMemoryGraphService implements IGraphDB {
 		const cypher = `MATCH ${query} RETURN ${returnParts.join(', ')}`;
 
 		const res = await this.db.executeCypher(cypher, parameters);
-		const mainResults = res.toArray().map((row) => {
+		const rows = res.toArray() as Record<string, unknown>[];
+		const mainResults = rows.map((row) => {
 			const matchResult: DBGraphPatternMatchResult = { nodes: {}, edges: {} };
 			for (const v of nodeVars) {
 				const props = row[v] as Record<string, unknown> | undefined;
@@ -482,8 +480,8 @@ export class InMemoryGraphService implements IGraphDB {
 		const cypher = `MATCH ${matchPart}${whereStr} RETURN COUNT(*) AS c`;
 
 		const result = await this.db.executeCypher(cypher, parameters);
-		const rows = result.toArray();
+		const rows = result.toArray() as { c: number }[];
 		if (!rows.length) return false;
-		return (rows[0].c as number) > 0;
+		return rows[0].c > 0;
 	}
 }

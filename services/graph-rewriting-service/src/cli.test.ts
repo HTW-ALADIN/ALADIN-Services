@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -63,7 +64,7 @@ const sampleFindRequest = {
 // ─── parseArgs ──────────────────────────────────────────────────────────────
 
 describe('parseArgs', () => {
-	let exitSpy: ReturnType<typeof vi.spyOn>;
+	let exitSpy: MockInstance<typeof process.exit>;
 
 	beforeEach(() => {
 		exitSpy = vi
@@ -154,7 +155,7 @@ describe('parseArgs', () => {
 // ─── readJsonInput ──────────────────────────────────────────────────────────
 
 describe('readJsonInput', () => {
-	let exitSpy: ReturnType<typeof vi.spyOn>;
+	let exitSpy: MockInstance<typeof process.exit>;
 
 	beforeEach(() => {
 		exitSpy = vi
@@ -241,7 +242,7 @@ describe('CLI command handlers', () => {
 	let mockGraphService: Neo4jGraphService;
 	let consoleSpy: ReturnType<typeof vi.spyOn>;
 	let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
-	let exitSpy: ReturnType<typeof vi.spyOn>;
+	let exitSpy: MockInstance<typeof process.exit>;
 
 	beforeEach(() => {
 		mockGraphService = {
@@ -428,7 +429,11 @@ describe('CLI command handlers', () => {
 		});
 
 		test('exits with error when node not found', async () => {
-			vi.mocked(mockGraphService.getNode).mockResolvedValue(undefined);
+			vi.mocked(mockGraphService.getNode).mockResolvedValue(
+				undefined as unknown as Awaited<
+					ReturnType<typeof mockGraphService.getNode>
+				>
+			);
 
 			await cmdGetNode(mockGraphService, 'missing');
 
@@ -491,7 +496,11 @@ describe('CLI command handlers', () => {
 		});
 
 		test('exits with error when edge not found', async () => {
-			vi.mocked(mockGraphService.getEdge).mockResolvedValue(undefined);
+			vi.mocked(mockGraphService.getEdge).mockResolvedValue(
+				undefined as unknown as Awaited<
+					ReturnType<typeof mockGraphService.getEdge>
+				>
+			);
 
 			await cmdGetEdge(mockGraphService, 'missing');
 
