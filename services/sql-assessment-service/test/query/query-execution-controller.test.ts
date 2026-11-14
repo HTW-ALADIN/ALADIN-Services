@@ -1,29 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Request, Response, NextFunction } from 'express';
 
-// ---------------------------------------------------------------------------
-// Module-level mocks (hoisted by vitest)
-//
-// connectToDatabase – return true without touching a real PG server.
-// DataSource        – stub destroy() so the catch block does not throw on an
-//                     uninitialised pool.
-// The synchronous factory avoids async-hoisting edge cases in vitest v4.
-// ---------------------------------------------------------------------------
-vi.mock('../../src/shared/utils/database-utils', () => ({
-	generateDatabaseKey: (host: string, port: number, schema: string) =>
-		`${host}:${port}/${schema}`,
-	generatePGliteKey: (id: string) => `pglite:${id}`,
-	connectToDatabase: vi.fn().mockResolvedValue(true),
-	makeRowQueryFn: vi.fn(),
-	createQueryRunner: vi.fn(),
-	buildAliasMapFromTables: vi.fn(),
-}));
-
 vi.mock('typeorm', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('typeorm')>();
 	return {
 		...actual,
-		DataSource: vi.fn(function (this: Record<string, unknown>) {
+		DataSource: vi.fn(function (this: Record<string, unknown>, options: unknown) {
+			this.options = options;
 			this.initialize = vi.fn().mockResolvedValue(undefined);
 			this.destroy = vi.fn().mockResolvedValue(undefined);
 		}),
@@ -35,7 +18,7 @@ import {
 	QueryExecutionError,
 } from '../../src/query/query-execution-service';
 import { databaseMetadata } from '../../src/database/internal-memory';
-import { generateDatabaseKey } from '../../src/shared/utils/database-utils';
+import { generatePostgresDatabaseKey } from '../../src/shared/utils/database-utils';
 
 // ---------------------------------------------------------------------------
 // Express mock helpers
@@ -65,18 +48,14 @@ const VALID_CONNECTION = {
 	// Use a public, non-loopback/private host: validateConnectionInfo() blocks
 	// internal connection targets (SSRF protection), so 'localhost' would be
 	// rejected before the request ever reaches the service under test.
-	host: 'db.example.com',
+	host: '8.8.8.8',
 	port: 5432,
 	username: 'user',
 	password: 'pass',
 	schema: 'northwind',
 };
 
-const DB_KEY = generateDatabaseKey(
-	VALID_CONNECTION.host,
-	VALID_CONNECTION.port,
-	VALID_CONNECTION.schema,
-);
+const DB_KEY = generatePostgresDatabaseKey(VALID_CONNECTION.host, VALID_CONNECTION);
 
 let controller: QueryExecutionController;
 let serviceMock: QueryExecutionService;

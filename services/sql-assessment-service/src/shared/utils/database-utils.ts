@@ -1,8 +1,11 @@
 import { DataSource, QueryFailedError, QueryRunner } from 'typeorm';
-import { BroadcasterResult } from 'typeorm/subscriber/BroadcasterResult';
+import type { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
+import type { PostgresDriver } from 'typeorm/driver/postgres/PostgresDriver';
+import { BroadcasterResult } from 'typeorm/subscriber/BroadcasterResult.js';
 import type { PGlite } from '@electric-sql/pglite';
 import { AST, Parser } from 'node-sql-parser';
 import { IAliasMap, IParsedTable } from '../interfaces/domain';
+import { databaseMetadata } from '../../database/internal-memory';
 
 /**
  * Database-agnostic query executor: accepts a SQL string and returns the
@@ -153,6 +156,20 @@ export function generateDatabaseKey(
 	return `${host}:${port}/${schema}`;
 }
 
+export function generatePostgresDatabaseKey(
+	requestedHost: string,
+	connectionInfo: PostgresConnectionOptions,
+): string {
+	return `postgres:${JSON.stringify([
+		requestedHost,
+		connectionInfo.host,
+		connectionInfo.port,
+		connectionInfo.database || process.env.PGDATABASE || connectionInfo.username,
+		connectionInfo.schema,
+		connectionInfo.username,
+	])}`;
+}
+
 export function generatePGliteKey(databaseId: string): string {
 	return `pglite:${databaseId}`;
 }
@@ -175,6 +192,72 @@ export async function connectToDatabase(
 			isConnected = false;
 		});
 	return isConnected;
+}
+
+export interface ConnectedPostgres {
+	dataSource: DataSource;
+	connectionInfo: PostgresConnectionOptions;
+}
+
+const DEFAULT_POSTGRES_CONNECT_TIMEOUT_MS = 5000;
+
+export async function connectToPostgresCandidates(
+	candidates: readonly PostgresConnectionOptions[],
+): Promise<ConnectedPostgres | null> {
+	for (const candidate of candidates) {
+		const configuredTimeout = candidate.extra?.connectionTimeoutMillis ?? candidate.connectTimeoutMS;
+		const timeout = typeof configuredTimeout === 'number' &&
+			Number.isFinite(configuredTimeout) && configuredTimeout > 0
+			? configuredTimeout
+			: DEFAULT_POSTGRES_CONNECT_TIMEOUT_MS;
+		const connectionInfo: PostgresConnectionOptions = {
+			...candidate,
+			connectTimeoutMS: timeout,
+			extra: { ...candidate.extra, connectionTimeoutMillis: timeout },
+		};
+		let dataSource: DataSource | undefined;
+		try {
+			dataSource = new DataSource(connectionInfo);
+			if (await connectToDatabase(dataSource)) {
+				return { dataSource, connectionInfo };
+			}
+		} catch {
+			if (!dataSource) continue;
+		}
+		if (dataSource) {
+			try {
+				if (dataSource.isInitialized) {
+					await dataSource.destroy();
+				} else {
+					const driver = dataSource.driver as PostgresDriver | undefined;
+					if (driver?.master) await driver.disconnect();
+				}
+			} catch {
+				return null;
+			}
+		}
+	}
+	return null;
+}
+
+export async function connectToRegisteredPostgres(
+	requestedHost: string,
+	candidates: readonly PostgresConnectionOptions[],
+): Promise<
+	| { ok: true; dataSource: DataSource; databaseKey: string }
+	| { ok: false; reason: 'unregistered' | 'unavailable' }
+> {
+	const registered = candidates.filter((candidate) =>
+		databaseMetadata.has(generatePostgresDatabaseKey(requestedHost, candidate)),
+	);
+	if (registered.length === 0) return { ok: false, reason: 'unregistered' };
+	const connection = await connectToPostgresCandidates(registered);
+	if (!connection) return { ok: false, reason: 'unavailable' };
+	return {
+		ok: true,
+		dataSource: connection.dataSource,
+		databaseKey: generatePostgresDatabaseKey(requestedHost, connection.connectionInfo),
+	};
 }
 
 export function createQueryRunner(

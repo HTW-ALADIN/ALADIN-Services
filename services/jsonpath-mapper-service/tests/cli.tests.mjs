@@ -36,6 +36,17 @@ const writeJson = (name, obj) => {
 
 describe('CLI', () => {
   describe('basic mapping', () => {
+    it('should run the built CLI', () => {
+      const dataFile = writeJson('built-data.json', { value: 42 });
+      const templateFile = writeJson('built-template.json', { num: '.value' });
+      const stdout = execFileSync(process.execPath, ['dist/cli.mjs', dataFile, templateFile], {
+        encoding: 'utf-8',
+        cwd: new URL('..', import.meta.url).pathname,
+        env: { ...process.env, NODE_V8_COVERAGE: '' },
+      });
+      expect(JSON.parse(stdout)).to.deep.equal({ num: 42 });
+    });
+
     it('should map data using a template', () => {
       const dataFile = writeJson('data.json', {
         user: { firstName: 'Alice', lastName: 'Smith', address: { city: 'Vienna' } },

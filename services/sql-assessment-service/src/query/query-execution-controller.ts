@@ -1,8 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { DataSource } from 'typeorm';
 import {
-	connectToDatabase,
-	generateDatabaseKey,
+	connectToRegisteredPostgres,
 	generatePGliteKey,
 } from '../shared/utils/database-utils';
 import {
@@ -19,7 +18,7 @@ import {
 } from './query-execution-service';
 import { t, resolveLanguageCode, SupportedLanguage } from '../shared/i18n';
 import { pgliteInstances } from '../database/internal-memory';
-import { DatabaseService } from '../database/database-service';
+import { DatabaseService, AnalyzeResult } from '../database/database-service';
 
 /**
  * Exposes a single endpoint for executing a raw SQL SELECT query against a
@@ -133,11 +132,14 @@ export class QueryExecutionController {
 		}
 
 		// ---- auto-analyze ---------------------------------------------------
+		let analyzed: AnalyzeResult | undefined;
 		if (this.databaseService) {
-			const analyzed = await this.databaseService.ensureAnalyzed(
+			analyzed = await this.databaseService.ensureAnalyzed(
 				options.connectionInfo,
 				undefined,
 				lang,
+				false,
+				true,
 			);
 			if (!analyzed.ok) {
 				return res.status(analyzed.status).json({ message: analyzed.message });
@@ -152,31 +154,28 @@ export class QueryExecutionController {
 		}
 		// -------------------------------------------------------------------
 
-		const validationError = validateConnectionInfo(connectionInfo, lang);
-		if (validationError) {
-			return res.status(400).json({ message: validationError });
-		}
-
-		const { host, port, schema } = connectionInfo;
-		const databaseKey = generateDatabaseKey(host!, port!, schema!);
-
-		if (!isDatabaseRegistered(databaseKey)) {
-			return res
-				.status(400)
-				.json({ message: t('DATABASE_NOT_REGISTERED', lang) });
-		}
-
 		let dataSource: DataSource;
-		let isConnected: boolean;
-		try {
-			dataSource = new DataSource(connectionInfo);
-			isConnected = await connectToDatabase(dataSource);
-		} catch {
-			return res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
-		}
-
-		if (!isConnected) {
-			return res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
+		if (analyzed) {
+			if (!analyzed.dataSource || !analyzed.databaseKey) {
+				return res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
+			}
+			dataSource = analyzed.dataSource;
+		} else {
+			const validation = await validateConnectionInfo(connectionInfo, lang);
+			if (!validation.ok) {
+				return res.status(400).json({ message: validation.message });
+			}
+			const connected = await connectToRegisteredPostgres(
+				validation.requestedHost,
+				validation.connectionInfos,
+			);
+			if (!connected.ok) {
+				const message = connected.reason === 'unregistered'
+					? t('DATABASE_NOT_REGISTERED', lang)
+					: t('UNABLE_TO_CONNECT', lang);
+				return res.status(400).json({ message });
+			}
+			dataSource = connected.dataSource;
 		}
 
 		try {
@@ -185,11 +184,8 @@ export class QueryExecutionController {
 				dataSource,
 				lang,
 			);
-			await dataSource.destroy();
 			return res.status(200).json(result);
 		} catch (err) {
-			await dataSource.destroy();
-
 			if (err instanceof QueryExecutionError) {
 				const clientCodes: QueryExecutionError['code'][] = [
 					'EMPTY_QUERY',
@@ -207,6 +203,8 @@ export class QueryExecutionController {
 			return res
 				.status(500)
 				.json({ message: t('QUERY_UNEXPECTED_ERROR', lang, String(err)) });
+		} finally {
+			await dataSource.destroy();
 		}
 	}
 

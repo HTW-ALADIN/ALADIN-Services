@@ -10,16 +10,9 @@ import * as a from './acceptance/index.mjs';
 import { siteConfigEntry } from './sample-data.mjs';
 import { mapArrayObject } from './sample-data.mjs';
 
-// When the project runtime (or build) resolves the ES modules
-// or if the package.json "type" is "module"
-// this is the intended way to import the mapJson methods
-import mapJson, { mapJsonAsync } from 'jsonpath-mapper';
-
-// // When the project runtime resolves the Common JS modules (standard Node.js resolution)
-// // we cannot import the default and named exports 
-// // instead import everything and destructure the required method
-// import pkg from 'jsonpath-mapper';
-// const { default: mapJson, mapJsonAsync } = pkg;
+const { default: mapJson, mapJsonAsync } = await import(
+  process.env.MAPPER_COVERAGE ? '../src/index.ts' : 'jsonpath-mapper'
+);
 
 console.log('mapJson: ', mapJson);
 console.log('mapJsonAsync: ', mapJsonAsync);

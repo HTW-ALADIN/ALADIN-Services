@@ -3,8 +3,7 @@ import { DataSource } from 'typeorm';
 import { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
 import { AST, Parser } from 'node-sql-parser';
 import {
-	connectToDatabase,
-	generateDatabaseKey,
+	connectToRegisteredPostgres,
 	generatePGliteKey,
 	makeReadOnlyPGliteRowQueryFn,
 	makeReadOnlyRowQueryFn,
@@ -36,7 +35,7 @@ import {
 	ProximityHeuristic,
 	QueryProximityService,
 } from './query-proximity-service';
-import { DatabaseService } from '../database/database-service';
+import { DatabaseService, AnalyzeResult } from '../database/database-service';
 
 // ---------------------------------------------------------------------------
 // Internal helper types
@@ -44,6 +43,7 @@ import { DatabaseService } from '../database/database-service';
 
 interface ValidatedConnection {
 	databaseKey: string;
+	schema: string;
 	/** Backend-agnostic query executor (TypeORM Postgres or in-process PGlite). */
 	runQuery: RowQueryFn;
 	/**
@@ -297,11 +297,14 @@ export class GradingController {
 		}
 
 		// ---- auto-analyze ---------------------------------------------------
+		let analyzed: AnalyzeResult | undefined;
 		if (this.databaseService) {
-			const analyzed = await this.databaseService.ensureAnalyzed(
+			analyzed = await this.databaseService.ensureAnalyzed(
 				body.connectionInfo,
 				undefined,
 				lang,
+				false,
+				true,
 			);
 			if (!analyzed.ok) {
 				res.status(analyzed.status).json({ message: analyzed.message });
@@ -317,7 +320,7 @@ export class GradingController {
 		}
 		// ---------------------------------------------------------------------
 
-		return this.resolvePostgresConnection(connectionInfo, lang, res);
+		return this.resolvePostgresConnection(connectionInfo, lang, res, analyzed);
 	}
 
 	// =========================================================================
@@ -358,6 +361,7 @@ export class GradingController {
 
 		return {
 			databaseKey,
+			schema: 'public',
 			runQuery: makeReadOnlyPGliteRowQueryFn(db),
 			cleanup: async () => {
 				/* shared PGlite instance — never closed here */
@@ -375,38 +379,41 @@ export class GradingController {
 		connectionInfo: PostgresConnectionOptions,
 		lang: SupportedLanguage,
 		res: Response,
+		analyzed?: AnalyzeResult,
 	): Promise<ValidatedConnection | null> {
-		const validationError = validateConnectionInfo(connectionInfo, lang);
-		if (validationError) {
-			res.status(400).json({ message: validationError });
-			return null;
-		}
-
-		const { host, port, schema } = connectionInfo;
-		const databaseKey = generateDatabaseKey(host!, port!, schema!);
-
-		if (!isDatabaseRegistered(databaseKey)) {
-			res.status(400).json({ message: t('DATABASE_NOT_REGISTERED', lang) });
-			return null;
-		}
-
 		let dataSource: DataSource;
-		let isConnected: boolean;
-		try {
-			dataSource = new DataSource(connectionInfo);
-			isConnected = await connectToDatabase(dataSource);
-		} catch {
-			res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
-			return null;
-		}
-
-		if (!isConnected) {
-			res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
-			return null;
+		let databaseKey: string;
+		if (analyzed) {
+			if (!analyzed.dataSource || !analyzed.databaseKey) {
+				res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
+				return null;
+			}
+			dataSource = analyzed.dataSource;
+			databaseKey = analyzed.databaseKey;
+		} else {
+			const validation = await validateConnectionInfo(connectionInfo, lang);
+			if (!validation.ok) {
+				res.status(400).json({ message: validation.message });
+				return null;
+			}
+			const connected = await connectToRegisteredPostgres(
+				validation.requestedHost,
+				validation.connectionInfos,
+			);
+			if (!connected.ok) {
+				const message = connected.reason === 'unregistered'
+					? t('DATABASE_NOT_REGISTERED', lang)
+					: t('UNABLE_TO_CONNECT', lang);
+				res.status(400).json({ message });
+				return null;
+			}
+			dataSource = connected.dataSource;
+			databaseKey = connected.databaseKey;
 		}
 
 		return {
 			databaseKey,
+			schema: (dataSource.options as PostgresConnectionOptions).schema!,
 			runQuery: makeReadOnlyRowQueryFn(dataSource),
 			cleanup: async () => {
 				await dataSource.destroy();
@@ -475,11 +482,14 @@ export class GradingController {
 		}
 
 		// ---- auto-analyze ---------------------------------------------------
+		let analyzed: AnalyzeResult | undefined;
 		if (this.databaseService) {
-			const analyzed = await this.databaseService.ensureAnalyzed(
+			analyzed = await this.databaseService.ensureAnalyzed(
 				connectionInfo,
 				undefined,
 				lang,
+				false,
+				true,
 			);
 			if (!analyzed.ok) {
 				return res.status(analyzed.status).json({ message: analyzed.message });
@@ -509,12 +519,13 @@ export class GradingController {
 				connectionInfo,
 				lang,
 				res,
+				analyzed,
 			);
 			if (!validated) return res;
 			databaseKey = validated.databaseKey;
 			runQuery = validated.runQuery;
 			cleanup = validated.cleanup;
-			schema = connectionInfo.schema!;
+			schema = validated.schema;
 		}
 
 		const gradingRequest = gradingRequestOptions.gradingRequest;
