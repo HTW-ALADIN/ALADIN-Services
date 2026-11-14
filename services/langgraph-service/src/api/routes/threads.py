@@ -159,8 +159,10 @@ async def get_thread_history(thread_id: str, limit: int = 20) -> JSONResponse:
 
 @router.delete("/v1/threads/{thread_id}", status_code=204)
 async def delete_thread(thread_id: str) -> JSONResponse:
-    if not registry.delete_thread(thread_id):
+    if registry.get_thread(thread_id) is None:
         return JSONResponse(
             status_code=404, content={"detail": f"Unknown thread id {thread_id!r}."}
         )
+    await get_manager().get().adelete_thread(thread_id)
+    registry.delete_thread(thread_id)
     return JSONResponse(status_code=204, content=None)

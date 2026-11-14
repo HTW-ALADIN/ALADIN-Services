@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import suppress
 from typing import Any
 
 from langgraph.errors import GraphRecursionError
@@ -23,6 +25,7 @@ def _compiler_settings() -> CompilerSettings:
         llm_retry_once=settings.llm_retry_once,
         http_timeout_seconds=settings.http_node_timeout_seconds,
         max_tool_response_bytes=settings.max_tool_response_bytes,
+        http_internal_host_allowlist=frozenset(settings.http_internal_host_allowlist.split(",")),
     )
 
 
@@ -115,36 +118,59 @@ async def stream_run(thread_id: str, run_input: dict[str, Any]):
     compiled = compile_graph(stored.definition, _compiler_settings(), checkpointer=checkpointer)
     limiter = get_limiter()
     config = thread_config(thread_id, settings.recursion_limit)
-    async with limiter.acquire():
+    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=1)
+
+    async def _produce():
+        stream = compiled.astream({"data": dict(run_input)}, config, stream_mode="updates")
         try:
-
-            async def _generate():
-                async for event in compiled.astream(
-                    {"data": dict(run_input)}, config, stream_mode="updates"
-                ):
-                    unwrapped = {
-                        node_id: update.get("data", update) if isinstance(update, dict) else update
-                        for node_id, update in event.items()
-                    }
-                    yield unwrapped
-
-            agen = _generate()
-            while True:
-                try:
-                    event = await limiter.run_with_timeout(agen.__anext__())
-                except StopAsyncIteration:
-                    break
-                yield event
-        except NodeExecutionError as exc:
-            yield {"__error__": exc.to_payload()}
-        except GraphRecursionError as exc:
-            from config import settings as _settings
-
-            yield {
-                "__error__": {
-                    "node_id": None,
-                    "message": (
-                        f"graph exceeded recursion limit {_settings.recursion_limit}: {exc}"
-                    ),
+            async for event in stream:
+                unwrapped = {
+                    node_id: update.get("data", update) if isinstance(update, dict) else update
+                    for node_id, update in event.items()
                 }
+                await queue.put(unwrapped)
+        finally:
+            await stream.aclose()
+
+    async def _run():
+        async with limiter.acquire():
+            await limiter.run_with_timeout(_produce())
+
+    task = asyncio.create_task(_run())
+    task.add_done_callback(lambda done: None if done.cancelled() else done.exception())
+    try:
+        while True:
+            if task.done():
+                task.result()
+                if queue.empty():
+                    break
+                yield queue.get_nowait()
+                continue
+            pending_event = asyncio.create_task(queue.get())
+            try:
+                done, _ = await asyncio.wait(
+                    {task, pending_event}, return_when=asyncio.FIRST_COMPLETED
+                )
+                if task in done:
+                    task.result()
+                if pending_event in done:
+                    yield pending_event.result()
+            finally:
+                if not pending_event.done():
+                    pending_event.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await pending_event
+    except NodeExecutionError as exc:
+        yield {"__error__": exc.to_payload()}
+    except GraphRecursionError as exc:
+        yield {
+            "__error__": {
+                "node_id": None,
+                "message": f"graph exceeded recursion limit {settings.recursion_limit}: {exc}",
             }
+        }
+    finally:
+        if not task.done():
+            task.cancel()
+        with suppress(asyncio.CancelledError, Exception):
+            await task

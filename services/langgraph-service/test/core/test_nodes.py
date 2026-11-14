@@ -1,5 +1,7 @@
 """Unit tests for node executors (gateway/HTTP mocked, no live network)."""
 
+import gzip
+
 import httpx
 import pytest
 import respx
@@ -92,7 +94,11 @@ async def test_llm_node_gateway_error_maps_to_502():
     assert exc_info.value.upstream_status == 500
 
 
-async def test_http_node_success_and_template():
+async def test_http_node_success_and_template(monkeypatch):
+    async def resolve(host, port, *, allow_internal=False):
+        return "8.8.8.8"
+
+    monkeypatch.setattr("core.nodes.http_tool.resolve_safe_address", resolve)
     node = HTTPNode.model_validate(
         {
             "id": "search",
@@ -104,13 +110,15 @@ async def test_http_node_success_and_template():
         }
     )
     with respx.mock(assert_all_called=True) as mock:
-        route = mock.post("https://api.example.com/v1/search").respond(200, json={"hits": [1]})
+        route = mock.post("https://8.8.8.8/v1/search").respond(200, json={"hits": [1]})
         async with httpx.AsyncClient() as client:
             update = await execute_http_node(
                 node, {"query": "gnn"}, timeout_seconds=5.0, max_response_bytes=1024, client=client
             )
         assert route.call_count == 1
         assert route.calls[0].request.content == b'{"query":"gnn"}'
+        assert route.calls[0].request.headers["host"] == "api.example.com"
+        assert route.calls[0].request.extensions["sni_hostname"] == "api.example.com"
     assert update == {"papers": {"hits": [1]}}
 
 
@@ -128,17 +136,127 @@ async def test_http_node_rejects_unsafe_url():
         await execute_http_node(node, {}, timeout_seconds=5.0, max_response_bytes=1024)
 
 
-async def test_http_node_response_cap():
+async def test_http_node_response_cap(monkeypatch):
+    async def resolve(host, port, *, allow_internal=False):
+        return "8.8.8.8"
+
+    monkeypatch.setattr("core.nodes.http_tool.resolve_safe_address", resolve)
     node = HTTPNode.model_validate(
         {"id": "call", "type": "http", "url": "https://api.example.com/big", "output_key": "out"}
     )
     with respx.mock(assert_all_called=True) as mock:
-        mock.post("https://api.example.com/big").respond(200, content=b"x" * 64)
+        mock.post("https://8.8.8.8/big").respond(200, content=b"x" * 64)
         async with httpx.AsyncClient() as client:
             with pytest.raises(NodeExecutionError, match="exceeded"):
                 await execute_http_node(
                     node, {}, timeout_seconds=5.0, max_response_bytes=8, client=client
                 )
+
+
+async def test_http_internal_allowlist_pins_dns_and_preserves_host(monkeypatch):
+    import asyncio
+
+    calls = []
+
+    async def resolve(host, port, **kwargs):
+        calls.append(host)
+        return [(0, 0, 0, "", ("10.2.3.4" if len(calls) == 1 else "127.0.0.1", port))]
+
+    monkeypatch.setattr(asyncio.get_running_loop(), "getaddrinfo", resolve)
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        return httpx.Response(200, stream=httpx.ByteStream(b"ok"))
+
+    node = HTTPNode.model_validate(
+        {"id": "call", "type": "http", "url": "http://sibling:8000", "output_key": "out"}
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        result = await execute_http_node(
+            node,
+            {},
+            timeout_seconds=5,
+            max_response_bytes=100,
+            client=client,
+            internal_host_allowlist=frozenset({"sibling"}),
+        )
+    assert result == {"out": "ok"}
+    assert calls == ["sibling"]
+    assert requests[0].url.host == "10.2.3.4"
+    assert requests[0].headers["host"] == "sibling:8000"
+
+
+async def test_http_unlisted_internal_host_rejected(monkeypatch):
+    import asyncio
+
+    async def resolve(*args, **kwargs):
+        return [(0, 0, 0, "", ("10.2.3.4", 80))]
+
+    monkeypatch.setattr(asyncio.get_running_loop(), "getaddrinfo", resolve)
+    node = HTTPNode.model_validate(
+        {"id": "call", "type": "http", "url": "http://evil.sibling", "output_key": "out"}
+    )
+    with pytest.raises(NodeExecutionError, match="unsafe"):
+        await execute_http_node(
+            node,
+            {},
+            timeout_seconds=5,
+            max_response_bytes=100,
+            internal_host_allowlist=frozenset({"sibling"}),
+        )
+
+
+async def test_http_rejects_compressed_response(monkeypatch):
+    async def resolve(host, port, *, allow_internal=False):
+        return "8.8.8.8"
+
+    monkeypatch.setattr("core.nodes.http_tool.resolve_safe_address", resolve)
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200, headers={"content-encoding": "gzip"}, content=gzip.compress(b"data")
+        )
+    )
+    node = HTTPNode.model_validate(
+        {"id": "call", "type": "http", "url": "https://example.com", "output_key": "out"}
+    )
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(NodeExecutionError, match="compressed"):
+            await execute_http_node(
+                node, {}, timeout_seconds=5, max_response_bytes=5, client=client
+            )
+
+
+async def test_http_stream_stops_at_limit_and_closes(monkeypatch):
+    async def resolve(host, port, *, allow_internal=False):
+        return "8.8.8.8"
+
+    class Chunks(httpx.AsyncByteStream):
+        def __init__(self):
+            self.reads = 0
+            self.closed = False
+
+        async def __aiter__(self):
+            for _ in range(10):
+                self.reads += 1
+                yield b"abcd"
+
+        async def aclose(self):
+            self.closed = True
+
+    monkeypatch.setattr("core.nodes.http_tool.resolve_safe_address", resolve)
+    stream = Chunks()
+    transport = httpx.MockTransport(lambda request: httpx.Response(500, stream=stream))
+    node = HTTPNode.model_validate(
+        {"id": "call", "type": "http", "url": "https://example.com", "output_key": "out"}
+    )
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(NodeExecutionError, match="exceeded"):
+            await execute_http_node(
+                node, {}, timeout_seconds=5, max_response_bytes=5, client=client
+            )
+    assert stream.reads == 2
+    assert stream.closed
 
 
 def test_transform_pick_const_merge():

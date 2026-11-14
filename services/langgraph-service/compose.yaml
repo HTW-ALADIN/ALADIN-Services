@@ -8,6 +8,7 @@ services:
     pids_limit: 128
     environment:
       LLM_GATEWAY_BASE_URL: http://llm-gateway-service:8002
+      HTTP_INTERNAL_HOST_ALLOWLIST: ${HTTP_INTERNAL_HOST_ALLOWLIST:-}
       LANGGRAPH_CHECKPOINTER: ${LANGGRAPH_CHECKPOINTER:-memory}
       POSTGRES_URL: ${POSTGRES_URL:-}
     ports:

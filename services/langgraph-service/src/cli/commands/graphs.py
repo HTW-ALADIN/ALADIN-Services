@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
 import typer
 
-import main as app_module
+from cli.runtime import runtime
 from core.dsl import GraphDefinition
 from core.store import registry
 from core.url_safety import UnsafeUrlError, assert_safe_url
@@ -19,7 +20,15 @@ def graph(
     ),
 ) -> None:
     """Manage graph definitions; prints JSON."""
-    app_module.ensure_runtime()
+    asyncio.run(_graph(action, graph_id, file))
+
+
+async def _graph(action: str, graph_id: str | None, file: str | None) -> None:
+    async with runtime():
+        _handle_graph(action, graph_id, file)
+
+
+def _handle_graph(action: str, graph_id: str | None, file: str | None) -> None:
     if action == "create":
         if file is None:
             raise typer.BadParameter("--file is required for graph create")

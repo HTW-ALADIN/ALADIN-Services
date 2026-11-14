@@ -38,6 +38,7 @@ class CompilerSettings:
         llm_retry_once: bool,
         http_timeout_seconds: float,
         max_tool_response_bytes: int,
+        http_internal_host_allowlist: frozenset[str] = frozenset(),
         http_client_factory=None,
         llm_client_factory=None,
     ) -> None:
@@ -47,6 +48,7 @@ class CompilerSettings:
         self.llm_retry_once = llm_retry_once
         self.http_timeout_seconds = http_timeout_seconds
         self.max_tool_response_bytes = max_tool_response_bytes
+        self.http_internal_host_allowlist = http_internal_host_allowlist
         self.http_client_factory = http_client_factory
         self.llm_client_factory = llm_client_factory
 
@@ -121,6 +123,7 @@ def compile_graph(
                             _unwrap(state),
                             timeout_seconds=runtime_settings.http_timeout_seconds,
                             max_response_bytes=runtime_settings.max_tool_response_bytes,
+                            internal_host_allowlist=runtime_settings.http_internal_host_allowlist,
                             client=client,
                         )
                     )

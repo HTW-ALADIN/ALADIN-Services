@@ -129,6 +129,53 @@ describe('JSONPath tests', () => {
   );
 });
 
+describe('Fallback values', () => {
+  const data = { disabled: false, empty: '', zero: 0, present: 'present', missing: null };
+
+  for (const [name, mapper] of [['sync', mapJson], ['async', mapJsonAsync]]) {
+    it(`preserves falsy values in string fallbacks (${name})`, async () => {
+      const template = {
+        disabled: ['missing', 'disabled', 'present'],
+        empty: ['absent', 'empty', 'present'],
+        zero: ['absent', 'zero', 'present'],
+        none: ['missing', 'absent'],
+        path: { $path: ['absent', 'disabled', 'present'], $default: 'default' },
+      };
+      expect(await mapper(data, template)).to.deep.equal({
+        disabled: false,
+        empty: '',
+        zero: 0,
+        path: false,
+      });
+    });
+
+    it(`preserves falsy values in mixed and nested fallbacks (${name})`, async () => {
+      const template = {
+        values: [
+          () => null,
+          () => undefined,
+          () => false,
+          () => '',
+          () => 0,
+          () => NaN,
+          ['absent', 'empty', 'present'],
+          { $path: ['absent', 'disabled', 'present'] },
+        ],
+      };
+      expect(await mapper(data, template)).to.deep.equal({
+        values: [false, '', 0, NaN, '', false],
+      });
+    });
+  }
+
+  it('preserves asynchronously resolved falsy values', async () => {
+    const result = await mapJsonAsync(data, {
+      values: [async () => null, async () => false, async () => '', async () => undefined],
+    });
+    expect(result).to.deep.equal({ values: [false, ''] });
+  });
+});
+
 // Mapper feature tests
 describe('Multiple paths with $path and $return hooks', () => {
   doTest(store, 'All prices for products in store', 'allPrices');

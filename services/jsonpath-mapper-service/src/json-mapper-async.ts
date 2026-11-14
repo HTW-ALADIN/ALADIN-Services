@@ -3,7 +3,6 @@ import {
   isArray,
   isMapperFunctions,
   isNullOrUndefined,
-  isNumber,
   isObject,
   isString,
   isUndefined,
@@ -172,7 +171,7 @@ const tryMultiple = async <S>(
   findMultiple: (json: S, arr: MappingElement<S>[], $root: S) => any[]
 ) => {
   const result = (await Promise.all(findMultiple(json, arr, $root)))
-    .filter(r => isNumber(r) || r);
+    .filter(r => !isNullOrUndefined(r));
   if (arr.every((i) => typeof i === 'string'))
     return result.length > 0 ? result[0] : null;
   return result;

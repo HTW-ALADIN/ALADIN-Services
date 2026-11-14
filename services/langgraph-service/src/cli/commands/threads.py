@@ -5,7 +5,7 @@ import json
 
 import typer
 
-import main as app_module
+from cli.runtime import runtime
 from core.checkpointer import get_manager
 from core.compiler import CompilerSettings, compile_graph
 from core.store import registry
@@ -18,7 +18,15 @@ def thread(
     limit: int = typer.Option(20, help="History entry limit"),
 ) -> None:
     """Manage threads; prints JSON."""
-    app_module.ensure_runtime()
+    asyncio.run(_thread(action, thread_id, graph, limit))
+
+
+async def _thread(action: str, thread_id: str | None, graph: str | None, limit: int) -> None:
+    async with runtime():
+        await _handle_thread(action, thread_id, graph, limit)
+
+
+async def _handle_thread(action: str, thread_id: str | None, graph: str | None, limit: int) -> None:
     if action == "create":
         if graph is None:
             raise typer.BadParameter("--graph is required for thread create")
@@ -39,16 +47,18 @@ def thread(
     elif action == "state":
         if thread_id is None:
             raise typer.BadParameter("thread_id is required for thread state")
-        typer.echo(json.dumps(asyncio.run(_state(thread_id)), indent=2))
+        typer.echo(json.dumps(await _state(thread_id), indent=2))
     elif action == "history":
         if thread_id is None:
             raise typer.BadParameter("thread_id is required for thread history")
-        typer.echo(json.dumps(asyncio.run(_history(thread_id, limit)), indent=2))
+        typer.echo(json.dumps(await _history(thread_id, limit), indent=2))
     elif action == "delete":
         if thread_id is None:
             raise typer.BadParameter("thread_id is required for thread delete")
-        if not registry.delete_thread(thread_id):
+        if registry.get_thread(thread_id) is None:
             raise typer.BadParameter(f"Unknown thread id {thread_id!r}.")
+        await get_manager().get().adelete_thread(thread_id)
+        registry.delete_thread(thread_id)
         typer.echo(json.dumps({"deleted": thread_id}, indent=2))
     else:
         raise typer.BadParameter(

@@ -122,3 +122,28 @@ async def test_conditional_routing_falls_back_to_default():
     compiled = compile_graph(definition, _settings(), checkpointer=get_manager().get())
     output = await compiled.ainvoke({"data": {}}, config={"configurable": {"thread_id": "t3"}})
     assert output["data"]["value"] == "B"
+
+
+async def test_configured_internal_allowlist_reaches_http_node(monkeypatch):
+    import config
+    from core.runner import _compiler_settings
+
+    observed = []
+
+    async def execute(node, state, **kwargs):
+        observed.append(kwargs["internal_host_allowlist"])
+        return {"out": "ok"}
+
+    monkeypatch.setattr(config, "settings", config.Settings(http_internal_host_allowlist="Sibling"))
+    monkeypatch.setattr("core.compiler.execute_http_node", execute)
+    definition = _definition(
+        {
+            "name": "http",
+            "nodes": [{"id": "call", "type": "http", "url": "http://sibling", "output_key": "out"}],
+            "edges": [],
+            "entry": "call",
+        }
+    )
+    output = await compile_graph(definition, _compiler_settings()).ainvoke({"data": {}})
+    assert output["data"]["out"] == "ok"
+    assert observed == [frozenset({"sibling"})]

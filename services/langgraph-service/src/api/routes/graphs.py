@@ -1,4 +1,4 @@
-"""Graph definition endpoints: validate-only DSL, ephemeral registry."""
+"""Graph definition endpoints: validate-only DSL and registry."""
 
 from __future__ import annotations
 

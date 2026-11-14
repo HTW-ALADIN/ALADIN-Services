@@ -2,11 +2,12 @@
 
 LLM credentials live in llm-gateway-service, not here: this service holds only
 the gateway connection details. Graph definitions are caller-supplied JSON
-(data only, never code) and graph/thread registries are ephemeral in v1.
+(data only, never code).
 """
 
 from typing import Literal
 
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,9 +30,26 @@ class Settings(BaseSettings):
     llm_retry_once: bool = False
 
     http_node_timeout_seconds: float = 30.0
+    http_internal_host_allowlist: str = Field(
+        default="",
+        description=(
+            "Comma-separated exact DNS hostnames allowed to resolve to RFC1918 or ULA addresses"
+        ),
+    )
     max_tool_response_bytes: int = 1048576
 
-    checkpointer: Literal["memory", "postgres"] = "memory"
+    @field_validator("http_internal_host_allowlist")
+    @classmethod
+    def validate_internal_hosts(cls, value: str) -> str:
+        from core.url_safety import normalize_internal_hostname
+
+        return ",".join(
+            normalize_internal_hostname(host.strip()) for host in value.split(",") if host.strip()
+        )
+
+    checkpointer: Literal["memory", "postgres"] = Field(
+        default="memory", validation_alias=AliasChoices("LANGGRAPH_CHECKPOINTER", "CHECKPOINTER")
+    )
     postgres_url: str = ""
 
     run_timeout_seconds: float = 120.0

@@ -19,15 +19,15 @@ Next an .env file should be created by copying the .env.example and setting the 
 
 The application supports two database backends:
 
-#### In-Memory (default, no Neo4j needed)
+#### In-Memory (no Neo4j needed)
 
-Simply start the application — no external database required:
+Start the application with the memory backend:
 
 ```bash
-npm run dev
+DB_BACKEND=memory npm run dev
 ```
 
-#### With Neo4j
+#### With Neo4j (default)
 
 To run with Neo4j as the database backend:
 
@@ -90,7 +90,7 @@ This separation reduces image size and enables independent scaling.
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
 | `APP_ENV` | `production` | No | Application environment: `development`, `production` |
-| `DB_BACKEND` | `memory` | No | Database backend: `memory` (in-memory, no external DB) or `neo4j` |
+| `DB_BACKEND` | `neo4j` | No | Database backend: `memory` (in-memory, no external DB) or `neo4j` |
 | `NEO4J_URI` | `bolt://neo4j:7687` | No | Neo4j Bolt connection URI (only when `DB_BACKEND=neo4j`) |
 | `NEO4J_USERNAME` | `neo4j` | No | Neo4j username (only when `DB_BACKEND=neo4j`) |
 | `NEO4J_PASSWORD` | (none) | When neo4j | Neo4j password (must be set when using neo4j backend) |

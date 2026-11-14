@@ -6,8 +6,8 @@ import {
 	connectToDatabase,
 	generateDatabaseKey,
 	generatePGliteKey,
-	makePGliteRowQueryFn,
-	makeRowQueryFn,
+	makeReadOnlyPGliteRowQueryFn,
+	makeReadOnlyRowQueryFn,
 	RowQueryFn,
 } from '../shared/utils/database-utils';
 import {
@@ -358,7 +358,7 @@ export class GradingController {
 
 		return {
 			databaseKey,
-			runQuery: makePGliteRowQueryFn(db),
+			runQuery: makeReadOnlyPGliteRowQueryFn(db),
 			cleanup: async () => {
 				/* shared PGlite instance — never closed here */
 			},
@@ -407,7 +407,7 @@ export class GradingController {
 
 		return {
 			databaseKey,
-			runQuery: makeRowQueryFn(dataSource),
+			runQuery: makeReadOnlyRowQueryFn(dataSource),
 			cleanup: async () => {
 				await dataSource.destroy();
 			},

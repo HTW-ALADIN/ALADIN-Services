@@ -7,7 +7,7 @@ Generic LangGraph execution engine over caller-supplied graph definitions (no pr
 - Checkpointing is pluggable: `InMemorySaver` by default (no infra), `AsyncPostgresSaver` opt-in via env + compose profile.
 - HTTP API (FastAPI) and CLI (Typer), sharing the same `core/*` logic.
 
-Graph definitions are data only: a closed node set with `$.path` lookups, no `eval`/`exec`, no expression language. Definitions and thread metadata are ephemeral in v1 — re-POST them after a restart.
+Graph definitions are data only: a closed node set with `$.path` lookups, no `eval`/`exec`, no expression language. The HTTP registry is in memory by default; PostgreSQL mode persists graph definitions, thread metadata, and checkpoints.
 
 ## Code Layout
 
@@ -24,7 +24,7 @@ src/core/nodes/http_tool.py     Generic HTTP tool node (for sibling ALADIN servi
 src/core/nodes/transform.py     Pure data ops (pick/merge/const)
 src/core/nodes/template.py      `$.path` template rendering (no expressions)
 src/core/url_safety.py          SSRF-safety checks for caller-supplied URLs
-src/core/store.py               Ephemeral graph/thread registries
+src/core/store.py               Graph/thread registries
 src/core/checkpointer.py        InMemorySaver vs AsyncPostgresSaver factory
 src/core/limits.py              Run concurrency semaphore + wall deadlines
 src/core/errors.py              Domain errors mapped to HTTP status codes
@@ -43,6 +43,7 @@ src/cli/                        Typer CLI mirroring the HTTP API 1:1
 | `LLM_NODE_TIMEOUT_SECONDS` | `60` | Per-`llm`-node timeout |
 | `LLM_RETRY_ONCE` | `false` | Retry gateway calls once on 502/503/504 |
 | `HTTP_NODE_TIMEOUT_SECONDS` | `30` | Per-`http`-node timeout |
+| `HTTP_INTERNAL_HOST_ALLOWLIST` | unset | Comma-separated trusted hostnames permitted to resolve to private service addresses |
 | `MAX_TOOL_RESPONSE_BYTES` | `1048576` | `http`-node response body cap |
 | `LANGGRAPH_CHECKPOINTER` | `memory` | `memory` \| `postgres` |
 | `POSTGRES_URL` | unset | Required when `LANGGRAPH_CHECKPOINTER=postgres` |
@@ -67,10 +68,10 @@ No LLM provider keys live here — only the gateway connection details above.
 
 Related mitigations exist in the service itself, but none is a substitute for an auth boundary:
 
-- Every caller-supplied `http`-node URL is checked by `src/core/url_safety.py` (rejects non-http(s) schemes, loopback, link-local, RFC1918 private ranges, and known cloud metadata endpoints) before any request is made. This is a best-effort, static hostname/IP-literal check — it does not resolve DNS, and does not prevent requests to arbitrary **public** URLs.
+- Caller-supplied `http`-node URLs are resolved and pinned to validated addresses before connecting. Loopback, link-local, and metadata addresses are blocked; trusted hostnames explicitly listed in `HTTP_INTERNAL_HOST_ALLOWLIST` may resolve to RFC1918 or ULA addresses. Requests to arbitrary public URLs remain possible.
 - Caller-supplied `Authorization`/`Cookie` headers are rejected on `http` nodes (only `Content-Type: application/json` is allowed), and the gateway API key always comes from service env, never from graph definitions.
 - Graph definitions are data only: no `eval`/`exec`, no expression language — only `$.dotted.path` lookups with integer list indexes. `transform` ops are limited to `pick`/`const`/`merge`; `conditional` routing is limited to `when-equals` cases plus a default.
-- Secrets are never logged, never persisted to disk, and never echoed in thread state/history.
+- Gateway credentials come from the environment. Avoid placing secrets in graph definitions or thread data: configured persistence stores those values.
 - Resource bounds (node/edge counts, request-byte caps, run timeout, concurrency semaphore with fast `503`) mirror `graph-generation-service` admission control.
 
 **Do not expose this service on an untrusted network without first adding an authentication layer in front of it.**
@@ -102,7 +103,7 @@ The API listens on port `8004` by default. OpenAPI docs: `http://localhost:8004/
 
 ### Graph definition DSL
 
-A definition wires a closed node set. `llm` nodes send `openai-chat`-shaped `POST /generate` requests to the gateway; `http` nodes call sibling ALADIN services; `transform` reshapes state; `conditional` nodes only route (wired via `conditional_edges`).
+A definition wires a closed node set. `llm` nodes send `openai-chat`-shaped `POST /generate` requests to the gateway; `http` nodes call sibling ALADIN services; `transform` reshapes state; `conditional` nodes only route (wired via `conditional_edges`). For the example below, add `academic-search-service` to `HTTP_INTERNAL_HOST_ALLOWLIST` when it resolves to a private address.
 
 ```json
 {
@@ -170,7 +171,7 @@ uv run langgraph-service run invoke <thread_id> --input '{"query": "..."}'
 uv run langgraph-service run stream <thread_id> --input '{"query": "..."}'
 ```
 
-The CLI's `run stream` prints one JSON object per node update; the HTTP API streams SSE frames instead. `make cli ARGS="..."` forwards to the same entrypoint.
+The CLI's `run stream` prints one JSON object per node update; the HTTP API streams SSE frames instead. `make cli ARGS="..."` forwards to the same entrypoint. With the default memory setting, the CLI stores graph/thread metadata and checkpoints in `$XDG_STATE_HOME/langgraph-service/registry.sqlite3` and `checkpoints.sqlite3` (default `$XDG_STATE_HOME` is `~/.local/state`). The HTTP API remains in-memory and does not share this CLI state. Use PostgreSQL mode to share durable state between the CLI and HTTP service.
 
 ## Docker
 

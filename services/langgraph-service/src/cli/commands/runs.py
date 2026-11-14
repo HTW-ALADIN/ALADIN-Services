@@ -5,7 +5,7 @@ import json
 
 import typer
 
-import main as app_module
+from cli.runtime import runtime
 from core.runner import invoke_run, stream_run
 
 
@@ -15,15 +15,23 @@ def run(
     input: str = typer.Option("{}", help="JSON run input object"),
 ) -> None:
     """Invoke a thread run (invoke) or print SSE-style frames (stream); prints JSON."""
-    app_module.ensure_runtime()
+    asyncio.run(_run(action, thread_id, input))
+
+
+async def _run(action: str, thread_id: str, input: str) -> None:
+    async with runtime():
+        await _handle_run(action, thread_id, input)
+
+
+async def _handle_run(action: str, thread_id: str, input: str) -> None:
     payload = json.loads(input)
     if not isinstance(payload, dict):
         raise typer.BadParameter("--input must be a JSON object")
     if action == "invoke":
-        output = asyncio.run(invoke_run(thread_id, payload))
+        output = await invoke_run(thread_id, payload)
         typer.echo(json.dumps({"thread_id": thread_id, "output": output}, indent=2))
     elif action == "stream":
-        asyncio.run(_print_stream(thread_id, payload))
+        await _print_stream(thread_id, payload)
     else:
         raise typer.BadParameter(f"unknown run action {action!r}; expected invoke|stream")
 
