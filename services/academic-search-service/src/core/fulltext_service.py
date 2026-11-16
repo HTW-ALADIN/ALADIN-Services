@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 from adapters import academic_mcp_adapter
+from config import settings
 from core.credentials import resolve_credentials
 from core.identifiers import UnsafePaperIdError, assert_safe_paper_id
 from core.provider_registry import get_provider_spec
@@ -37,6 +38,14 @@ async def read_fulltext(
     resolution = resolve_credentials(provider, credentials.get(provider))
     if not resolution.ok:
         raise FulltextUnavailableError("missing_credentials")
+
+    if not settings.academic_mcp_downloads_allowed:
+        raise FulltextUnavailableError(
+            "academic_mcp full-text extraction is disabled by default (SSRF gap: "
+            "provider-supplied PDF URLs cannot be validated before fetch). "
+            "Set ACADEMIC_MCP_DOWNLOADS_ALLOWED=true to enable, with egress "
+            "controls in place."
+        )
 
     dest_dir = str(Path(tempfile.gettempdir()) / "academic-search-service" / "fulltext")
     return await academic_mcp_adapter.read_fulltext(

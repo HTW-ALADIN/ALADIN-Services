@@ -12,10 +12,17 @@ import {
 export { default as fromEntries } from 'fromentries';
 
 export const jpath = <S, T>(query: string, json: S): T | T[] => {
+  const path = `$${query.startsWith('.') ? '' : '.'}${query}`;
+  const requiresEvaluation = JSONPath.toPathArray(path).some((segment) =>
+    segment?.split(',').some(
+      (selector) => selector.startsWith('?(') || selector.startsWith('(')
+    )
+  );
   const result = JSONPath({
-    path: `$${query.startsWith('.') ? '' : '.'}${query}`,
+    path,
     json: json as any,
-  });
+    eval: requiresEvaluation ? 'safe' : false,
+  }) as T[];
   // const result = jsonpath.query(
   //   json,
   //   `$${query.startsWith('.') ? '' : '.'}${query}`

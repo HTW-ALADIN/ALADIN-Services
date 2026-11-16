@@ -50,8 +50,8 @@ src/cli/                        Typer CLI mirroring the HTTP API 1:1
 | `RUN_TIMEOUT_SECONDS` | `120` | Per-run wall deadline (`504` on expiry) |
 | `RUN_CONCURRENCY` | `4` | Concurrent runs per process; excess → `503` without queueing |
 | `RECURSION_LIMIT` | `25` | LangGraph recursion cap per run |
-| `MAX_GRAPH_BYTES` | `65536` | Graph definition size cap (`413` on excess) |
-| `MAX_INPUT_BYTES` | `262144` | Run input size cap (`413` on excess) |
+| `MAX_GRAPH_BYTES` | `65536` | Graph request body size cap (`413` on excess) |
+| `MAX_INPUT_BYTES` | `262144` | Run `input` size cap, measured using `json.dumps`; the wire body is capped at `8 * max(0, MAX_INPUT_BYTES) + 1024` bytes (2,098,176 by default) to allow JSON escaping and formatting. Either limit returns `413` for invoke or an SSE error for streaming. |
 | `MAX_OUTPUT_BYTES` | `1048576` | Run output/event size cap (`502` on excess) |
 
 No LLM provider keys live here — only the gateway connection details above.

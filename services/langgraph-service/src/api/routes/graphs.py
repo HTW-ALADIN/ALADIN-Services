@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from api.routes import RequestBodyTooLarge, limit_request_body
 from core.dsl import GraphDefinition
 from core.store import registry
 from core.url_safety import UnsafeUrlError, assert_safe_url
@@ -30,8 +31,9 @@ class GraphListResponse(BaseModel):
 async def create_graph(request: Request) -> JSONResponse:
     from config import settings
 
-    raw = await request.body()
-    if len(raw) > settings.max_graph_bytes:
+    try:
+        raw = await limit_request_body(request, settings.max_graph_bytes).body()
+    except RequestBodyTooLarge:
         return JSONResponse(
             status_code=413,
             content={"detail": f"graph definition exceeds {settings.max_graph_bytes} bytes"},

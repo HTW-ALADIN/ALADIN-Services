@@ -1,4 +1,6 @@
 import { expect } from 'chai';
+import { JSONPath } from 'jsonpath-plus';
+import { createRequire } from 'node:module';
 import {
   store,
   nullSearchPayload,
@@ -10,7 +12,7 @@ import * as a from './acceptance/index.mjs';
 import { siteConfigEntry } from './sample-data.mjs';
 import { mapArrayObject } from './sample-data.mjs';
 
-const { default: mapJson, mapJsonAsync } = await import(
+const { default: mapJson, mapJsonAsync, jpath } = await import(
   process.env.MAPPER_COVERAGE ? '../src/index.ts' : 'jsonpath-mapper'
 );
 
@@ -120,6 +122,74 @@ describe('JSONPath tests', () => {
     'jsonPathTests',
     'booksByVariousAuthor'
   );
+});
+
+describe('JSONPath security', () => {
+  const marker = '__jsonpathMapperCVE20251302__';
+  const payload = `p="globalThis.${marker}=true";a=''[['constructor']][['constructor']](p);a()`;
+  const queries = [
+    ['filter', `..[?(${payload})]`],
+    ['dynamic selector', `items[(${payload})]`],
+  ];
+  const data = { a: 1, items: [{ a: 1 }] };
+
+  afterEach(() => {
+    delete globalThis[marker];
+  });
+
+  it('disables evaluation for ordinary paths and uses safe evaluation for expressions', () => {
+    const cjsJSONPath = createRequire(import.meta.url)('jsonpath-plus').JSONPath;
+    const prototypes = [...new Set([JSONPath.prototype, cjsJSONPath.prototype])];
+    const originalEvaluators = prototypes.map((prototype) => prototype.evaluate);
+    const modes = [];
+    const input = {
+      items: [{ name: 'low', price: 5 }, { name: 'high', price: 25 }],
+      quoted: { 'with(paren)': 42 },
+    };
+    try {
+      prototypes.forEach((prototype, index) => {
+        prototype.evaluate = function (...args) {
+          modes.push(this.eval);
+          return originalEvaluators[index].apply(this, args);
+        };
+      });
+      expect(jpath('items[*].name', input)).to.deep.equal(['low', 'high']);
+      expect(jpath("quoted['with(paren)']", input)).to.deep.equal([42]);
+      expect(jpath('items[0,1].name', input)).to.deep.equal(['low', 'high']);
+      expect(jpath('items[*].name.@string()', input)).to.deep.equal(['low', 'high']);
+      expect(jpath('items[?(@.price < 20)].name', input)).to.deep.equal(['low']);
+      expect(jpath('items[(@.length-1)].name', input)).to.deep.equal(['high']);
+      expect(jpath('items[0,(@.length-1)].name', input)).to.deep.equal(['low', 'high']);
+      expect(modes).to.deep.equal([false, false, false, false, 'safe', 'safe', 'safe']);
+    } finally {
+      prototypes.forEach((prototype, index) => {
+        prototype.evaluate = originalEvaluators[index];
+      });
+    }
+  });
+
+  for (const [selector, query] of queries) {
+    for (const [name, run] of [
+      ['jpath', () => jpath(query, data)],
+      ['sync mapper', () => mapJson(data, { value: query })],
+      ['async mapper', () => mapJsonAsync(data, { value: query })],
+      ['sync $path', () => mapJson(data, { value: { $path: query } })],
+      ['async $path', () => mapJsonAsync(data, { value: { $path: query } })],
+      ['sync fallback', () => mapJson(data, { value: ['missing', query] })],
+      ['async fallback', () => mapJsonAsync(data, { value: ['missing', query] })],
+    ]) {
+      it(`blocks CVE-2025-1302 in a ${selector} without executing code in ${name}`, async () => {
+        let error;
+        try {
+          await run();
+        } catch (caught) {
+          error = caught;
+        }
+        expect(globalThis[marker]).to.be.undefined;
+        expect(error).to.be.instanceOf(Error);
+      });
+    }
+  }
 });
 
 describe('Fallback values', () => {

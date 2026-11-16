@@ -38,9 +38,7 @@ ALLOW_LARGE_MODEL_DOWNLOADS_ENV = "ALLOW_LARGE_MODEL_DOWNLOADS"
 # ``model_type`` params are free-form by default, which would let a caller ask
 # the host to download an arbitrary multi-GB (or third-party) checkpoint
 # server-side with no opt-in. To close that hole we only accept a short, curated
-# list of well-known models. Names are matched WITHOUT the common HuggingFace
-# org prefixes ("sentence-transformers/", "cross-encoder/", ...), so both
-# "all-MiniLM-L6-v2" and "sentence-transformers/all-MiniLM-L6-v2" are accepted.
+# list of well-known models. Both short names and canonical repository IDs are accepted.
 _ALLOWED_BASE_MODELS: dict[str, set[str]] = {
     "sbert_cosine": {
         "all-MiniLM-L6-v2",  # default; ~22.7M params / ~90 MB
@@ -65,12 +63,7 @@ _ALLOWED_BASE_MODELS: dict[str, set[str]] = {
 _KNOWN_HF_MEASURES = frozenset(_ALLOWED_BASE_MODELS.keys())
 
 
-def _normalize_hf_name(model_name: str) -> str:
-    """Return the org-prefix-stripped base name (last path segment)."""
-    return model_name.split("/", 1)[-1].strip()
-
-
-def require_allowed_model(measure: str, model_name: str | None) -> None:
+def require_allowed_model(measure: str, model_name: str | None) -> str | None:
     """Validate an HF ``model_name``/``model_type`` against the allowlist.
 
     ``model_name=None`` means the measure uses its built-in default (e.g.
@@ -83,9 +76,16 @@ def require_allowed_model(measure: str, model_name: str | None) -> None:
         raise ValueError(f"'{measure}' is not an HF model-backed measure; cannot allow-list it.")
     if model_name is None:
         return  # built-in default is curated by construction
-    base = _normalize_hf_name(model_name)
-    if base not in allowed:
-        raise ValueError(f"model_name/model_type '{model_name}' is not on the allow-list for '{measure}'. Allowed: {sorted(allowed)}")
+    prefix = {
+        "sbert_cosine": "sentence-transformers",
+        "semantic_search": "sentence-transformers",
+        "cross_encoder": "cross-encoder",
+    }.get(measure)
+    for base in allowed:
+        canonical = f"{prefix}/{base}" if prefix else base
+        if model_name == base or model_name == canonical:
+            return canonical
+    raise ValueError(f"model_name/model_type '{model_name}' is not on the allow-list for '{measure}'. Allowed: {sorted(allowed)}")
 
 
 def allowlisted_model_names(measure: str) -> list[str]:
@@ -452,12 +452,9 @@ def _preload_entries(raw: str | None) -> list[tuple[str, str]]:
         if measure not in _ALLOWED_BASE_MODELS:
             logger.warning("HF_PRELOAD: unknown measure %r; ignoring %r", measure, entry)
             continue
-        # Map semantic_search / sbert_cosine onto the shared SBERT loader while
-        # still returning the caller's original measure name.
-        loader_key = "sbert_cosine" if measure in _semantic_search_measures() else measure
-        allowed = _ALLOWED_BASE_MODELS.get(loader_key)
-        base = _normalize_hf_name(model)
-        if allowed is None or base not in allowed:
+        try:
+            require_allowed_model(measure, model)
+        except ValueError:
             logger.warning(
                 "HF_PRELOAD: model %r not on the allow-list for measure %r; ignoring %r",
                 model,
@@ -487,6 +484,7 @@ def load_model(measure: str, model_name: str) -> None:
     bertscore through its module-level singleton scorer. Raises on failure so
     the caller decides how to handle it.
     """
+    model_name = require_allowed_model(measure, model_name)
     if measure in _semantic_search_measures():
         get_sbert_model(model_name)
     elif measure == "cross_encoder":

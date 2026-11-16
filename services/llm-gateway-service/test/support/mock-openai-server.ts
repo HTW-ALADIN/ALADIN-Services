@@ -8,7 +8,7 @@ import {
 export type MockHandler = (
 	body: any,
 	req: IncomingMessage
-) => { status: number; body: unknown };
+) => { status: number; body: unknown; headers?: Record<string, string> };
 
 /**
  * Minimal local HTTP server that mimics an OpenAI-compatible API
@@ -59,8 +59,8 @@ export class MockOpenAIServer {
 				return;
 			}
 
-			const { status, body: responseBody } = handler(body, req);
-			res.writeHead(status, { 'Content-Type': 'application/json' });
+			const { status, body: responseBody, headers } = handler(body, req);
+			res.writeHead(status, { 'Content-Type': 'application/json', ...headers });
 			res.end(JSON.stringify(responseBody));
 		});
 	}

@@ -8,6 +8,7 @@ not here).
 
 from __future__ import annotations
 
+import asyncio
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,9 +21,11 @@ from config import settings
 from core.credentials import resolve_credentials
 from core.identifiers import UnsafePaperIdError, assert_safe_paper_id
 from core.provider_registry import get_provider_spec
-from core.url_safety import UnsafeUrlError, assert_safe_url
+from core.url_safety import UnsafeUrlError, resolve_safe_url
 
 Status = Literal["ok", "paywalled", "not_found", "error"]
+
+_MAX_REDIRECTS = 5
 
 
 class BatchSizeError(ValueError):
@@ -59,6 +62,59 @@ def _dest_dir() -> str:
     return str(base)
 
 
+class _PinnedDownloadTransport(httpx.AsyncBaseTransport):
+    def __init__(self, timeout: float) -> None:
+        self._timeout = timeout
+        self._transport = httpx.AsyncHTTPTransport(
+            trust_env=False, limits=httpx.Limits(max_keepalive_connections=0)
+        )
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        url, addresses = await resolve_safe_url(str(request.url), self._timeout)
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self._timeout
+
+        for index, address in enumerate(addresses):
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise httpx.ConnectTimeout(
+                    "Download connection attempts timed out", request=request
+                )
+
+            attempt_timeout = remaining / (len(addresses) - index)
+            headers = httpx.Headers(request.headers)
+            headers["Host"] = url.netloc.decode("ascii")
+            extensions = dict(request.extensions)
+            extensions["sni_hostname"] = url.raw_host.decode("ascii")
+            extensions["timeout"] = {
+                **extensions.get("timeout", {}),
+                "connect": attempt_timeout,
+            }
+            pinned_request = httpx.Request(
+                request.method,
+                url.copy_with(host=address),
+                headers=headers,
+                stream=request.stream,
+                extensions=extensions,
+            )
+            try:
+                async with asyncio.timeout(attempt_timeout):
+                    return await self._transport.handle_async_request(pinned_request)
+            except TimeoutError as exc:
+                if index == len(addresses) - 1:
+                    raise httpx.TimeoutException(
+                        "Download request timed out", request=request
+                    ) from exc
+            except (httpx.NetworkError, httpx.TimeoutException, httpx.RemoteProtocolError):
+                if index == len(addresses) - 1:
+                    raise
+
+        raise httpx.ConnectError("No validated address available", request=request)
+
+    async def aclose(self) -> None:
+        await self._transport.aclose()
+
+
 async def _download_via_scimesh(
     provider: str, paper_id: str, credentials: dict[str, str], dest_dir: str
 ) -> DownloadResult:
@@ -74,20 +130,21 @@ async def _download_via_scimesh(
             error="no pdf_url available from provider",
         )
 
-    try:
-        assert_safe_url(paper.pdf_url)
-    except UnsafeUrlError as exc:
-        return DownloadResult(provider, paper_id, "error", error=f"unsafe pdf_url: {exc}")
-
     dest_path = Path(dest_dir) / f"{provider}_{paper_id.replace('/', '_')}.pdf"
     try:
-        async with httpx.AsyncClient(timeout=settings.provider_timeout_seconds) as client:
-            response = await client.get(paper.pdf_url, follow_redirects=True)
+        async with httpx.AsyncClient(
+            timeout=settings.provider_timeout_seconds,
+            follow_redirects=True,
+            max_redirects=_MAX_REDIRECTS,
+            trust_env=False,
+            transport=_PinnedDownloadTransport(settings.provider_timeout_seconds),
+        ) as client:
+            response = await client.get(paper.pdf_url)
             response.raise_for_status()
             dest_path.write_bytes(response.content)
         return DownloadResult(provider, paper_id, "ok", path=str(dest_path))
-    except httpx.HTTPStatusError as exc:
-        return DownloadResult(provider, paper_id, "error", error=str(exc))
+    except (UnsafeUrlError, httpx.InvalidURL, UnicodeError) as exc:
+        return DownloadResult(provider, paper_id, "error", error=f"unsafe pdf_url: {exc}")
     except httpx.HTTPError as exc:
         return DownloadResult(provider, paper_id, "error", error=str(exc))
 

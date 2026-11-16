@@ -15,7 +15,7 @@
 		"cli": "tsx src/cli/index.ts",
 		"test": "mocha",
 		"test:coverage": "c8 mocha",
-		"test:integration:real": "mocha --no-config --node-option import=tsx --spec test/integration/real-provider.test.ts --timeout 60000",
+		"test:integration:real": "mocha --no-config --node-option import=tsx --node-option import=./src/core/url-safety.ts --spec test/integration/real-provider.test.ts --timeout 60000",
 		"lint": "eslint ./src ./test ./scripts",
 		"lint:fix": "eslint ./src ./test ./scripts --fix",
 		"format": "prettier --write .",
@@ -30,6 +30,8 @@
 		"ai": "^6.0.232",
 		"commander": "^15.0.0",
 		"fastify": "^5.10.0",
+		"ipaddr.js": "^2.5.0",
+		"undici": "^6.29.1",
 		"zod": "^4.1.8"
 	},
 	"devDependencies": {
