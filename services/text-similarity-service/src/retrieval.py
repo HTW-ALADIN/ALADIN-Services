@@ -22,7 +22,7 @@ def _semantic_search_sbert(input_data: dict[str, Any], params: dict[str, Any]) -
 
     # Validate BEFORE importing sentence_transformers so a disallowed model name
     # fails fast with a clean 400 without importing the heavy torch stack.
-    require_allowed_model("semantic_search", model_name)
+    model_name = require_allowed_model("semantic_search", model_name)
     from sentence_transformers import util
 
     model = get_sbert_model(model_name)

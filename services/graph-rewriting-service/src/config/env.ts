@@ -11,6 +11,6 @@ export function getAppEnvConfig(): AppEnvConfig {
 
 	return {
 		APP_ENV: (APP_ENV as EnvVarAppEnvironment) ?? 'production',
-		DB_BACKEND: (DB_BACKEND as EnvVarDbBackend) ?? 'memory',
+		DB_BACKEND: (DB_BACKEND as EnvVarDbBackend) ?? 'neo4j',
 	};
 }

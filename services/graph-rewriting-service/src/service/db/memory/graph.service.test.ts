@@ -60,6 +60,20 @@ describe('InMemoryGraphService', () => {
 			expect(result).toBeUndefined();
 		});
 
+		test('round-trips parameterized node identifiers and properties', async () => {
+			const key = "node' RETURN 1 //";
+			const attributes = {
+				name: "O'Reilly $value",
+				count: 42,
+				active: true,
+				tags: ['first', 'second'],
+			};
+			await graphService.createNode(attributes, key);
+
+			expect(await graphService.getNode(key)).toEqual({ key, attributes });
+			expect(await graphService.getAllNodes()).toEqual([{ key, attributes }]);
+		});
+
 		test('updateNode with default (modify) mode', async () => {
 			await graphService.createNode({ label: 'Test', foo: 'bar' }, 'testnode1');
 			const result = await graphService.updateNode(
@@ -84,6 +98,7 @@ describe('InMemoryGraphService', () => {
 				key: 'testnode1',
 				attributes: { hello: 'world' },
 			});
+			expect(await graphService.getNode('testnode1')).toEqual(result);
 		});
 
 		test('updateNode with delete mode', async () => {
@@ -98,6 +113,7 @@ describe('InMemoryGraphService', () => {
 				key: 'testnode1',
 				attributes: {},
 			});
+			expect(await graphService.getNode('testnode1')).toEqual(result);
 		});
 
 		test('getAllNodes', async () => {
@@ -170,6 +186,15 @@ describe('InMemoryGraphService', () => {
 			});
 		});
 
+		test('createEdge rejects a missing endpoint', async () => {
+			await graphService.createNode({}, 'a');
+
+			await expect(
+				graphService.createEdge('a', 'missing', 'e1', {})
+			).rejects.toThrow('one or both endpoints do not exist');
+			expect(await graphService.getAllEdges()).toEqual([]);
+		});
+
 		test('getEdge', async () => {
 			await graphService.createNode({}, 'testnodeA');
 			await graphService.createNode({}, 'testnodeB');
@@ -197,6 +222,41 @@ describe('InMemoryGraphService', () => {
 			await graphService.deleteEdge('testedge');
 			const result = await graphService.getEdge('testedge');
 			expect(result).toBeUndefined();
+		});
+
+		test('deleteEdge preserves parallel relationships in the graph', async () => {
+			await graphService.createNode({ name: 'A' }, 'a');
+			await graphService.createNode({ name: 'B' }, 'b');
+			await graphService.createEdge('a', 'b', 'e1', { weight: 1 });
+			await graphService.createEdge('a', 'b', 'e2', { weight: 2 });
+
+			await graphService.deleteEdge('e1');
+
+			expect(await graphService.getAllEdges()).toEqual([
+				{ key: 'e2', source: 'a', target: 'b', attributes: { weight: 2 } },
+			]);
+			expect(
+				await graphService.findPatternMatch(
+					[{ key: 'A' }, { key: 'B' }],
+					[{ key: 'edge', source: 'A', target: 'B', attributes: {} }],
+					'directed'
+				)
+			).toEqual([
+				{
+					nodes: {
+						A: { key: 'a', attributes: { name: 'A' } },
+						B: { key: 'b', attributes: { name: 'B' } },
+					},
+					edges: {
+						edge: {
+							key: 'e2',
+							source: 'a',
+							target: 'b',
+							attributes: { weight: 2 },
+						},
+					},
+				},
+			]);
 		});
 
 		test('deleteEdge returns undefined for missing edge', async () => {
@@ -449,6 +509,31 @@ describe('InMemoryGraphService', () => {
 			expect(result).toHaveLength(1);
 			expect(result[0].nodes['A'].key).toBe('n1');
 			expect(result[0].nodes['B'].key).toBe('n1');
+		});
+
+		test('NAC count excludes only the matching bound node', async () => {
+			await graphService.createNode({ name: "O'Reilly", blocked: true }, 'n1');
+			await graphService.createNode({ name: "O'Reilly", blocked: false }, 'n2');
+
+			const result = await graphService.findPatternMatch(
+				[{ key: 'node', attributes: { name: "O'Reilly" } }],
+				[],
+				'undirected',
+				true,
+				[{ nodes: [{ key: 'node', attributes: { blocked: true } }], edges: [] }]
+			);
+
+			expect(result).toEqual([
+				{
+					nodes: {
+						node: {
+							key: 'n2',
+							attributes: { name: "O'Reilly", blocked: false },
+						},
+					},
+					edges: {},
+				},
+			]);
 		});
 
 		test('NAC: excluding attribute', async () => {

@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import '@fastify/swagger';
 import { GatewayClient } from '../../core/gateway-client.js';
 import { getFormatAdapter } from '../../core/format/index.js';
+import { validateCustomProviderOverride } from '../../core/format/shared.js';
 import { replyWithError } from '../reply-error.js';
 import {
 	EmbedRequestSchema,
@@ -46,6 +47,7 @@ const generateRoutes = (
 						403: ErrorResponseSchema,
 						429: ErrorResponseSchema,
 						502: ErrorResponseSchema,
+						503: ErrorResponseSchema,
 					},
 				},
 			},
@@ -76,11 +78,15 @@ const generateRoutes = (
 						403: ErrorResponseSchema,
 						429: ErrorResponseSchema,
 						502: ErrorResponseSchema,
+						503: ErrorResponseSchema,
 					},
 				},
 			},
 			async (request, reply) => {
 				try {
+					if (request.body.customProvider !== undefined) {
+						validateCustomProviderOverride(request.body.customProvider);
+					}
 					const result = await client.embedText(request.body);
 					return reply.status(200).send(result);
 				} catch (err) {

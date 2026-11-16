@@ -13,7 +13,7 @@ import {
 import { LlmGatewayConfig } from '../../shared/interfaces/llm-gateway';
 import {
 	buildAliasMapFromTables,
-	generateDatabaseKey,
+	generatePostgresDatabaseKey,
 	generatePGliteKey,
 } from '../../shared/utils/database-utils';
 import {
@@ -26,7 +26,7 @@ import {
 } from '../../database/internal-memory';
 import { TaskDescriptionGenerationService } from './task-description-generation-service';
 import { t, resolveLanguageCode, SupportedLanguage } from '../../shared/i18n';
-import { DatabaseService } from '../../database/database-service';
+import { DatabaseService, AnalyzeResult } from '../../database/database-service';
 
 const sqlParser = new Parser();
 
@@ -297,8 +297,9 @@ export class DescriptionController {
 		}
 
 		// ---- auto-analyze ---------------------------------------------------
+		let analyzed: AnalyzeResult | undefined;
 		if (this.databaseService) {
-			const analyzed = await this.databaseService.ensureAnalyzed(
+			analyzed = await this.databaseService.ensureAnalyzed(
 				options.connectionInfo,
 				undefined,
 				lang,
@@ -324,16 +325,29 @@ export class DescriptionController {
 			databaseKey = generatePGliteKey(databaseId);
 			schema = 'public';
 		} else {
-			// PostgreSQL path
-			const connectionError = validateConnectionInfo(connectionInfo, lang);
-			if (connectionError) {
-				res.status(400).json({ message: connectionError });
-				return null;
+			if (analyzed) {
+				if (!analyzed.databaseKey || !analyzed.schema) {
+					res.status(400).json({ message: t('DATABASE_NOT_REGISTERED', lang) });
+					return null;
+				}
+				databaseKey = analyzed.databaseKey;
+				schema = analyzed.schema;
+			} else {
+				const validation = await validateConnectionInfo(connectionInfo, lang);
+				if (!validation.ok) {
+					res.status(400).json({ message: validation.message });
+					return null;
+				}
+				const registeredInfo = validation.connectionInfos.find((info) =>
+					isDatabaseRegistered(generatePostgresDatabaseKey(validation.requestedHost, info)),
+				);
+				if (!registeredInfo) {
+					res.status(400).json({ message: t('DATABASE_NOT_REGISTERED', lang) });
+					return null;
+				}
+				databaseKey = generatePostgresDatabaseKey(validation.requestedHost, registeredInfo);
+				schema = registeredInfo.schema!;
 			}
-
-			const { host, port, schema: pgSchema } = connectionInfo;
-			databaseKey = generateDatabaseKey(host!, port!, pgSchema!);
-			schema = pgSchema!;
 		}
 		// ---------------------------------------------------------------------
 

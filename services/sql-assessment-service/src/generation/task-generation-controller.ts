@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { DataSource } from 'typeorm';
+import type { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
 import {
 	ConnectionInfo,
 	DescriptionStrategy,
@@ -11,8 +12,7 @@ import {
 	TaskResponse,
 } from '../shared/interfaces/index';
 import {
-	connectToDatabase,
-	generateDatabaseKey,
+	connectToRegisteredPostgres,
 	generatePGliteKey,
 	makeRowQueryFn,
 } from '../shared/utils/database-utils';
@@ -24,7 +24,7 @@ import { pgliteInstances } from '../database/internal-memory';
 import { SQLQueryGenerationService } from './query/sql-query-generation-service';
 import { TaskDescriptionGenerationService } from './description/task-description-generation-service';
 import { t, resolveLanguageCode, SupportedLanguage } from '../shared/i18n';
-import { DatabaseService } from '../database/database-service';
+import { DatabaseService, AnalyzeResult } from '../database/database-service';
 
 /**
  * @openapi
@@ -165,11 +165,14 @@ export class TaskGenerationController {
 		}
 
 		// ---- auto-analyze ---------------------------------------------------
+		let analyzed: AnalyzeResult | undefined;
 		if (this.databaseService) {
-			const analyzed = await this.databaseService.ensureAnalyzed(
+			analyzed = await this.databaseService.ensureAnalyzed(
 				connectionInfo,
 				undefined,
 				lang,
+				false,
+				true,
 			);
 			if (!analyzed.ok) {
 				return res.status(analyzed.status).json({ message: analyzed.message });
@@ -200,64 +203,66 @@ export class TaskGenerationController {
 					.json({ message: t('DATABASE_NOT_REGISTERED', lang) });
 			}
 
-		const runQuery = async (sql: string) => {
-			const result = await pgliteDb.query(sql);
-			return result.rows as any[];
-		};
+			const runQuery = async (sql: string) => {
+				const result = await pgliteDb.query(sql);
+				return result.rows as any[];
+			};
 
-		return this.runGeneration(
-			res,
-			taskRequest.taskConfiguration,
-			databaseKey,
-			'public',
-			runQuery,
-			lang,
-			null,
-			taskRequest.llmGateway,
-			resolveRequestedDescriptionStrategies(taskRequest),
-		);
-  }
+			return this.runGeneration(
+				res,
+				taskRequest.taskConfiguration,
+				databaseKey,
+				'public',
+				runQuery,
+				lang,
+				taskRequest.llmGateway,
+				resolveRequestedDescriptionStrategies(taskRequest),
+			);
+		}
 	// ---------------------------------------------------------------------
 
 	// ---- PostgreSQL branch ----------------------------------------------
-	const validationError = validateConnectionInfo(connectionInfo, lang);
-	if (validationError) {
-		return res.status(400).json({ message: validationError });
-	}
+		let databaseKey: string;
+		let dataSource: DataSource;
+		if (analyzed) {
+			if (!analyzed.databaseKey || !analyzed.dataSource) {
+				return res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
+			}
+			databaseKey = analyzed.databaseKey;
+			dataSource = analyzed.dataSource;
+		} else {
+			const validation = await validateConnectionInfo(connectionInfo, lang);
+			if (!validation.ok) {
+				return res.status(400).json({ message: validation.message });
+			}
+			const connected = await connectToRegisteredPostgres(
+				validation.requestedHost,
+				validation.connectionInfos,
+			);
+			if (!connected.ok) {
+				const message = connected.reason === 'unregistered'
+					? t('DATABASE_NOT_REGISTERED', lang)
+					: t('UNABLE_TO_CONNECT', lang);
+				return res.status(400).json({ message });
+			}
+			databaseKey = connected.databaseKey;
+			dataSource = connected.dataSource;
+		}
 
-	const databaseKey = generateDatabaseKey(
-		connectionInfo.host!,
-		connectionInfo.port!,
-		connectionInfo.schema!,
-	);
-	if (!isDatabaseRegistered(databaseKey)) {
-		return res
-			.status(400)
-			.json({ message: t('DATABASE_NOT_REGISTERED', lang) });
-	}
-
-	console.log('Received connection info:', connectionInfo);
-
-	const taskContext: ITaskConfiguration = taskRequest.taskConfiguration;
-	const dataSource = new DataSource(connectionInfo);
-	const isConnected = await connectToDatabase(dataSource);
-
-  if (isConnected) {
-		return this.runGeneration(
-			res,
-			taskContext,
-			databaseKey,
-			connectionInfo.schema!,
-			makeRowQueryFn(dataSource),
-			lang,
-			dataSource,
-			taskRequest.llmGateway,
-			resolveRequestedDescriptionStrategies(taskRequest),
-		);
-  }
-
-		await dataSource.destroy();
-		return res.status(400).json({ message: t('UNABLE_TO_CONNECT', lang) });
+		try {
+			return await this.runGeneration(
+				res,
+				taskRequest.taskConfiguration,
+				databaseKey,
+				(dataSource.options as PostgresConnectionOptions).schema!,
+				makeRowQueryFn(dataSource),
+				lang,
+				taskRequest.llmGateway,
+				resolveRequestedDescriptionStrategies(taskRequest),
+			);
+		} finally {
+			await dataSource.destroy();
+		}
 	}
 
 	private async runGeneration(
@@ -267,14 +272,12 @@ export class TaskGenerationController {
 		schema: string,
 		runQuery: (sql: string) => Promise<any[]>,
 		lang: SupportedLanguage,
-		dataSource: DataSource | null,
 		llmGateway?: LlmGatewayConfig,
 		requestedStrategies?: Set<DescriptionStrategy>,
 	): Promise<Response> {
 		const configValidation =
 			this.selectQueryGenerationService.validateConfiguration(taskContext);
 		if (!configValidation[0]) {
-			if (dataSource) await dataSource.destroy();
 			return res.status(400).json({ message: configValidation[1] });
 		}
 
@@ -290,7 +293,6 @@ export class TaskGenerationController {
 				);
 		} catch (error) {
 			console.log(error);
-			if (dataSource) await dataSource.destroy();
 			return res.status(500).json({
 				message: t('TASK_GENERATION_QUERY_ERROR', lang, String(error)),
 			});
@@ -354,13 +356,11 @@ export class TaskGenerationController {
 			}
 		} catch (error) {
 			console.log('Error in task description generation', error);
-			if (dataSource) await dataSource.destroy();
 			return res
 				.status(500)
 				.json({ message: t('TASK_GENERATION_DESCRIPTION_ERROR', lang) });
 		}
 
-		if (dataSource) await dataSource.destroy();
 		return res.status(200).json(taskResponse);
 	}
 }

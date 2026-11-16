@@ -32,6 +32,8 @@ The `docker-compose.yml` spins up a Postgres container. Uncomment the `app` serv
 
 ## PostgreSQL (external database)
 
+Use an isolated database and a restricted, read-only role for untrusted queries. Read-only transactions and rollback prevent ordinary table writes, but do not sandbox side-effecting functions, advisory locks, external calls, or all sequence operations.
+
 Database Analysis: Call the POST API:
 `http://localhost:3000/api/database/analyze-database`
 

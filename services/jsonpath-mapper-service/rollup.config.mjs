@@ -17,6 +17,7 @@ export default [
       {
         file: 'dist/jsonpath-mapper.mjs',
         format: 'es',
+        sourcemap: true,
       },
     ],
     external: ['jsonpath-plus'],
@@ -28,7 +29,7 @@ export default [
       {
         file: 'dist/cli.mjs',
         format: 'es',
-        banner: '#!/usr/bin/env node',
+        sourcemap: true,
       },
     ],
     external: ['jsonpath-plus', 'node:fs', 'node:path'],

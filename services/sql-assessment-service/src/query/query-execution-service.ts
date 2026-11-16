@@ -2,6 +2,7 @@ import { DataSource, QueryFailedError } from 'typeorm';
 import { AST, Parser } from 'node-sql-parser';
 import { QueryExecutionResult } from '../shared/interfaces/http';
 import { t, SupportedLanguage } from '../shared/i18n';
+import { makeReadOnlyRowQueryFn, makeReadOnlyPGliteRowQueryFn } from '../shared/utils/database-utils';
 
 /**
  * Executes a raw SQL SELECT query against a live DataSource and returns the
@@ -42,9 +43,8 @@ export class QueryExecutionService {
 
 		this.assertSelectOnly(trimmed, lang);
 
-		const queryRunner = dataSource.createQueryRunner();
 		try {
-			const rows: Record<string, unknown>[] = await queryRunner.query(trimmed);
+			const rows: Record<string, unknown>[] = await makeReadOnlyRowQueryFn(dataSource)(trimmed);
 			return { rows, rowCount: rows.length };
 		} catch (err) {
 			const detail =
@@ -55,8 +55,6 @@ export class QueryExecutionService {
 				t('QUERY_EXECUTION_FAILED', lang, detail),
 				'EXECUTION_FAILED',
 			);
-		} finally {
-			await queryRunner.release();
 		}
 	}
 
@@ -85,8 +83,7 @@ export class QueryExecutionService {
 		this.assertSelectOnly(trimmed, lang);
 
 		try {
-			const result = await db.query(trimmed);
-			const rows = result.rows as Record<string, unknown>[];
+			const rows = await makeReadOnlyPGliteRowQueryFn(db)(trimmed) as Record<string, unknown>[];
 			return { rows, rowCount: rows.length };
 		} catch (err) {
 			const detail = err instanceof Error ? err.message : String(err);
@@ -125,7 +122,7 @@ export class QueryExecutionService {
 			);
 		}
 
-		if (!ast || ast.type !== 'select') {
+		if (!ast || ast.type !== 'select' || (ast as any).into?.position) {
 			const type = ast?.type ?? 'unknown';
 			throw new QueryExecutionError(
 				t('QUERY_NON_SELECT', lang, type),

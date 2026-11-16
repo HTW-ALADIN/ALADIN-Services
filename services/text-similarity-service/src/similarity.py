@@ -200,7 +200,7 @@ def _sbert_cosine(input_data: dict[str, Any], params: dict[str, Any]) -> dict[st
     a = input_data.get("text_a", "")
     b = input_data.get("text_b", "")
     model_name = params.get("model_name", "all-MiniLM-L6-v2")
-    require_allowed_model("sbert_cosine", model_name)
+    model_name = require_allowed_model("sbert_cosine", model_name)
     model = get_sbert_model(model_name)
     emb = model.encode([a, b])
     from sentence_transformers import util
@@ -224,7 +224,7 @@ def sbert_cosine_batch(pairs: list[dict[str, Any]], params: dict[str, Any]) -> l
     from .model_cache import get_sbert_model, require_allowed_model
 
     model_name = params.get("model_name", "all-MiniLM-L6-v2")
-    require_allowed_model("sbert_cosine", model_name)
+    model_name = require_allowed_model("sbert_cosine", model_name)
     model = get_sbert_model(model_name)
 
     # De-duplicate texts so an identical string is encoded once, not per pair.
@@ -287,7 +287,7 @@ def _cross_encoder(input_data: dict[str, Any], params: dict[str, Any]) -> dict[s
     a = input_data.get("text_a", "")
     b = input_data.get("text_b", "")
     model_name = params.get("model_name", "cross-encoder/stsb-roberta-base")
-    require_allowed_model("cross_encoder", model_name)
+    model_name = require_allowed_model("cross_encoder", model_name)
     model = get_cross_encoder_model(model_name)
     raw = float(model.predict([(a, b)])[0])
     return _normalize_similarity(raw, "cross_encoder", "sentence_transformers")
@@ -407,9 +407,7 @@ def _token_set_overlap(input_data: dict[str, Any], params: dict[str, Any], varia
 def _bertscore(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
     from .model_cache import require_allowed_model
 
-    # model_type=None means bert_score derives its curated default (roberta-large
-    # for lang='en'); an explicit model_type must be on the allow-list.
-    require_allowed_model("bertscore", params.get("model_type"))
+    model_type = require_allowed_model("bertscore", params.get("model_type") or "roberta-large")
     import bert_score
 
     # Default to English so a caller that sets neither lang nor model_type still
@@ -421,7 +419,7 @@ def _bertscore(input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, 
     P, R, F1 = bert_score.score(
         [input_data.get("text_a", "")],
         [input_data.get("text_b", "")],
-        model_type=params.get("model_type"),
+        model_type=model_type,
         lang=lang,
         idf=params.get("idf", False),
         rescale_with_baseline=params.get("rescale_with_baseline", False),

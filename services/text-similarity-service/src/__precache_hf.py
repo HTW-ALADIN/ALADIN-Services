@@ -33,11 +33,12 @@ def _download_model(measure: str, model_name: str) -> list[str]:
     from sentence_transformers import CrossEncoder, SentenceTransformer
     from transformers import AutoModel, AutoTokenizer
 
+    model_name = mc.require_allowed_model(measure, model_name)
     if measure in ("sbert_cosine", "semantic_search"):
-        SentenceTransformer(f"sentence-transformers/{model_name}")
+        SentenceTransformer(model_name)
         return [f"sbert_cosine({model_name})"]
     if measure == "cross_encoder":
-        CrossEncoder(f"cross-encoder/{model_name}")
+        CrossEncoder(model_name)
         return [f"cross_encoder({model_name})"]
     if measure == "bertscore":
         AutoModel.from_pretrained(model_name)

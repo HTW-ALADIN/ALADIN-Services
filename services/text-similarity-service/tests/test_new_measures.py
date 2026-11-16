@@ -515,7 +515,7 @@ class TestSbertModelName:
         monkeypatch.setattr("src.model_cache.get_sbert_model", fake_get)
         clear_all()
         r = compute_similarity("sbert_cosine", "sentence_transformers", {"text_a": "a", "text_b": "b"}, {})
-        assert captured == ["all-MiniLM-L6-v2"]
+        assert captured == ["sentence-transformers/all-MiniLM-L6-v2"]
         assert r["similarity"] == pytest.approx(1.0)
 
     def test_custom_model_name(self, monkeypatch):
@@ -568,6 +568,28 @@ class TestHfModelAllowlist:
             require_allowed_model("cross_encoder", "facebook/bart-large")
         with pytest.raises(ValueError, match="not on the allow-list"):
             require_allowed_model("bertscore", "microsoft/deberta-v3-large")
+
+    @pytest.mark.parametrize(
+        ("measure", "model_name"),
+        [
+            ("sbert_cosine", "attacker/all-MiniLM-L6-v2"),
+            ("semantic_search", "attacker/all-MiniLM-L6-v2"),
+            ("cross_encoder", "attacker/stsb-roberta-base"),
+            ("bertscore", "attacker/roberta-large"),
+            ("sbert_cosine", " sentence-transformers/all-MiniLM-L6-v2 "),
+        ],
+    )
+    def test_rejects_untrusted_repositories(self, measure, model_name):
+        from src.model_cache import require_allowed_model
+
+        with pytest.raises(ValueError, match="not on the allow-list"):
+            require_allowed_model(measure, model_name)
+
+    def test_short_names_resolve_to_canonical_repositories(self):
+        from src.model_cache import require_allowed_model
+
+        assert require_allowed_model("sbert_cosine", "all-MiniLM-L6-v2") == "sentence-transformers/all-MiniLM-L6-v2"
+        assert require_allowed_model("cross_encoder", "stsb-roberta-base") == "cross-encoder/stsb-roberta-base"
 
     def test_unknown_measure_fails_loud(self):
         from src.model_cache import require_allowed_model

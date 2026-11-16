@@ -1,0 +1,17 @@
+@baseUrl = http://localhost:8004
+
+### Synchronous run (replace thread_id; requires LLM_GATEWAY_API_KEY for llm nodes)
+POST {{baseUrl}}/v1/threads/th_replace_me/runs
+Content-Type: application/json
+
+{
+  "input": {"query": "What is ALADIN?"}
+}
+
+### Streaming run (replace thread_id)
+POST {{baseUrl}}/v1/threads/th_replace_me/runs:stream
+Content-Type: application/json
+
+{
+  "input": {"query": "What is ALADIN?"}
+}

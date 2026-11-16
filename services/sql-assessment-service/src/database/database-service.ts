@@ -4,8 +4,8 @@ import * as fs from 'fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { DatabaseAnalyzer } from './database-analyzer';
 import {
-	connectToDatabase,
-	generateDatabaseKey,
+	connectToPostgresCandidates,
+	generatePostgresDatabaseKey,
 	generatePGliteKey,
 } from '../shared/utils/database-utils';
 import {
@@ -27,6 +27,9 @@ export interface AnalyzeResult {
 	ok: boolean;
 	status: number;
 	message: string;
+	databaseKey?: string;
+	schema?: string;
+	dataSource?: DataSource;
 }
 
 /**
@@ -65,15 +68,13 @@ export class DatabaseService {
 	 *   no-op (assumes a prior registration is still valid for the process).
 	 *   When `required` is `true` (used by the `/api/database/analyze-database`
 	 *   endpoint), `sqlContent` is mandatory and its absence is an error.
-	 * - **PostgreSQL** – runs a full schema extraction only when the database
-	 *   key is not yet registered.  Subsequent calls within the same process
-	 *   skip the expensive round-trip.
 	 */
 	async ensureAnalyzed(
 		connectionInfo: any,
 		aliasMap?: IAliasMap,
 		lang: SupportedLanguage = 'en',
 		required = false,
+		retainPostgresConnection = false,
 	): Promise<AnalyzeResult> {
 		if (!connectionInfo) {
 			return {
@@ -134,19 +135,51 @@ export class DatabaseService {
 
 		// PostgreSQL – validate first so we never generate a bogus key from undefined fields.
 		const pgInfo = connectionInfo as PostgresConnectionOptions;
-		const pgValidationError = validateConnectionInfo(pgInfo, lang);
-		if (pgValidationError) {
-			return { ok: false, status: 400, message: pgValidationError };
+		const validation = await validateConnectionInfo(pgInfo, lang);
+		if (!validation.ok) {
+			return { ok: false, status: 400, message: validation.message };
 		}
 
-		// Skip the expensive round-trip only when the caller did not explicitly
-		// require a fresh analysis (required=true is used by /analyze-database).
-		const key = generateDatabaseKey(pgInfo.host!, pgInfo.port!, pgInfo.schema!);
-		if (!required && isDatabaseRegistered(key)) {
-			return { ok: true, status: 200, message: 'already registered' };
+		const connection = await connectToPostgresCandidates(validation.connectionInfos);
+		if (!connection) {
+			return { ok: false, status: 400, message: t('UNABLE_TO_CONNECT', lang) };
 		}
 
-		return this.analyzePostgres(connectionInfo, aliasMap, lang);
+		let retained = false;
+		try {
+			const databaseKey = generatePostgresDatabaseKey(
+				validation.requestedHost,
+				connection.connectionInfo,
+			);
+			let message = 'already registered';
+			if (required || !isDatabaseRegistered(databaseKey)) {
+				const extracted = await this.databaseAnalyzer.extractDatabaseSchema(
+					connection.dataSource,
+					connection.connectionInfo.schema!,
+					databaseKey,
+					aliasMap,
+				);
+				if (!extracted) {
+					return {
+						ok: false,
+						status: 500,
+						message: t('DATABASE_SCHEMA_EXTRACTION_FAILED', lang),
+					};
+				}
+				message = t('DATABASE_ANALYSIS_SUCCESS', lang);
+			}
+			retained = retainPostgresConnection;
+			return {
+				ok: true,
+				status: 200,
+				message,
+				databaseKey,
+				schema: connection.connectionInfo.schema,
+				...(retained ? { dataSource: connection.dataSource } : {}),
+			};
+		} finally {
+			if (!retained) await connection.dataSource.destroy();
+		}
 	}
 
 	// -------------------------------------------------------------------------
@@ -319,62 +352,4 @@ export class DatabaseService {
 		};
 	}
 
-	// -------------------------------------------------------------------------
-	// PostgreSQL helpers
-	// -------------------------------------------------------------------------
-
-	private async analyzePostgres(
-		connectionInfo: PostgresConnectionOptions,
-		aliasMap: IAliasMap | undefined,
-		lang: SupportedLanguage,
-	): Promise<AnalyzeResult> {
-		const validationError = validateConnectionInfo(connectionInfo, lang);
-		if (validationError) {
-			return { ok: false, status: 400, message: validationError };
-		}
-
-		let dataSource: DataSource;
-		let isConnected: boolean;
-		try {
-			dataSource = new DataSource(connectionInfo);
-			isConnected = await connectToDatabase(dataSource);
-		} catch {
-			return { ok: false, status: 400, message: t('UNABLE_TO_CONNECT', lang) };
-		}
-
-		if (!isConnected) {
-			try {
-				await dataSource!.destroy();
-			} catch {
-				/* ignore */
-			}
-			return { ok: false, status: 400, message: t('UNABLE_TO_CONNECT', lang) };
-		}
-
-		const key = generateDatabaseKey(
-			connectionInfo.host!,
-			connectionInfo.port!,
-			connectionInfo.schema!,
-		);
-		const extracted = await this.databaseAnalyzer.extractDatabaseSchema(
-			dataSource,
-			connectionInfo.schema!,
-			key,
-			aliasMap,
-		);
-		await dataSource.destroy();
-
-		if (!extracted) {
-			return {
-				ok: false,
-				status: 500,
-				message: t('DATABASE_SCHEMA_EXTRACTION_FAILED', lang),
-			};
-		}
-		return {
-			ok: true,
-			status: 200,
-			message: t('DATABASE_ANALYSIS_SUCCESS', lang),
-		};
-	}
 }

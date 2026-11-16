@@ -54,6 +54,7 @@ src/cli/                        Typer CLI mirroring the HTTP API 1:1
 | `LOG_LEVEL` | `info` | Log verbosity |
 | `GRAPH_CURSOR_SECRET` | random per-process | HMAC signing key for `/v1/graph` pagination cursors. **Set this explicitly to a stable secret in any real deployment** -- if left unset, cursors stop validating across restarts/replicas. |
 | `DOWNLOAD_MAX_BATCH_SIZE` | `20` | Max `items` per `/v1/download` call; larger batches must be paginated client-side |
+| `ACADEMIC_MCP_DOWNLOADS_ALLOWED` | `false` | Enable academic-mcp PDF downloads and full-text extraction, accepting the SSRF risk; egress controls are required |
 
 No provider API keys/tokens are configured via environment variables. All
 provider credentials (`SCOPUS_API_KEY`-equivalents, `mailto`, etc.) are
@@ -83,20 +84,24 @@ fully trusted network. Suitable options include (non-exhaustive):
 - Wrapping it in an authenticating sidecar/proxy if the deployment platform
   does not offer the above natively.
 
-Two related mitigations exist in the service itself, but neither is a
-substitute for an auth boundary:
+Related mitigations exist in the service itself, but none is a substitute for
+an auth boundary or network-level egress controls:
 
-- Any URL this service fetches server-side that originated from a
-  provider's response (e.g. a paper's `pdf_url`) is checked by
-  `src/core/url_safety.py` (rejects loopback, link-local, RFC1918 private
-  ranges, and known cloud metadata endpoints) before the request is made.
-  This is a best-effort, static hostname/IP-literal check -- it does not
-  resolve DNS, and does not prevent requests to arbitrary **public** URLs.
-  **Known gap:** this check only covers the `scimesh`-backed download path
-  (`core/download_service.py`'s `_download_via_scimesh`). For
-  academic-mcp-backed providers, the PDF fetch happens entirely inside the
-  vendored `academic-mcp` library with no interception point currently
-  available, so that path is **not** SSRF-checked by this service.
+- For `scimesh` downloads, `src/core/url_safety.py` rejects non-public IP
+  addresses and checks every DNS answer before connecting directly to a
+  validated address. Network failures or timeouts before the response headers
+  trigger retries of other validated addresses.
+  Up to five redirects are followed, with each destination resolved and
+  validated independently. The original hostname is used for the HTTP Host
+  header and TLS certificate verification. Environment-configured HTTP proxies
+  and CA overrides are disabled. Requests to arbitrary **public** URLs remain
+  possible.
+- For academic-mcp-backed providers, PDF downloads and full-text extraction
+  are disabled by default. This also blocks cached PDFs because the library
+  does not expose a reliably cache-only extraction operation. Enabling
+  `ACADEMIC_MCP_DOWNLOADS_ALLOWED` opts into fetches inside the vendored library
+  that this service cannot SSRF-check; network-level egress controls are
+  required.
 - `paper_id` values supplied to `/v1/download` and `/v1/fulltext` are
   validated by `src/core/identifiers.py` to reject path-traversal patterns
   (`..` segments, absolute paths, backslashes) before being forwarded to any

@@ -31,8 +31,6 @@ COPY --from=builder /build/dist ./dist
 COPY --from=builder /build/node_modules/@grafeo-db ./node_modules/@grafeo-db
 
 # ── Environment defaults ───────────────────────────────────────────────────────
-# DB_BACKEND defaults to "memory" (no external DB needed).
-# Set DB_BACKEND=neo4j to use Neo4j and supply all three NEO4J_* vars;
 # NEO4J_PASSWORD has no default and must be provided explicitly.
 ENV APP_ENV=production \
     NODE_ENV=production \

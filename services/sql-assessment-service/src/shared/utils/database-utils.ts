@@ -1,6 +1,11 @@
-import { DataSource, QueryRunner } from 'typeorm';
+import { DataSource, QueryFailedError, QueryRunner } from 'typeorm';
+import type { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
+import type { PostgresDriver } from 'typeorm/driver/postgres/PostgresDriver';
+import { BroadcasterResult } from 'typeorm/subscriber/BroadcasterResult.js';
 import type { PGlite } from '@electric-sql/pglite';
+import { AST, Parser } from 'node-sql-parser';
 import { IAliasMap, IParsedTable } from '../interfaces/domain';
+import { databaseMetadata } from '../../database/internal-memory';
 
 /**
  * Database-agnostic query executor: accepts a SQL string and returns the
@@ -8,6 +13,108 @@ import { IAliasMap, IParsedTable } from '../interfaces/domain';
  * PGlite execution paths.
  */
 export type RowQueryFn = (sql: string) => Promise<any[]>;
+
+function assertReadOnlyStatement(sql: string): void {
+	const statement = sql.replace(
+		/^\s*EXPLAIN\s*\(\s*FORMAT\s+JSON\s*\)\s+/i,
+		'',
+	);
+	let ast: AST | AST[];
+	try {
+		ast = new Parser().astify(statement, { database: 'postgresql' });
+	} catch (error) {
+		if (statement === sql && /^\s*select\b/i.test(statement)) {
+			return;
+		}
+		throw error;
+	}
+	if (
+		Array.isArray(ast) ||
+		!ast ||
+		ast.type !== 'select' ||
+		(ast as any).into?.position
+	) {
+		throw new Error('Only a single SELECT without INTO is allowed');
+	}
+}
+
+export function makeReadOnlyRowQueryFn(dataSource: DataSource): RowQueryFn {
+	return async (sql: string) => {
+		assertReadOnlyStatement(sql);
+		const runner = dataSource.createQueryRunner();
+		try {
+			await runner.startTransaction();
+			await runner.query('SET TRANSACTION READ ONLY');
+			const connection = await runner.connect();
+			dataSource.logger.logQuery(sql, undefined, runner);
+			const beforeEvents = new BroadcasterResult();
+			runner.broadcaster.broadcastBeforeQueryEvent(beforeEvents, sql, undefined);
+			await beforeEvents.wait();
+			const afterEvents = new BroadcasterResult();
+			const startedAt = Date.now();
+			let result: { rows: any[] };
+			try {
+				result = await connection.query({ text: sql, queryMode: 'extended' });
+			} catch (error) {
+				const loggedError =
+					error instanceof Error || typeof error === 'string'
+						? error
+						: String(error);
+				dataSource.logger.logQueryError(loggedError, sql, undefined, runner);
+				runner.broadcaster.broadcastAfterQueryEvent(
+					afterEvents,
+					sql,
+					undefined,
+					false,
+					undefined,
+					undefined,
+					error,
+				);
+				await afterEvents.wait();
+				if (error instanceof Error) {
+					throw new QueryFailedError(sql, undefined, error);
+				}
+				throw error;
+			}
+			const elapsed = Date.now() - startedAt;
+			if (
+				dataSource.options.maxQueryExecutionTime &&
+				elapsed > dataSource.options.maxQueryExecutionTime
+			) {
+				dataSource.logger.logQuerySlow(elapsed, sql, undefined, runner);
+			}
+			runner.broadcaster.broadcastAfterQueryEvent(
+				afterEvents,
+				sql,
+				undefined,
+				true,
+				elapsed,
+				result,
+				undefined,
+			);
+			await afterEvents.wait();
+			return result.rows;
+		} finally {
+			try {
+				if (runner.isTransactionActive) await runner.rollbackTransaction();
+			} finally {
+				await runner.release();
+			}
+		}
+	};
+}
+
+export function makeReadOnlyPGliteRowQueryFn(db: PGlite): RowQueryFn {
+	return async (sql: string) => {
+		assertReadOnlyStatement(sql);
+		return db.transaction(async (tx) => {
+			await tx.query('SET TRANSACTION READ ONLY');
+			const result = await tx.query(sql);
+			await tx.rollback();
+			return result.rows as any[];
+		});
+	};
+}
 
 /**
  * Builds a {@link RowQueryFn} backed by a TypeORM {@link DataSource}.
@@ -49,6 +156,20 @@ export function generateDatabaseKey(
 	return `${host}:${port}/${schema}`;
 }
 
+export function generatePostgresDatabaseKey(
+	requestedHost: string,
+	connectionInfo: PostgresConnectionOptions,
+): string {
+	return `postgres:${JSON.stringify([
+		requestedHost,
+		connectionInfo.host,
+		connectionInfo.port,
+		connectionInfo.database || process.env.PGDATABASE || connectionInfo.username,
+		connectionInfo.schema,
+		connectionInfo.username,
+	])}`;
+}
+
 export function generatePGliteKey(databaseId: string): string {
 	return `pglite:${databaseId}`;
 }
@@ -71,6 +192,72 @@ export async function connectToDatabase(
 			isConnected = false;
 		});
 	return isConnected;
+}
+
+export interface ConnectedPostgres {
+	dataSource: DataSource;
+	connectionInfo: PostgresConnectionOptions;
+}
+
+const DEFAULT_POSTGRES_CONNECT_TIMEOUT_MS = 5000;
+
+export async function connectToPostgresCandidates(
+	candidates: readonly PostgresConnectionOptions[],
+): Promise<ConnectedPostgres | null> {
+	for (const candidate of candidates) {
+		const configuredTimeout = candidate.extra?.connectionTimeoutMillis ?? candidate.connectTimeoutMS;
+		const timeout = typeof configuredTimeout === 'number' &&
+			Number.isFinite(configuredTimeout) && configuredTimeout > 0
+			? configuredTimeout
+			: DEFAULT_POSTGRES_CONNECT_TIMEOUT_MS;
+		const connectionInfo: PostgresConnectionOptions = {
+			...candidate,
+			connectTimeoutMS: timeout,
+			extra: { ...candidate.extra, connectionTimeoutMillis: timeout },
+		};
+		let dataSource: DataSource | undefined;
+		try {
+			dataSource = new DataSource(connectionInfo);
+			if (await connectToDatabase(dataSource)) {
+				return { dataSource, connectionInfo };
+			}
+		} catch {
+			if (!dataSource) continue;
+		}
+		if (dataSource) {
+			try {
+				if (dataSource.isInitialized) {
+					await dataSource.destroy();
+				} else {
+					const driver = dataSource.driver as PostgresDriver | undefined;
+					if (driver?.master) await driver.disconnect();
+				}
+			} catch {
+				return null;
+			}
+		}
+	}
+	return null;
+}
+
+export async function connectToRegisteredPostgres(
+	requestedHost: string,
+	candidates: readonly PostgresConnectionOptions[],
+): Promise<
+	| { ok: true; dataSource: DataSource; databaseKey: string }
+	| { ok: false; reason: 'unregistered' | 'unavailable' }
+> {
+	const registered = candidates.filter((candidate) =>
+		databaseMetadata.has(generatePostgresDatabaseKey(requestedHost, candidate)),
+	);
+	if (registered.length === 0) return { ok: false, reason: 'unregistered' };
+	const connection = await connectToPostgresCandidates(registered);
+	if (!connection) return { ok: false, reason: 'unavailable' };
+	return {
+		ok: true,
+		dataSource: connection.dataSource,
+		databaseKey: generatePostgresDatabaseKey(requestedHost, connection.connectionInfo),
+	};
 }
 
 export function createQueryRunner(

@@ -64,6 +64,7 @@ So this service supports two paths:
 | `LLM_GATEWAY_ADMIN_BASE_URL` | unset                      | Base URL of the gateway's admin/management API (best-effort provider setup) |
 | `LLM_GATEWAY_ADMIN_TOKEN`    | unset                      | Bearer token for the admin API (e.g. an Enterprise master key)              |
 | `LLM_GATEWAY_TIMEOUT_MS`     | `60000`                    | Timeout applied to gateway and custom-provider HTTP calls                   |
+| `LLM_GATEWAY_ALLOW_DIRECT_PROVIDER_EGRESS` | unset | Explicitly allow direct inline-provider egress with a preinitialized plain global agent; see security notes |
 | `PORT`                       | `8002`                     | HTTP port used by `make start` and the Docker container                     |
 | `HOST`                       | `0.0.0.0`                  | HTTP host to bind                                                           |
 
@@ -93,10 +94,18 @@ service does not, and is not intended to, provide that boundary itself. Suitable
 
 Two related mitigations exist in the service itself, but neither is a substitute for an auth boundary:
 
-- `customProvider.baseUrl` is validated to reject loopback, link-local, RFC1918 private ranges, and known cloud
-  metadata endpoints (see `src/core/url-safety.ts`) before this service makes any outbound request to it. This is
-  a best-effort, static hostname check — it does not resolve DNS, and does not prevent requests to arbitrary
-  **public** URLs.
+- `customProvider.baseUrl` and the addresses resolved when connecting are checked to reject non-public destinations
+  (see `src/core/url-safety.ts`). Redirects are disabled for direct provider calls. These checks do not prevent
+  requests to arbitrary **public** URLs; the configured gateway may still use private addresses and follow redirects.
+- Inline provider requests use a dedicated direct dispatcher and **do not use the global dispatcher or its proxy**.
+  They fail with 503 if `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` (or their lowercase variants),
+  `GLOBAL_AGENT_HTTP_PROXY`, `GLOBAL_AGENT_HTTPS_PROXY`, or Node's environment-proxy mode is configured, even when
+  `NO_PROXY` is set. They also fail if the global dispatcher changes or was already initialized before this service
+  loaded, including a normal agent initialized by earlier `fetch` calls. If direct egress is permitted and that
+  preinitialized dispatcher is a plain `Agent`, setting `LLM_GATEWAY_ALLOW_DIRECT_PROVIDER_EGRESS=true` explicitly
+  permits direct requests; this bypasses that agent and any custom policy or proxy hidden inside it. Never enable it
+  when the global dispatcher enforces egress policy. Proxy-based inline provider routing is not supported; use the
+  configured gateway instead, and enforce egress restrictions at the network layer.
 - Missing `LLM_GATEWAY_API_KEY` fails fast with a clear error (see above) rather than silently proceeding.
 
 **Do not expose this service on an untrusted network without first adding an authentication layer in front of it.**

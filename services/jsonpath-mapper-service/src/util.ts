@@ -12,10 +12,17 @@ import {
 export { default as fromEntries } from 'fromentries';
 
 export const jpath = <S, T>(query: string, json: S): T | T[] => {
+  const path = `$${query.startsWith('.') ? '' : '.'}${query}`;
+  const requiresEvaluation = JSONPath.toPathArray(path).some((segment) =>
+    segment?.split(',').some(
+      (selector) => selector.startsWith('?(') || selector.startsWith('(')
+    )
+  );
   const result = JSONPath({
-    path: `$${query.startsWith('.') ? '' : '.'}${query}`,
+    path,
     json: json as any,
-  });
+    eval: requiresEvaluation ? 'safe' : false,
+  }) as T[];
   // const result = jsonpath.query(
   //   json,
   //   `$${query.startsWith('.') ? '' : '.'}${query}`
@@ -72,7 +79,7 @@ export const tryMultiple = <S>(
   $root: S,
   findMultiple: (json: S, arr: MappingElement<S>[], $root: S) => any[]
 ) => {
-  const result = findMultiple(json, arr, $root).filter(r => isNumber(r) || r);
+  const result = findMultiple(json, arr, $root).filter(r => !isNullOrUndefined(r));
   if (arr.every(i => (typeof i === "string")))
     return result.length > 0 ? result[0] : null;
   return result;

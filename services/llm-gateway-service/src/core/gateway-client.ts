@@ -4,6 +4,11 @@ import {
 } from '@llmgateway/ai-sdk-provider';
 import { generateText, tool, jsonSchema, type ModelMessage } from 'ai';
 import type { GatewayConfig } from '../config.js';
+import { validateCustomProviderOverride } from './format/shared.js';
+import {
+	assertSafeCustomProviderBaseUrl,
+	getCustomProviderDispatcher,
+} from './url-safety.js';
 import {
 	GatewayRequestError,
 	type ChatMessage,
@@ -36,13 +41,6 @@ import {
  * package version tied to the gateway's own AI SDK major version. This is
  * what allows a workflow to deploy, configure, and call a brand-new custom
  * provider in a single step without any prior gateway registration.
- *
- * `customProvider.baseUrl` is expected to have already been validated by the
- * caller (see `core/url-safety.ts` and `core/format/vercel.ts::parseRequest`,
- * which run at the untrusted HTTP/CLI input boundary) — this class itself
- * does not re-validate it, so it remains usable in trusted/internal contexts
- * (tests, programmatic callers) that intentionally target loopback or
- * private addresses.
  */
 export class GatewayClient {
 	private readonly gateway: LLMGatewayProvider;
@@ -55,14 +53,16 @@ export class GatewayClient {
 	}
 
 	async generate(request: GenerateRequest): Promise<GenerateResponse> {
-		if (request.customProvider) {
+		if (request.customProvider !== undefined) {
+			validateCustomProviderOverride(request.customProvider);
 			return this.generateViaCustomProvider(request);
 		}
 		return this.generateViaGateway(request);
 	}
 
 	async embedText(request: EmbedRequest): Promise<EmbedResponse> {
-		if (request.customProvider) {
+		if (request.customProvider !== undefined) {
+			validateCustomProviderOverride(request.customProvider);
 			return this.embedViaCustomProvider(request);
 		}
 		return this.embedViaGateway(request);
@@ -128,7 +128,8 @@ export class GatewayClient {
 				top_p: request.topP,
 				stop: request.stopSequences,
 			},
-			this.gatewayConfig.timeoutMs
+			this.gatewayConfig.timeoutMs,
+			'custom'
 		);
 
 		const choice = body?.choices?.[0];
@@ -167,7 +168,8 @@ export class GatewayClient {
 			`${normalizeBaseUrl(this.gatewayConfig.baseUrl)}/embeddings`,
 			this.gatewayConfig.apiKey,
 			{ model: `${request.provider}/${request.model}`, input: request.input },
-			this.gatewayConfig.timeoutMs
+			this.gatewayConfig.timeoutMs,
+			'gateway'
 		);
 
 		return {
@@ -187,7 +189,8 @@ export class GatewayClient {
 			`${normalizeBaseUrl(cp.baseUrl)}/embeddings`,
 			cp.apiKey,
 			{ model: request.model, input: request.input },
-			this.gatewayConfig.timeoutMs
+			this.gatewayConfig.timeoutMs,
+			'custom'
 		);
 
 		return {
@@ -224,11 +227,16 @@ async function postOpenAICompatible(
 	url: string,
 	apiKey: string,
 	body: unknown,
-	timeoutMs: number
+	timeoutMs: number,
+	destination: 'gateway' | 'custom'
 ): Promise<any> {
+	if (destination === 'custom') {
+		assertSafeCustomProviderBaseUrl(url);
+	}
+
 	let response: Response;
 	try {
-		response = await fetch(url, {
+		const options = {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
@@ -236,8 +244,15 @@ async function postOpenAICompatible(
 			},
 			body: JSON.stringify(body),
 			signal: AbortSignal.timeout(timeoutMs),
-		});
+			...(destination === 'custom'
+				? { redirect: 'error' as const, dispatcher: getCustomProviderDispatcher() }
+				: {}),
+		};
+		response = await fetch(url, options);
 	} catch (err) {
+		if (err instanceof Error && err.cause instanceof GatewayRequestError) {
+			throw err.cause;
+		}
 		throw toGatewayRequestError(err);
 	}
 

@@ -15,6 +15,7 @@ import { createTestDb } from '../helpers/pg-mem-factory';
 import { QueryExecutionController } from '../../src/query/query-execution-controller';
 import { QueryExecutionService } from '../../src/query/query-execution-service';
 import { databaseMetadata } from '../../src/database/internal-memory';
+import { generatePostgresDatabaseKey } from '../../src/shared/utils/database-utils';
 import { t } from '../../src/shared/i18n';
 
 // ---------------------------------------------------------------------------
@@ -40,13 +41,13 @@ const VALID_CONNECTION = {
     // Use a public, non-loopback/private host: validateConnectionInfo() blocks
     // internal connection targets (SSRF protection), so 'localhost' would be
     // rejected before the request ever reaches the branch under test.
-    host: 'db.example.com',
+    host: '8.8.8.8',
     port: 5432,
     username: 'user',
     password: 'pass',
     schema: 'northwind',
 };
-const DB_KEY = 'db.example.com:5432/northwind';
+const DB_KEY = generatePostgresDatabaseKey(VALID_CONNECTION.host, VALID_CONNECTION);
 
 let db: IMemoryDb;
 let backup: IBackup;

@@ -246,6 +246,20 @@ describe('GradingController — PGlite backend', () => {
 	// ── POST /api/grading/compare/result-set ─────────────────────────────────
 
 	describe('compareResultSet', () => {
+		it('compares valid PostgreSQL SELECT syntax unsupported by the AST parser', async () => {
+			const query = "SELECT 'a;b' AS value WHERE 1 IS DISTINCT FROM 2";
+			const { res, status, json } = mockRes();
+			await controller.compareResultSet(
+				mockReq({
+					connectionInfo: PGLITE_CONN_WITH_SQL,
+					referenceQuery: query,
+					studentQuery: query,
+				}),
+				res,
+			);
+			expect(status).toHaveBeenCalledWith(200);
+			expect(firstJson(json).match).toBe(true);
+		});
 		it('reports match=true for equivalent result sets', async () => {
 			const { res, status, json } = mockRes();
 			await controller.compareResultSet(

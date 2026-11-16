@@ -7,7 +7,7 @@ import {
 	databaseMetadata,
 	pgliteInstances,
 } from '../../src/database/internal-memory';
-import { generatePGliteKey } from '../../src/shared/utils/database-utils';
+import { generatePGliteKey, makeReadOnlyPGliteRowQueryFn } from '../../src/shared/utils/database-utils';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -124,6 +124,87 @@ describe('QueryExecutionController — PGlite path', () => {
 	// -----------------------------------------------------------------------
 
 	describe('executeQuery — PGlite integration', () => {
+		it('rolls back temporary writes and session settings after successful SELECTs', async () => {
+			await pgliteDb.exec(`
+				CREATE TEMP TABLE scratch (value integer);
+				INSERT INTO scratch VALUES (1);
+				CREATE FUNCTION pg_temp.write_scratch() RETURNS integer AS $$
+				BEGIN UPDATE scratch SET value = value + 1; RETURN (SELECT value FROM scratch); END;
+				$$ LANGUAGE plpgsql;
+			`);
+			const service = new QueryExecutionService();
+			const gradingQuery = makeReadOnlyPGliteRowQueryFn(pgliteDb);
+			const originalSetting = (await pgliteDb.query("SELECT current_setting('application_name') AS value")).rows;
+
+			expect((await service.executeQueryOnPGlite('SELECT pg_temp.write_scratch() AS value', pgliteDb)).rows)
+				.toEqual([{ value: 2 }]);
+			expect(await gradingQuery('SELECT pg_temp.write_scratch() AS value')).toEqual([{ value: 2 }]);
+			expect(await Promise.all([
+				gradingQuery('SELECT pg_temp.write_scratch() AS value'),
+				gradingQuery('SELECT pg_temp.write_scratch() AS value'),
+			])).toEqual([[{ value: 2 }], [{ value: 2 }]]);
+			expect((await pgliteDb.query('SELECT value FROM scratch')).rows).toEqual([{ value: 1 }]);
+
+			await service.executeQueryOnPGlite("SELECT set_config('application_name', 'assessment-test', false)", pgliteDb);
+			expect((await pgliteDb.query("SELECT current_setting('application_name') AS value")).rows)
+				.toEqual(originalSetting);
+		});
+
+		it('rolls back temporary writes when a SELECT function fails', async () => {
+			await pgliteDb.exec(`
+				CREATE TEMP TABLE scratch (value integer);
+				INSERT INTO scratch VALUES (1);
+				CREATE FUNCTION pg_temp.fail_after_write() RETURNS integer AS $$
+				BEGIN UPDATE scratch SET value = 2; RAISE EXCEPTION 'failed'; END;
+				$$ LANGUAGE plpgsql;
+			`);
+			const service = new QueryExecutionService();
+			await expect(service.executeQueryOnPGlite('SELECT pg_temp.fail_after_write()', pgliteDb))
+				.rejects.toMatchObject({ code: 'EXECUTION_FAILED' });
+			expect((await pgliteDb.query('SELECT value FROM scratch')).rows).toEqual([{ value: 1 }]);
+		});
+		it('does not roll back temporary sequence increments', async () => {
+			await pgliteDb.exec('CREATE TEMP SEQUENCE scratch_sequence');
+			const runQuery = makeReadOnlyPGliteRowQueryFn(pgliteDb);
+			expect(await runQuery("SELECT nextval('scratch_sequence')::int AS value"))
+				.toEqual([{ value: 1 }]);
+			expect(await runQuery("SELECT nextval('scratch_sequence')::int AS value"))
+				.toEqual([{ value: 2 }]);
+		});
+
+		it('rejects parser-disagreement statements without committing or mutating', async () => {
+			const query = "SELECT 'abc\\'; COMMIT; UPDATE products SET price = 0; --'";
+			await expect(new QueryExecutionService().executeQueryOnPGlite(query, pgliteDb))
+				.rejects.toMatchObject({ code: 'EXECUTION_FAILED' });
+			await expect(makeReadOnlyPGliteRowQueryFn(pgliteDb)(query)).rejects.toThrow();
+			expect((await pgliteDb.query('SELECT price FROM products ORDER BY id')).rows)
+				.toEqual([{ price: '9.99' }, { price: '19.99' }]);
+		});
+
+		it('rejects SELECT INTO and database mutations through functions', async () => {
+			await pgliteDb.exec(`CREATE FUNCTION mutate_products() RETURNS integer AS $$
+			BEGIN UPDATE products SET price = 0; RETURN 1; END;
+			$$ LANGUAGE plpgsql`);
+			const service = new QueryExecutionService();
+			await expect(service.executeQueryOnPGlite('SELECT * INTO copied_products FROM products', pgliteDb))
+				.rejects.toMatchObject({ code: 'NON_SELECT' });
+			await expect(service.executeQueryOnPGlite('SELECT mutate_products()', pgliteDb))
+				.rejects.toMatchObject({ code: 'EXECUTION_FAILED' });
+			const gradingQuery = makeReadOnlyPGliteRowQueryFn(pgliteDb);
+			await expect(gradingQuery('SELECT mutate_products()')).rejects.toThrow();
+			await expect(gradingQuery('SELECT * INTO copied_products FROM products')).rejects.toThrow();
+			await expect(gradingQuery('SELECT * INTO TEMP TABLE copied_products FROM products'))
+				.rejects.toThrow(/read.only/i);
+			await expect(gradingQuery('EXPLAIN (FORMAT JSON) SELECT * INTO TEMP TABLE copied_products FROM products'))
+				.rejects.toThrow();
+			await expect(gradingQuery('SELECT 1 WHERE 1 IS DISTINCT FROM 2; DELETE FROM products'))
+				.rejects.toThrow();
+			await expect(gradingQuery('SELECT 1; DELETE FROM products')).rejects.toThrow();
+			expect((await pgliteDb.query('SELECT price FROM products ORDER BY id')).rows)
+				.toEqual([{ price: '9.99' }, { price: '19.99' }]);
+			expect((await pgliteDb.query("SELECT to_regclass('copied_products') AS name")).rows)
+				.toEqual([{ name: null }]);
+		});
 		it('returns 200 for a valid SELECT', async () => {
 			const { res, status } = mockRes();
 			await controller.executeQuery(
