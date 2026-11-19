@@ -110,11 +110,16 @@ limited to 1 MiB.
 - JSONPath supports only `$`, `.name`, `["name"]` and `[index]`; wildcards,
   filters and recursive descent are rejected.
 - Expression depth is 64, evaluation is capped at 1000 nodes, branches at 256
-  cases, and `forEach` at 1000 items. Task data is capped at 1 MiB.
-- `forEach` pushes the whole spawn group at once; the declared `concurrency`
-  value is validated but not yet enforced as a scheduler bound.
+  cases, and `forEach` at 100 items. Task data is capped at 1 MiB; the total
+  pushed child payloads are capped at 4 MiB.
+- `forEach` pushes the whole spawn group at once. It fails closed with
+  `UNSUPPORTED_CONCURRENCY` unless the item count fits within the declared
+  `concurrency` upper bound; bounded scheduling beyond that needs runtime
+  support.
 - Joined child payloads that are still data references are rejected with
   `UNRESOLVED_JOINED_PAYLOAD`; the runtime must materialize them before collect.
+  The current runner does not yet expose join results to a follow-up step, so
+  collect is prepared but not wired end to end.
 
 ## Development
 

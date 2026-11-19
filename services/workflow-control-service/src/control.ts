@@ -10,9 +10,10 @@ import type {
 } from "./types.js";
 
 export const MAX_CASES = 256;
-export const MAX_ITEMS = 1_000;
-export const MAX_PUSH_INSTRUCTIONS = 1_000;
+/** Matches the utility InstructionRouter default maxFanout. */
+export const MAX_ITEMS = 100;
 export const MAX_DATA_BYTES = 1_048_576;
+export const MAX_PUSHED_BYTES = 4 * 1_048_576;
 
 const BLOCK_PATTERN = /^[A-Za-z0-9._:/-]{1,200}$/;
 const NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -222,18 +223,29 @@ function runForEach(params: ForEachParams, data: JsonObject): StackOperations {
     throw new ControlError("FAN_OUT_LIMIT", "forEach input is too large");
   }
   if (items.length === 0) return {};
-  const spawns: InstructionSpec[] = items.map((element, index) => ({
-    op: "spawn",
-    block: params.bodyBlock,
-    slot: String(index),
-    input: {
-      type: "value",
-      payload: { ...data, [params.as]: element as JsonValue },
-    },
-  }));
-  if (spawns.length + 1 > MAX_PUSH_INSTRUCTIONS) {
-    throw new ControlError("FAN_OUT_LIMIT", "forEach pushes too many steps");
+  if (items.length > params.concurrency) {
+    throw new ControlError(
+      "UNSUPPORTED_CONCURRENCY",
+      "Bounded forEach concurrency requires runtime scheduling support",
+    );
   }
+  let pushedBytes = 0;
+  const spawns: InstructionSpec[] = items.map((element, index) => {
+    const payload = { ...data, [params.as]: element as JsonValue };
+    pushedBytes += Buffer.byteLength(JSON.stringify(payload), "utf8");
+    if (pushedBytes > MAX_PUSHED_BYTES) {
+      throw new ControlError(
+        "INPUT_LIMIT",
+        "forEach child payloads exceed the size limit",
+      );
+    }
+    return {
+      op: "spawn",
+      block: params.bodyBlock,
+      slot: String(index),
+      input: { type: "value", payload },
+    };
+  });
   return {
     push: [{ op: "join" }, ...spawns],
   };

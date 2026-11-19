@@ -358,17 +358,49 @@ describe("forEach control", () => {
     assert.deepEqual(runControl(forEach(), { items: [] }), {});
   });
 
-  it("rejects missing, invalid and oversized inputs", () => {
+  it("accepts the utility fan-out boundary and rejects one more item", () => {
+    const items = Array.from({ length: MAX_ITEMS }, (_, index) => index);
+    const result = runControl(forEach({ concurrency: MAX_ITEMS }), { items });
+    assert.equal(result.push.length, MAX_ITEMS + 1);
+    assert.throws(
+      () =>
+        runControl(forEach({ concurrency: MAX_ITEMS }), {
+          items: [...items, MAX_ITEMS],
+        }),
+      { code: "FAN_OUT_LIMIT" },
+    );
+  });
+
+  it("fails closed when the item count exceeds the concurrency bound", () => {
+    assert.throws(
+      () =>
+        runControl(forEach({ concurrency: 2 }), {
+          items: [1, 2, 3],
+        }),
+      { code: "UNSUPPORTED_CONCURRENCY" },
+    );
+    assert.equal(
+      runControl(forEach({ concurrency: 3 }), { items: [1, 2, 3] }).push
+        .length,
+      4,
+    );
+  });
+
+  it("rejects missing, invalid, oversized and amplified inputs", () => {
     assert.throws(() => runControl(forEach(), {}), { code: "INVALID_INPUT" });
     assert.throws(() => runControl(forEach(), { items: "x" }), {
       code: "INVALID_INPUT",
     });
     assert.throws(
-      () => runControl(forEach(), { items: Array.from({ length: MAX_ITEMS + 1 }, () => 1) }),
-      { code: "FAN_OUT_LIMIT" },
+      () => runControl(forEach(), { items: [], big: "x".repeat(1_100_000) }),
+      { code: "INPUT_LIMIT" },
     );
     assert.throws(
-      () => runControl(forEach(), { items: [], big: "x".repeat(1_100_000) }),
+      () =>
+        runControl(forEach({ concurrency: 6 }), {
+          items: [1, 2, 3, 4, 5, 6],
+          blob: "x".repeat(900_000),
+        }),
       { code: "INPUT_LIMIT" },
     );
   });
