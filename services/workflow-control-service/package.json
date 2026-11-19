@@ -1,0 +1,22 @@
+{
+  "name": "workflow-control-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Official Aladin workflow control image: branch/forEach stack operations and ordered result collection",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "start": "node build/server.js",
+    "cli": "node build/cli.js",
+    "generate:openapi": "npm run build && node build/generate-openapi.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.8.3"
+  }
+}
