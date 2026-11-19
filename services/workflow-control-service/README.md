@@ -100,7 +100,9 @@ POST /collect  {"params": ..., "joined": ...}
 ```
 
 Domain failures return `422`; malformed requests return `400`; request bodies are
-limited to 1 MiB.
+limited to 1 MiB. The HTTP surface is unauthenticated and intended for health
+checks and manual evaluation only; do not expose it publicly. The runner uses the
+CLI directly.
 
 ## Limits and security
 
