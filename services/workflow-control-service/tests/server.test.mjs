@@ -84,4 +84,25 @@ describe("HTTP surface", () => {
     const missing = await fetch(`${base}/missing`);
     assert.equal(missing.status, 404);
   });
+
+  it("rejects invalid envelopes and oversized bodies", async () => {
+    const invalid = await fetch(`${base}/control`, {
+      method: "POST",
+      body: JSON.stringify({
+        params: { kind: "branch", cases: [] },
+        data: {},
+        extra: true,
+      }),
+    });
+    assert.equal(invalid.status, 400);
+
+    const oversized = await fetch(`${base}/control`, {
+      method: "POST",
+      body: JSON.stringify({
+        params: { kind: "branch", cases: [] },
+        data: { blob: "x".repeat(1_100_000) },
+      }),
+    });
+    assert.equal(oversized.status, 413);
+  });
 });

@@ -36,6 +36,7 @@ describe("JSONPath subset", () => {
     assert.equal(readJsonPath(data, '$["odd key"]'), 1);
     assert.equal(readJsonPath(data, "$.a.b[0]"), 10);
     assert.equal(readJsonPath(data, "$"), data);
+    assert.equal(readJsonPath({ 'a"b': 2 }, '$["a\\"b"]'), 2);
   });
 
   it("returns undefined for missing segments and blocks prototype reads", () => {
@@ -46,7 +47,16 @@ describe("JSONPath subset", () => {
   });
 
   it("rejects unsupported or malformed paths", () => {
-    for (const path of ["a", "$.a[", "$.a[*]", "$..a", "$.a[-1]", "$.a[01]"]) {
+    for (const path of [
+      "a",
+      "$.a[",
+      "$.a[*]",
+      "$..a",
+      "$.a[-1]",
+      "$.a[01]",
+      '$["a',
+      '$["a"x',
+    ]) {
       assert.throws(() => parseJsonPath(path), { code: "INVALID_PATH" });
     }
     assert.throws(() => parseJsonPath(`$.${"a.".repeat(70)}a`), {
@@ -456,6 +466,16 @@ describe("forEach control", () => {
         .length,
       4,
     );
+  });
+
+  it("emits processor instruction specs without runtime ids", () => {
+    const operations = runControl(forEach({ concurrency: 2 }), {
+      items: [1, 2],
+    });
+    for (const operation of operations.push) {
+      assert.equal("id" in operation, false);
+      assert.ok(["join", "spawn"].includes(operation.op));
+    }
   });
 
   it("rejects missing, invalid, oversized and amplified inputs", () => {
