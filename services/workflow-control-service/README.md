@@ -131,6 +131,7 @@ CLI directly.
 npm install
 npm run lint
 npm test
+npm run test:coverage
 npm run build
 npm run generate:openapi
 ```

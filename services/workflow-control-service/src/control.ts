@@ -196,7 +196,7 @@ function parseCollect(params: Record<string, unknown>): CollectParams {
 
 function runBranch(params: BranchParams, data: JsonObject): StackOperations {
   for (const controlCase of params.cases) {
-    if (Boolean(evaluateExpression(controlCase.when, data))) {
+    if (evaluateExpression(controlCase.when, data)) {
       return { push: [{ op: "call", block: controlCase.block }] };
     }
   }

@@ -43,8 +43,16 @@ jobs:
           cache-dependency-path: services/workflow-control-service/package-lock.json
       - name: Install dependencies
         run: npm ci
-      - name: Run tests
-        run: npm test
+      - name: Run tests with coverage
+        run: npm run test:coverage
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: services/workflow-control-service/coverage/lcov.info
+          flags: workflow-control-service
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+        if: always()
 
   generate-openapi:
     name: Generate OpenAPI Spec
