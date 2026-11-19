@@ -32,6 +32,8 @@ export const OPENAPI_SPEC = {
       post: {
         operationId: "collect",
         summary: "Collect ordered join slots into a JSON array",
+        description:
+          "Experimental: requires the runtime to materialize joined child results. The current runner does not expose joined slots to a follow-up step yet.",
         requestBody: { required: true },
         responses: {
           "200": { description: "Ordered child outputs" },

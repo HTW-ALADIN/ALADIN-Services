@@ -47,10 +47,12 @@ exactly one JSON output:
 }
 ```
 
-### `collect`
+### `collect` (experimental)
 
 Reads `{params, joined}` and writes the ordered output array directly (normal
-data step, not `control: true`):
+data step, not `control: true`). This mode is prepared for a runtime that
+materializes joined child results; the current runner does not expose them to a
+follow-up step yet.
 
 ```json
 {
@@ -109,6 +111,8 @@ CLI directly.
 - Expressions are data, never code: no `eval`, functions, loops or recursion.
 - Only `data` and `literal` expression bindings are available. `param`, `item`,
   `session` and `element` bindings must be materialized into task data first.
+- `src/types.ts` mirrors the Aladin control contract types. Update both sides
+  together until this service can depend on the registry package directly.
 - JSONPath supports only `$`, `.name`, `["name"]` and `[index]`; wildcards,
   filters and recursive descent are rejected.
 - Expression depth is 64, evaluation is capped at 1000 nodes, branches at 256
