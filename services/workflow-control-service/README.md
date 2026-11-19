@@ -112,6 +112,8 @@ limited to 1 MiB.
 - Expression depth is 64, evaluation is capped at 1000 nodes, branches at 256
   cases, and `forEach` at 100 items. Task data is capped at 1 MiB; the total
   pushed child payloads are capped at 4 MiB.
+- Equality and containment comparisons are capped at 64 nesting levels and
+  10,000 visited nodes; containment arrays are capped at 10,000 items.
 - `forEach` pushes the whole spawn group at once. It fails closed with
   `UNSUPPORTED_CONCURRENCY` unless the item count fits within the declared
   `concurrency` upper bound; bounded scheduling beyond that needs runtime

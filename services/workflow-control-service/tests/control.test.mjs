@@ -264,6 +264,78 @@ describe("expression evaluator", () => {
     assert.throws(() => evaluateExpression(expression, data), {
       code: "EXPRESSION_TOO_DEEP",
     });
+
+    const operand = {
+      op: "not",
+      value: {
+        op: "not",
+        value: {
+          op: "not",
+          value: { op: "not", value: { from: "literal", value: true } },
+        },
+      },
+    };
+    assert.throws(
+      () =>
+        evaluateExpression(
+          {
+            op: "and",
+            values: Array.from({ length: 240 }, () => operand),
+          },
+          data,
+        ),
+      { code: "EXPRESSION_TOO_LARGE" },
+    );
+  });
+
+  it("bounds comparison depth, nodes and containment width", () => {
+    const nest = (depth) => {
+      let value = { leaf: 1 };
+      for (let index = 0; index < depth; index += 1) value = [value];
+      return value;
+    };
+    assert.throws(
+      () =>
+        evaluateExpression(
+          {
+            op: "eq",
+            left: { from: "literal", value: nest(70) },
+            right: { from: "literal", value: nest(70) },
+          },
+          data,
+        ),
+      { code: "EXPRESSION_TOO_DEEP" },
+    );
+
+    const rows = Array.from({ length: 10_001 }, (_, index) => index);
+    assert.throws(
+      () =>
+        evaluateExpression(
+          {
+            op: "contains",
+            left: { from: "literal", value: rows },
+            right: { from: "literal", value: 10_000 },
+          },
+          data,
+        ),
+      { code: "EXPRESSION_TOO_LARGE" },
+    );
+
+    const wide = Object.fromEntries(
+      Array.from({ length: 10_001 }, (_, index) => [`k${index}`, index]),
+    );
+    assert.throws(
+      () =>
+        evaluateExpression(
+          {
+            op: "eq",
+            left: { from: "literal", value: wide },
+            right: { from: "literal", value: { ...wide } },
+          },
+          data,
+        ),
+      { code: "EXPRESSION_TOO_LARGE" },
+    );
   });
 });
 

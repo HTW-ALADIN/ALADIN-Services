@@ -5,6 +5,9 @@ import type { JsonObject, JsonValue } from "./types.js";
 const MAX_DEPTH = 64;
 const MAX_NODES = 1_000;
 const MAX_LIST = 256;
+const MAX_COMPARE_DEPTH = 64;
+const MAX_COMPARE_NODES = 10_000;
+const MAX_CONTAINMENT_ITEMS = 10_000;
 
 interface Budget {
   nodes: number;
@@ -129,6 +132,8 @@ function evaluateOperation(
       const equal = deepEqual(
         evaluate(expression.left, data, budget, depth + 1),
         evaluate(expression.right, data, budget, depth + 1),
+        { nodes: 0 },
+        0,
       );
       return op === "eq" ? equal : !equal;
     }
@@ -216,17 +221,48 @@ function contains(container: JsonValue, item: JsonValue): boolean {
     return container.includes(item);
   }
   if (Array.isArray(container)) {
-    return container.some((entry) => deepEqual(entry, item));
+    if (container.length > MAX_CONTAINMENT_ITEMS) {
+      throw new ControlError(
+        "EXPRESSION_TOO_LARGE",
+        "Containment target exceeds the comparison budget",
+      );
+    }
+    const state = { nodes: 0 };
+    return container.some((entry) => deepEqual(entry, item, state, 0));
   }
   return false;
 }
 
-function deepEqual(left: JsonValue, right: JsonValue): boolean {
+interface CompareState {
+  nodes: number;
+}
+
+function deepEqual(
+  left: JsonValue,
+  right: JsonValue,
+  state: CompareState,
+  depth: number,
+): boolean {
+  state.nodes += 1;
+  if (state.nodes > MAX_COMPARE_NODES) {
+    throw new ControlError(
+      "EXPRESSION_TOO_LARGE",
+      "Comparison exceeds the evaluation budget",
+    );
+  }
+  if (depth > MAX_COMPARE_DEPTH) {
+    throw new ControlError(
+      "EXPRESSION_TOO_DEEP",
+      "Comparison exceeds the nesting limit",
+    );
+  }
   if (left === right) return true;
   if (Array.isArray(left) && Array.isArray(right)) {
     return (
       left.length === right.length &&
-      left.every((value, index) => deepEqual(value, right[index] as JsonValue))
+      left.every((value, index) =>
+        deepEqual(value, right[index] as JsonValue, state, depth + 1),
+      )
     );
   }
   if (isRecord(left) && isRecord(right)) {
@@ -237,7 +273,12 @@ function deepEqual(left: JsonValue, right: JsonValue): boolean {
       leftKeys.every(
         (key) =>
           Object.hasOwn(right, key) &&
-          deepEqual(left[key] as JsonValue, right[key] as JsonValue),
+          deepEqual(
+            left[key] as JsonValue,
+            right[key] as JsonValue,
+            state,
+            depth + 1,
+          ),
       )
     );
   }
