@@ -1,0 +1,27 @@
+{
+  "description": "the same entity »Vertrag« as in entity_for_relationship, but n:m to Kunde and Konto (m at the partner): one Vertrag can stand for many pairs, so it is not »besitzt« in another form. The edge condition (umformungen: sub_kanten anker, cardinality 1) keeps FK-6.4 out -- without it the entity was accepted as equivalent. The diff stays what it is without a pattern: Vertrag extra, besitzt missing",
+  "covers": [],
+  "classes": {
+    "entity_extra": {
+      "instances": 1,
+      "claims": 7,
+      "consequences": 6
+    },
+    "relationship_missing": {
+      "instances": 1,
+      "claims": 3,
+      "consequences": 2
+    }
+  },
+  "points": {
+    "total": 2,
+    "deductions": {
+      "entity_extra": 0,
+      "relationship_missing": 2
+    }
+  },
+  "sentences": [
+    "Entität »Vertrag« ist zu viel -- damit auch Beziehung »regelt«, Beziehung »schließt« und vier Kanten",
+    "Zu Beziehung »besitzt« passten »regelt« und »schließt«, belegt ist keine Zuordnung -- so gelesen fehlt »besitzt«, und die genannten sind zu viel"
+  ]
+}

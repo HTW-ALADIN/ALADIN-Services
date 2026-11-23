@@ -1,0 +1,26 @@
+{
+  "description": "instead of the binary relationship »besitzt« (Kunde--Konto) the entity »Vertrag« with »schließt« to Kunde and »regelt« to Konto. Both relationships carry 1 at the partner, so every Vertrag belongs to exactly one Kunde and one Konto (umformungen: sub_kanten anker), and Vertrag has no key of its own: variant ohne_schluessel, equivalent and allowed -- a note, no deduction. The counterpart with n:m is entity_for_relationship_n_m",
+  "covers": [
+    "FK-6.4"
+  ],
+  "transformations": [
+    {
+      "name": "entity_for_relationship",
+      "variant": "ohne_schluessel"
+    }
+  ],
+  "classes": {
+    "entity_for_relationship": {
+      "instances": 1,
+      "claims": 10,
+      "consequences": 0
+    }
+  },
+  "points": {
+    "total": 0,
+    "deductions": {}
+  },
+  "sentences": [
+    "Hinweis: »Vertrag« ist als Entität modelliert; erwartet ist die Beziehung »besitzt« zwischen »Konto« und »Kunde« mit denselben Attributen -- gleichwertig, im Kurs zugelassen"
+  ]
+}

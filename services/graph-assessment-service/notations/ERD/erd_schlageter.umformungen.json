@@ -97,6 +97,7 @@
       "ref": {"relationship": 1, "attribute": "*"},
       "sub": {"entity": 1, "relationship": 2, "attribute": "*"},
       "sub_ohne": {"attribute": {"key": ["primary", "partial"]}},
+      "sub_kanten": {"anker": {"cardinality": ["1", ""]}},
       "bezeichner_gleich": true,
       "aequivalent": "ja",
       "allowed": true
@@ -109,6 +110,7 @@
       "ref": {"relationship": 1, "attribute": "*"},
       "sub": {"entity": 1, "relationship": 2, "attribute": "*"},
       "sub_mit": {"attribute": {"key": ["primary", "partial"]}},
+      "sub_kanten": {"anker": {"cardinality": ["1", ""]}},
       "aequivalent": "nein",
       "allowed": false
     },
