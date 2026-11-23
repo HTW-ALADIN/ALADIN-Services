@@ -39,7 +39,7 @@ from itertools import combinations, permutations
 
 from src.notation.diagram import canonical, edge_props, node_label, node_props, node_type
 
-from src.mapping.labels import label_similarity
+from src.mapping.labels import label_similarity, normal_form
 
 from .groups import Candidates
 
@@ -71,7 +71,14 @@ def resolve(result, candidates, ref, sub, notation):
     for _key, group in sorted(_groups(candidates, ref).items(),
                               key=lambda kv: sorted(str(r) for r in kv[1])):
         nodes = sorted(group, key=str)
-        available = [s for s in sorted(candidates[nodes[0]].matches, key=str)
+        # The candidates by what the student wrote, not by the IDs the
+        # drawing tool handed out: on a tie the first one tried wins
+        # (-> _assign, _best_candidate), and renaming the IDs must not
+        # change who that is. The ID only decides between equal labels --
+        # then the feedback reads the same anyway. The reference nodes stay
+        # sorted by ID: the teacher chose those.
+        available = [s for s in sorted(candidates[nodes[0]].matches,
+                                       key=lambda s: (normal_form(node_label(sub.nodes[s]) or ""), str(s)))
                      if s not in taken]
 
         # One reference node, at most one candidate: nothing to swap --
