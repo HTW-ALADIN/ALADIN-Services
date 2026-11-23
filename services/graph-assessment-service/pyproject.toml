@@ -18,6 +18,13 @@ dev = [
     "pytest>=8.0,<10",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["."]
+# test/ mirrors src/, so two test files may share a name -- importlib mode
+# needs no __init__.py to tell them apart.
+addopts = "--import-mode=importlib"
+
 [build-system]
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
